@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sticker Notes App</title>
+    <link rel="shortcut icon" type="image/png" href="https://placehold.co/32x32/764ba2/ffffff?text=SN">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sticker-note {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(148, 163, 184, 0.2); 
+            border-left-width: 5px; 
+            position: relative; 
+            min-height: 160px; 
+            max-height: 280px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            cursor: grab; 
+            padding: 1rem; 
+        }
+
+        .sticker-note.dragging { 
+            opacity: 0.5;
+            /* Removed border-style: dashed; */
+        }
+        
+        .sticker-note:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            border-right-color: rgba(99, 102, 241, 0.3);
+            border-top-color: rgba(99, 102, 241, 0.3);
+            border-bottom-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .sticker-note.drag-target-glow {
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.15); /* Indigo glow */
+            transform: translateY(-2px); /* Slight lift */
+            transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        
+        .sticker-actions {
+            position: absolute;
+            top: 8px; 
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transform: translateX(10px);
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+        
+        .sticker-note:hover .sticker-actions {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .action-button {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .action-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
+        
+        .action-button:hover::before {
+            left: 100%;
+        }
+        
+        .primary-button {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+        
+        .primary-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+        
+        .primary-button:disabled {
+            background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+            box-shadow: none;
+            transform: none;
+            cursor: not-allowed;
+        }
+        
+        .edit-button {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+        }
+        
+        .edit-button:hover {
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.6);
+            transform: translateY(-1px);
+        }
+        
+        .delete-button {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+        }
+        
+        .delete-button:hover {
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .copy-button {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+        }
+        .copy-button:hover {
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.6);
+            transform: translateY(-1px);
+        }
+        
+        .save-edit-button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        .cancel-button {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4); /* Corrected shadow property */
+        }
+        
+        .input-field {
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+        
+        .input-field:focus {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: #6366f1;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+        
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content { 
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        .edit-sticker-modal-content, .search-results-modal-content, .sticker-details-modal-content { 
+            max-width: 600px; 
+            width: 90%; 
+        }
+        
+        @keyframes modalSlideIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        .floating-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+            animation: notificationSlide 0.4s ease forwards;
+            z-index: 1001;
+            font-weight: 500;
+        }
+
+        .floating-notification.hide {
+            animation: notificationSlideOut 0.4s ease forwards;
+        }
+        
+        @keyframes notificationSlide {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes notificationSlideOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+        
+        .counter-badge {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            font-weight: 600;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+        }
+        
+        .scrollbar-custom {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar { width: 6px; }
+        .scrollbar-custom::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-custom::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 3px; }
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.5); }
+        
+        .title-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+
+        /* Original importance levels (will be mapped to new ones) */
+        .importance-level-1 { border-left-color: #22c55e; } /* Green */
+        .importance-level-2 { border-left-color: #4ade80; }  
+        .importance-level-3 { border-left-color: #84cc16; } 
+        .importance-level-4 { border-left-color: #a3e635; }  
+        .importance-level-5 { border-left-color: #facc15; } /* Amber */
+        .importance-level-6 { border-left-color: #fbbf24; }  
+        .importance-level-7 { border-left-color: #f97316; } 
+        .importance-level-8 { border-left-color: #ea580c; }  
+        .importance-level-9 { border-left-color: #dc2626; } /* Red */
+        .importance-level-10 { border-left-color: #b91c1c; }
+
+        /* NEW: Custom importance level for 'Complete' */
+        .importance-level-complete { border-left-color: #3b82f6; } /* Blue */
+
+        .sticker-bg-0 { background-color: #fef9c3; } .sticker-bg-1 { background-color: #dbeafe; }
+        .sticker-bg-2 { background-color: #e0f2fe; } .sticker-bg-3 { background-color: #fee2e2; }
+        .sticker-bg-4 { background-color: #fbcfe8; } .sticker-bg-5 { background-color: #ede9fe; }
+        .sticker-bg-6 { background-color: #d1fae5; } .sticker-bg-7 { background-color: #e0f7fa; }
+        .sticker-bg-8 { background-color: #f3e8ff; } .sticker-bg-9 { background-color: #fff7ed; }
+        .sticker-bg-10 { background-color: #e2e8f0; } .sticker-bg-11 { background-color: #ccfbf1; }
+        .sticker-bg-12 { background-color: #f0fdf4; } .sticker-bg-13 { background-color: #ecfdf5; }
+        .sticker-bg-14 { background-color: #f0f9ff; } .sticker-bg-15 { background-color: #fdf2f8; }
+
+        .sticker-content-text {
+            white-space: pre-wrap; 
+            word-break: break-word; 
+            overflow-y: hidden; 
+            max-height: 120px; 
+            line-height: 1.4; 
+        }
+
+        .sticker-timestamp {
+            position: absolute;
+            bottom: 6px;
+            right: 8px;
+            font-size: 0.7rem; 
+            color: #6b7280; 
+            z-index: 5;
+        }
+        .search-result-item {
+            border-bottom: 1px solid #e5e7eb; 
+            padding-bottom: 0.75rem; 
+            margin-bottom: 0.75rem; 
+            cursor: pointer; 
+        }
+        .search-result-item:last-child { border-bottom: none; margin-bottom: 0; }
+        .search-modal-body { max-height: 70vh; overflow-y: auto; }
+        .search-result-content {
+            max-height: 100px; 
+            overflow-y: auto; 
+            scrollbar-width: thin; 
+            scrollbar-color: rgba(156, 163, 175, 0.5) transparent; 
+        }
+        .search-result-content::-webkit-scrollbar { 
+            width: 5px; 
+            display: block; 
+        }
+        .search-result-content::-webkit-scrollbar-thumb { 
+            background-color: rgba(156, 163, 175, 0.5); 
+            border-radius: 3px;
+        }
+
+        /* NEW: Sticker details modal content scrollbar */
+        .sticker-details-content-area {
+            max-height: 300px; 
+            overflow-y: auto;
+            white-space: pre-wrap; /* This is important for preserving spaces and newlines */
+            word-break: break-word;
+            padding-right: 8px; 
+            scrollbar-width: thin;
+            scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+            border-left-width: 5px; 
+            padding-left: 1rem; 
+            text-align: left; 
+        }
+        .sticker-details-content-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sticker-details-content-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sticker-details-content-area::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 3px;
+        }
+        .sticker-details-content-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        /* NEW: Color swatch styling for edit modal */
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.1s ease-in-out, border-color 0.1s ease-in-out;
+        }
+        .color-swatch:hover {
+            transform: scale(1.05);
+        }
+        .color-swatch.selected {
+            border-color: #6366f1; /* Tailwind indigo-500 */
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+            transform: scale(1.05);
+        }
+
+
+        /* NEW: Sticker highlight effect */
+        @keyframes stickerHighlight {
+            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); } /* Bright purple glow */
+            70% { box-shadow: 0 0 0 15px rgba(139, 92, 246, 0); } /* Larger spread, fades out */
+            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+        .sticker-highlight-effect {
+            animation: stickerHighlight 5s ease-out; /* Glow for 5 seconds */
+        }
+
+        /* Page button drag styles */
+        #pagesContainer .action-button { cursor: grab; }
+        #pagesContainer .action-button.dragging { 
+            opacity: 0.5; 
+            /* Removed border-style: dashed; */
+        }
+        #pagesContainer .action-button.drag-target-glow {
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.15); /* Indigo glow */
+            transform: translateY(-2px); /* Slight lift */
+            transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+
+        .page-drop-indicator-line {
+            width: 2px; 
+            height: 24px; 
+            background-color: #9ca3af;
+            margin: 0 2px; 
+            border-radius: 1px;
+        }
+
+        /* NEW: Importance light and label styles */
+        .importance-display {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #4b5563; /* gray-700 */
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 4px 8px;
+            border-radius: 12px;
+            z-index: 9; /* Below sticker-actions */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .sticker-note:hover .importance-display {
+            opacity: 0;
+            transform: translateX(-10px);
+        }
+
+        .importance-light {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .light-on-track { background-color: #22c55e; } /* green-500 */
+        .light-caution { background-color: #facc15; } /* yellow-400 */
+        .light-urgent { background-color: #dc2626; } /* red-600 */
+        .light-complete { background-color: #3b82f6; } /* blue-500 */
+
+        /* Importance button styles */
+        .importance-button {
+            /* Inherit common action button styles */
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            /* Specific styles for non-selected importance button */
+            padding: 8px 16px; /* px-4 py-2 */
+            border-radius: 12px; /* rounded-xl */
+            font-weight: 500; /* font-medium */
+            font-size: 0.875rem; /* text-sm */
+            background-color: #e5e7eb; /* gray-200 */
+            color: #4b5563; /* gray-700 */
+            display: flex; /* Added for light dot */
+            align-items: center; /* Added for light dot */
+            gap: 6px; /* Added for spacing between light and text */
+        }
+        .importance-button::before { /* Add the shimmer effect */
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
+        .importance-button:hover::before {
+            left: 100%;
+        }
+        .importance-button.selected {
+            color: white; /* text-white */
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+        .importance-button:hover { /* Adjust hover for non-selected */
+            transform: translateY(-1px);
+            box-shadow: 0 44px 12px rgba(99, 102, 241, 0.2);
+        }
+        .importance-button.selected:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+
+        /* Specific style for importance display in modal */
+        .modal-importance-display {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Slightly more space than sticker-note display */
+            font-size: 1rem; /* Larger font size */
+            font-weight: 600;
+            color: #4b5563;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 8px 12px; /* More padding */
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            width: fit-content; /* Adjust width to content */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass-card p-8 rounded-3xl w-full" style="max-width: 1680px;">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="space-y-6">
+                <div class="text-center">
+                    <h1 class="text-3xl title-gradient mb-2">Sticker Notes</h1>
+                    <p class="text-gray-600 text-sm">Organize your daily work messages</p>
+                </div>
+                
+                <div class="bg-white p-4 rounded-2xl shadow-md border border-gray-200">
+                    <div id="pagesContainer" class="flex flex-wrap gap-2 mb-4 items-center"></div> 
+                    <div class="flex gap-2">
+                        <input type="text" id="newPageNameInput" class="input-field flex-1 p-2 rounded-xl focus:outline-none text-sm" placeholder="New page name..." maxlength="20"/>
+                        <button id="addPageButton" class="action-button primary-button text-white px-4 py-2 rounded-xl font-medium text-sm">➕ Add Page</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-md border border-gray-200">
+                    <label for="stickerNameInput" class="text-gray-700 font-medium block mb-1">Sticker Name:</label>
+                    <input type="text" id="stickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm mb-3" placeholder="Enter sticker name..." maxlength="50"/>
+                    
+                    <label for="stickerDateInput" class="text-gray-700 font-medium block mb-1">Sticker Date:</label>
+                    <input type="text" id="stickerDateInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm mb-3" placeholder="DD/MM/YYYY" maxlength="10"/>
+                    
+                    <label for="stickerWeekInput" class="text-gray-700 font-medium block mb-1">Sticker Week:</label>
+                    <input type="text" id="stickerWeekInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm" placeholder="WKX ofYYYY-YY" maxlength="15"/>
+                </div>
+
+                <div>
+                    <div class="relative">
+                         <label for="messageInput" class="text-gray-700 font-medium block mb-1 sr-only">Message Content:</label>
+                        <textarea id="messageInput" class="input-field w-full p-4 rounded-2xl focus:outline-none resize-none" rows="4" placeholder="Enter your daily work message... 😊🚀"></textarea>
+                        <div class="flex justify-between items-center mt-3">
+                            <span id="charCount" class="text-sm text-gray-500 font-medium">0 characters</span>
+                            <span id="messageCount" class="counter-badge">0/53 stickers</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded-2xl shadow-md border border-gray-200">
+                    <label class="text-gray-700 font-medium block mb-2">Importance Level:</label>
+                    <div id="importanceButtonsContainer" class="flex flex-wrap gap-2 justify-center">
+                        <button class="importance-button" data-importance="onTrack"><span class="importance-light light-on-track"></span>On track</button>
+                        <button class="importance-button" data-importance="caution"><span class="importance-light light-caution"></span>Caution</button>
+                        <button class="importance-button" data-importance="urgent"><span class="importance-light light-urgent"></span>Urgent</button>
+                        <button class="importance-button" data-importance="complete"><span class="importance-light light-complete"></span>Complete</button>
+                    </div>
+                </div>
+
+                <div>
+                    <button id="saveButton" class="action-button primary-button w-full text-white px-6 py-4 rounded-2xl font-semibold text-lg transition-all duration-300" disabled>💾 Save Sticker</button>
+                </div>
+                <p id="debugMessage" class="text-sm text-red-500 p-3 bg-red-50 rounded-xl hidden"></p>
+            </div>
+            
+            <div class="lg:col-span-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="currentStickerPageTitle" class="text-xl font-semibold text-gray-700">Your Stickers</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="globalSearchButton" class="action-button primary-button text-white px-3 py-2 rounded-xl text-sm flex items-center gap-1">
+                            🔎 <span>Search Message</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="stickerDisplayArea">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Element References
+        const messageInput = document.getElementById('messageInput');
+        const stickerNameInput = document.getElementById('stickerNameInput');
+        const stickerDateInput = document.getElementById('stickerDateInput'); 
+        const stickerWeekInput = document.getElementById('stickerWeekInput'); 
+        const importanceButtonsContainer = document.getElementById('importanceButtonsContainer');
+        const saveButton = document.getElementById('saveButton');
+        const charCount = document.getElementById('charCount');
+        const messageCount = document.getElementById('messageCount');
+        const debugMessage = document.getElementById('debugMessage');
+        const pagesContainer = document.getElementById('pagesContainer');
+        const newPageNameInput = document.getElementById('newPageNameInput');
+        const addPageButton = document.getElementById('addPageButton');
+        const currentStickerPageTitle = document.getElementById('currentStickerPageTitle');
+        // const globalSearchInput = document.getElementById('globalSearchInput'); // Removed from main UI
+        const globalSearchButton = document.getElementById('globalSearchButton');
+        const stickerDisplayArea = document.getElementById('stickerDisplayArea'); // Main area for sticker columns
+
+        // Global State Variables
+        let pages = {}; // Stores stickers, keyed by page name: { pageName: [stickerObj, ...], ... }
+        let pageOrder = []; // Array to maintain the order of pages for display
+        let currentPage = 'default'; // The currently active page
+        const maxStickers = 53; // Maximum number of stickers per page
+        const stickerBgColors = [ // Array of background color classes for stickers
+            'sticker-bg-0', 'sticker-bg-1', 'sticker-bg-2', 'sticker-bg-3', 'sticker-bg-4',
+            'sticker-bg-5', 'sticker-bg-6', 'sticker-bg-7', 'sticker-bg-8', 'sticker-bg-9',
+            'sticker-bg-10', 'sticker-bg-11', 'sticker-bg-12', 'sticker-bg-13', 'sticker-bg-14', 'sticker-bg-15'
+        ];
+        const MAX_STICKER_LINES = 6; // Max lines to show in the sticker preview on the main page
+        let draggedStickerIndex = null; // Index of the sticker being dragged
+        let draggedStickerElement = null; // DOM element of the sticker being dragged
+        let draggedOverTargetElement = null; // Stores the element currently being dragged over (for sticker glow effect)
+        let draggedPageName = null; // Name of the page tab being dragged
+        let draggedOverPageTargetElement = null; // Stores the element currently being dragged over (for page glow effect)
+
+        // Importance levels configuration
+        const importanceLevels = {
+            onTrack: { label: 'On track', lightClass: 'light-on-track', borderColorClass: 'importance-level-1' },
+            caution: { label: 'Caution', lightClass: 'light-caution', borderColorClass: 'importance-level-5' },
+            urgent: { label: 'Urgent', lightClass: 'light-urgent', borderColorClass: 'importance-level-9' },
+            complete: { label: 'Complete', lightClass: 'light-complete', borderColorClass: 'importance-level-complete' }
+        };
+        let selectedImportance = null; // Stores the currently selected importance level for a new sticker
+
+        // --- Utility Functions ---
+
+        /**
+         * Returns a random background color class for a sticker.
+         * @returns {string} A CSS class name.
+         */
+        function getRandomStickerBgClass() { return stickerBgColors[Math.floor(Math.random() * stickerBgColors.length)]; }
+        
+        /**
+         * Gets the border color class based on the sticker's importance level.
+         * @param {string} importance - The importance level key (e.g., 'onTrack', 'urgent').
+         * @returns {string} The CSS class for border color.
+         */
+        function getImportanceBorderClass(importance) { 
+            return importanceLevels[importance] ? importanceLevels[importance].borderColorClass : '';
+        }
+        /**
+         * Gets the light color class for the importance indicator.
+         * @param {string} importance - The importance level key.
+         * @returns {string} The CSS class for the importance light.
+         */
+        function getImportanceLightClass(importance) {
+            return importanceLevels[importance] ? importanceLevels[importance].lightClass : '';
+        }
+        /**
+         * Gets the display label for an importance level.
+         * @param {string} importance - The importance level key.
+         * @returns {string} The human-readable label.
+         */
+        function getImportanceLabel(importance) {
+            return importanceLevels[importance] ? importanceLevels[importance].label : '';
+        }
+
+        /**
+         * Shows a temporary floating notification message.
+         * @param {string} messageText - The text to display in the notification.
+         */
+        function showNotification(messageText) { 
+            const notification = document.createElement('div'); 
+            notification.className = 'floating-notification'; 
+            notification.textContent = messageText; 
+            document.body.appendChild(notification); 
+            setTimeout(() => { 
+                notification.classList.add('hide'); 
+                setTimeout(() => notification.remove(), 400); 
+            }, 2000); 
+        }
+
+        /**
+         * Displays a generic input modal.
+         * @param {string} title - The title of the modal.
+         * @param {string} placeholder - Placeholder text for the input field.
+         * @param {string} initialValue - Initial value for the input field.
+         * @param {number} maxLength - Maximum length for the input.
+         * @param {function} onSave - Callback function when save is clicked, passed the input value.
+         * @param {function} onCancel - Callback function when cancel is clicked or modal is dismissed.
+         */
+        function showInputModal(title, placeholder, initialValue, maxLength, onSave, onCancel) { 
+            const overlay = document.createElement('div'); 
+            overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-50'; 
+            const modal = document.createElement('div'); 
+            modal.className = 'modal-content fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-3xl p-8 max-w-md w-full mx-4'; 
+            modal.innerHTML = `<div class="text-center mb-6"><div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center"><span class="text-2xl">📝</span></div><h3 class="text-xl font-semibold text-gray-800 mb-2">${title}</h3><p class="text-gray-600 text-sm mb-4">Enter a name for your item</p><input type="text" id="modalInput" class="input-field w-full p-3 rounded-xl focus:outline-none" placeholder="${placeholder}" maxlength="${maxLength}"/><p class="text-xs text-gray-500 mt-2">Max ${maxLength} characters</p></div><div class="flex space-x-3"><button class="cancel-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Cancel</button><button class="primary-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Save</button></div>`; 
+            overlay.appendChild(modal); 
+            document.body.appendChild(overlay); 
+            const inputField = modal.querySelector('#modalInput'); 
+            const saveBtn = modal.querySelector('.primary-button'); 
+            const cancelBtn = modal.querySelector('.cancel-button'); 
+            inputField.value = initialValue; 
+            inputField.focus(); 
+            inputField.select(); 
+            saveBtn.addEventListener('click', () => { 
+                const value = inputField.value.trim(); 
+                if (value) { 
+                    onSave(value); 
+                    overlay.remove(); 
+                } else { 
+                    inputField.focus(); 
+                    inputField.style.borderColor = '#ef4444'; 
+                    setTimeout(() => inputField.style.borderColor = '', 2000); 
+                } 
+            }); 
+            cancelBtn.addEventListener('click', () => { onCancel(); overlay.remove(); }); 
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) { onCancel(); overlay.remove(); } }); 
+            inputField.addEventListener('keypress', (e) => { if (e.key === 'Enter') saveBtn.click(); }); 
+        }
+        
+        /**
+         * Displays a modal for editing an existing sticker.
+         * @param {object} stickerData - The data of the sticker to be edited.
+         * @param {function} onSave - Callback function when changes are saved.
+         * @param {function} onCancel - Callback function when editing is cancelled.
+         */
+        function showEditStickerModal(stickerData, onSave, onCancel) { 
+            const overlay = document.createElement('div'); 
+            overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-[100]'; 
+            const modal = document.createElement('div'); 
+            modal.className = 'modal-content edit-sticker-modal-content fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-3xl p-6 sm:p-8 shadow-2xl'; 
+            
+            let selectedBgColorClass = stickerData.bgColorClass; 
+            let currentEditImportance = stickerData.importance; 
+
+            const colorSwatchesHtml = stickerBgColors.map(colorClass => `
+                <div class="color-swatch ${colorClass} ${selectedBgColorClass === colorClass ? 'selected' : ''}" data-color-class="${colorClass}"></div>
+            `).join('');
+
+            const importanceButtonsHtml = Object.keys(importanceLevels).map(key => `
+                <button class="importance-button ${currentEditImportance === key ? 'selected' : ''}" data-importance="${key}">
+                    <span class="importance-light ${importanceLevels[key].lightClass}"></span>
+                    ${importanceLevels[key].label}
+                </button>
+            `).join('');
+
+            modal.innerHTML = `
+                <div>
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Edit Sticker</h3>
+                    <div class="mb-4">
+                        <label for="editStickerNameInput" class="block text-sm font-medium text-gray-700 mb-1">Name:</label>
+                        <input type="text" id="editStickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm" value="${stickerData.name}" maxlength="50">
+                    </div>
+                    <div class="mb-4">
+                        <label for="editStickerContentInput" class="block text-sm font-medium text-gray-700 mb-1">Content:</label>
+                        <textarea id="editStickerContentInput" class="input-field w-full p-3 rounded-xl focus:outline-none resize-y text-sm" rows="8">${stickerData.content}</textarea>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Importance Level:</label>
+                        <div id="editImportanceButtonsContainer" class="flex flex-wrap gap-2 justify-center">
+                            ${importanceButtonsHtml}
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Sticker Color:</label>
+                        <div id="colorSwatchesContainer" class="flex flex-wrap gap-3 justify-center">
+                            ${colorSwatchesHtml}
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button id="editModalCancelButton" class="cancel-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Cancel</button>
+                        <button id="editModalSaveButton" class="save-edit-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Save Changes</button>
+                    </div>
+                </div>
+            `; 
+            overlay.appendChild(modal); 
+            document.body.appendChild(overlay); 
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            
+            const nameInput = modal.querySelector('#editStickerNameInput'); 
+            const contentInput = modal.querySelector('#editStickerContentInput'); 
+            const editImportanceButtonsContainer = modal.querySelector('#editImportanceButtonsContainer');
+            const colorSwatchesContainer = modal.querySelector('#colorSwatchesContainer');
+            const saveBtn = modal.querySelector('#editModalSaveButton'); 
+            const cancelBtn = modal.querySelector('#editModalCancelButton'); 
+            
+            editImportanceButtonsContainer.addEventListener('click', (e) => {
+                const clickedButton = e.target.closest('.importance-button');
+                if (clickedButton) {
+                    editImportanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
+                        btn.classList.remove('selected');
+                    });
+                    clickedButton.classList.add('selected');
+                    currentEditImportance = clickedButton.dataset.importance;
+                }
+            });
+
+            colorSwatchesContainer.addEventListener('click', (e) => {
+                const clickedSwatch = e.target.closest('.color-swatch');
+                if (clickedSwatch) {
+                    colorSwatchesContainer.querySelectorAll('.color-swatch').forEach(swatch => {
+                        swatch.classList.remove('selected');
+                    });
+                    clickedSwatch.classList.add('selected');
+                    selectedBgColorClass = clickedSwatch.dataset.colorClass; 
+                }
+            });
+
+            saveBtn.addEventListener('click', () => { 
+                const newName = nameInput.value.trim(); 
+                const newContent = contentInput.value; // Keep original content with spaces for editing
+                const newBgColorClass = selectedBgColorClass; 
+                const newImportance = currentEditImportance;
+
+                if (newName && newContent.trim() && newImportance) { // Check trimmed content for validation
+                    onSave({ name: newName, content: newContent, importance: newImportance, bgColorClass: newBgColorClass }); 
+                    document.body.style.overflow = ''; 
+                    overlay.remove(); 
+                } else { 
+                    showNotification('Name, content, and importance cannot be empty.'); 
+                } 
+            }); 
+            const closeModal = () => { document.body.style.overflow = ''; overlay.remove(); onCancel(); }; 
+            cancelBtn.addEventListener('click', closeModal); 
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); }); 
+            nameInput.focus(); 
+        }
+        /**
+         * Displays a confirmation modal for deleting an item (page or sticker).
+         * @param {string} itemType - The type of item being deleted (e.g., "Page", "Sticker").
+         * @param {string} itemName - The name of the item.
+         * @param {function} onDeleteConfirm - Callback function when deletion is confirmed.
+         */
+        function showDeleteConfirmationModal(itemType, itemName, onDeleteConfirm) { 
+            const overlay = document.createElement('div'); 
+            overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-50'; 
+            const modal = document.createElement('div'); 
+            modal.className = 'modal-content fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-3xl p-8 max-w-sm w-full mx-4 text-center'; 
+            modal.innerHTML = `<div class="mb-6"><div class="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center"><span class="text-2xl">🗑️</span></div><h3 class="text-xl font-semibold text-gray-800 mb-2">Delete ${itemType}</h3><p class="text-gray-600">Are you sure you want to delete "${itemName}"? This action cannot be undone.</p></div><div class="flex space-x-3"><button class="cancel-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Cancel</button><button class="delete-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Delete</button></div>`; 
+            overlay.appendChild(modal); 
+            document.body.appendChild(overlay); 
+            const deleteButton = modal.querySelector('.delete-button'); 
+            const cancelButton = modal.querySelector('.cancel-button'); 
+            deleteButton.addEventListener('click', () => { onDeleteConfirm(); overlay.remove(); showNotification(`${itemType} deleted successfully!`); }); 
+            cancelButton.addEventListener('click', () => overlay.remove()); 
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); 
+        }
+        /**
+         * Copies text to the clipboard.
+         * @param {string} text - The text to copy.
+         * @param {HTMLElement} sourceElement - The element triggering the copy, used to check edit state.
+         */
+        async function copyToClipboard(text, sourceElement) { 
+            if (sourceElement.dataset.isEditing === 'true') { 
+                showNotification('Cannot copy while editing.');
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) { // Use modern clipboard API if available
+                    await navigator.clipboard.writeText(text);
+                    showNotification('Sticker content copied! 📋');
+                } else { // Fallback for older browsers or insecure contexts
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        showNotification('Sticker content copied! 📋');
+                    } catch (err) {
+                        throw new Error('Fallback copy failed');
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                debugMessage.textContent = 'Copy failed. Ensure page is HTTPS or try another browser.';
+                debugMessage.classList.remove('hidden');
+                setTimeout(() => { debugMessage.classList.add('hidden'); }, 3000);
+            }
+        }
+
+        /**
+         * Displays a modal with the full details of a sticker.
+         * @param {object} stickerData - The data of the sticker to display.
+         * @param {number} stickerIndex - The index of the sticker in the current page's array.
+         */
+        function showStickerDetailsModal(stickerData, stickerIndex) { 
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-[100]';
+            const modal = document.createElement('div');
+            modal.className = 'modal-content sticker-details-modal-content fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-3xl p-6 sm:p-8 shadow-2xl';
+            
+            const date = new Date(stickerData.timestamp);
+            const formattedDate = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+            const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            const displayTimestamp = `${formattedDate} ${formattedTime}`;
+
+            // Trim only leading/trailing whitespace from the entire content block.
+            // Internal leading spaces on lines and blank lines should be preserved by this.
+            const processedContent = stickerData.content.trim(); 
+
+            const nameParts = stickerData.name.split(' - ', 2);
+            const baseName = nameParts[0] || stickerData.name;
+            const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
+
+            modal.innerHTML = `
+                <div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-2xl font-semibold text-gray-800">${baseName}${dateAndWeekPart}</h3>
+                        <button id="closeDetailsModalButton" class="text-gray-500 hover:text-gray-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="mb-4">
+                        <div class="modal-importance-display">
+                            <div class="importance-light ${getImportanceLightClass(stickerData.importance)}"></div>
+                            <span>Importance: ${getImportanceLabel(stickerData.importance)}</span>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <label for="stickerDetailsContent" class="block text-sm font-medium text-gray-700 mb-1">Content:</label>
+                        <div id="stickerDetailsContent" class="sticker-details-content-area text-sm text-gray-700 p-3 rounded-xl bg-gray-50 border border-gray-200 ${getImportanceBorderClass(stickerData.importance)}">
+                            </div>
+                    </div>
+                    <p class="text-xs text-gray-500 text-right">${displayTimestamp}</p>
+                    <div class="flex flex-col sm:flex-row gap-3 mt-6">
+                        <button id="detailsModalCopyButton" class="copy-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Copy</button>
+                        <button id="detailsModalEditButton" class="edit-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Edit</button>
+                        <button id="detailsModalDeleteButton" class="delete-button action-button flex-1 text-white px-4 py-3 rounded-xl font-medium">Delete</button>
+                    </div>
+                </div>
+            `;
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            // ** NEW APPROACH: Set content using textContent **
+            const detailsContentDiv = modal.querySelector('#stickerDetailsContent');
+            if (detailsContentDiv) {
+                detailsContentDiv.textContent = processedContent;
+            }
+
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+
+            const closeBtn = modal.querySelector('#closeDetailsModalButton');
+            const copyBtn = modal.querySelector('#detailsModalCopyButton');
+            const editBtn = modal.querySelector('#detailsModalEditButton');
+            const deleteBtn = modal.querySelector('#detailsModalDeleteButton');
+
+            const closeModal = () => {
+                document.body.style.overflow = ''; 
+                overlay.remove();
+            };
+
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    closeModal();
+                }
+            });
+
+            copyBtn.addEventListener('click', () => {
+                copyToClipboard(stickerData.content, modal); 
+            });
+
+            editBtn.addEventListener('click', () => {
+                closeModal(); 
+                const stickerElement = document.querySelector(`.sticker-note[data-sticker-id="${currentPage}-${stickerIndex}"]`);
+                if (stickerElement) {
+                    editSticker(stickerIndex, stickerElement);
+                } else {
+                    showNotification('Could not find sticker to edit.');
+                }
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                closeModal(); 
+                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(index)); 
+            });
+        }
+
+        // --- Data Persistence (localStorage) ---
+
+        /**
+         * Loads all sticker data and page configurations from localStorage.
+         */
+        function loadAllData() { 
+            const storedPages = localStorage.getItem('stickerPages'); 
+            if (storedPages) pages = JSON.parse(storedPages); 
+            else pages['default'] = []; 
+            
+            const storedPageOrder = localStorage.getItem('stickerPageOrder');
+            if (storedPageOrder) {
+                pageOrder = JSON.parse(storedPageOrder);
+                // Ensure pageOrder is consistent with pages
+                const pageKeys = Object.keys(pages);
+                pageOrder = pageOrder.filter(pName => pageKeys.includes(pName)); // Remove non-existent pages
+                pageKeys.forEach(pKey => { // Add any missing pages from 'pages' object
+                    if (!pageOrder.includes(pKey)) pageOrder.push(pKey);
+                });
+            } else {
+                pageOrder = Object.keys(pages); 
+            }
+
+            currentPage = localStorage.getItem('currentPage') || (pageOrder.length > 0 ? pageOrder[0] : 'default'); 
+            // Ensure currentPage exists, if not, reset to a valid page
+            if (!pages[currentPage]) { 
+                currentPage = pageOrder.length > 0 ? pageOrder[0] : 'default'; 
+                if (!pages[currentPage] && currentPage === 'default' && !pageOrder.includes('default')) {
+                     pages['default'] = []; 
+                     if(!pageOrder.includes('default')) pageOrder.push('default');
+                }
+            } 
+            updateUI(); 
+        }
+        /**
+         * Saves all current sticker data and page configurations to localStorage.
+         */
+        function saveAllData() { 
+            localStorage.setItem('stickerPages', JSON.stringify(pages)); 
+            localStorage.setItem('stickerPageOrder', JSON.stringify(pageOrder)); 
+            localStorage.setItem('currentPage', currentPage); 
+        }
+
+        // --- Page Management Functions ---
+
+        /**
+         * Adds a new page.
+         * @param {string} pageName - The name for the new page.
+         */
+        function addPage(pageName) { 
+            if (pages[pageName]) { 
+                showNotification(`Page "${pageName}" already exists!`); 
+                return; 
+            } 
+            pages[pageName] = []; 
+            if(!pageOrder.includes(pageName)) pageOrder.push(pageName); 
+            currentPage = pageName; 
+            saveAllData(); 
+            updateUI(); 
+            showNotification(`Page "${pageName}" created! 🎉`); 
+        }
+        /**
+         * Switches the currently active page.
+         * @param {string} pageName - The name of the page to switch to.
+         */
+        function switchPage(pageName) { 
+            if (currentPage === pageName) return; 
+            currentPage = pageName; 
+            saveAllData(); 
+            updateUI(); 
+            showNotification(`Switched to page: "${pageName}"`); 
+            // globalSearchInput.value = ''; // No longer needed here
+        }
+        /**
+         * Initiates editing the name of an existing page.
+         * @param {string} oldPageName - The current name of the page to edit.
+         */
+        function editPageName(oldPageName) { 
+            showInputModal('Edit Page Name', 'Enter new page name...', oldPageName, 20, 
+                (newPageName) => { 
+                    if (newPageName === oldPageName) { 
+                        showNotification('Page name not changed.'); 
+                        return; 
+                    } 
+                    if (pages[newPageName]) { 
+                        showNotification(`Page "${newPageName}" already exists!`); 
+                        return; 
+                    } 
+                    const pageMessages = pages[oldPageName]; 
+                    delete pages[oldPageName]; 
+                    pages[newPageName] = pageMessages; 
+                    const oldIndex = pageOrder.indexOf(oldPageName); 
+                    if(oldIndex > -1) pageOrder.splice(oldIndex, 1, newPageName); 
+                    else pageOrder.push(newPageName); // Should not happen if page existed
+                    if (currentPage === oldPageName) currentPage = newPageName; 
+                    saveAllData(); 
+                    updateUI(); 
+                    showNotification(`Page "${oldPageName}" renamed to "${newPageName}"!`); 
+                }, 
+                () => {} // onCancel callback
+            ); 
+        }
+        /**
+         * Deletes a page after confirmation.
+         * @param {string} pageName - The name of the page to delete.
+         */
+        function deletePage(pageName) { 
+            showDeleteConfirmationModal('Page', pageName, () => { 
+                delete pages[pageName]; 
+                pageOrder = pageOrder.filter(p => p !== pageName); 
+                if (pageOrder.length === 0) { // Ensure there's always at least one page
+                    pages['default'] = []; 
+                    pageOrder.push('default'); 
+                } 
+                if (currentPage === pageName) currentPage = pageOrder[0] || 'default'; 
+                saveAllData(); 
+                updateUI(); 
+            }); 
+        }
+        
+        /**
+         * Renders the page navigation buttons.
+         */
+        function renderPages() { 
+            pagesContainer.innerHTML = ''; 
+            pageOrder.forEach(pageName => { 
+                if (!pages[pageName]) return; // Skip if page data somehow missing
+                const pageButton = document.createElement('button'); 
+                pageButton.className = `action-button px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 ${currentPage === pageName ? 'primary-button text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`; 
+                pageButton.textContent = pageName; 
+                pageButton.dataset.pageName = pageName; 
+                pageButton.setAttribute('draggable', 'true'); 
+
+                pageButton.addEventListener('click', () => switchPage(pageName)); 
+                pageButton.addEventListener('contextmenu', (e) => { e.preventDefault(); showPageContextMenu(e.clientX, e.clientY, pageName); }); 
+                
+                // Drag and drop event listeners for page reordering
+                pageButton.addEventListener('dragstart', handlePageDragStart);
+                pageButton.addEventListener('dragover', handlePageDragOver);
+                pageButton.addEventListener('dragleave', handlePageDragLeave);
+                pageButton.addEventListener('drop', handlePageDrop);
+                pageButton.addEventListener('dragend', handlePageDragEnd);
+
+                pagesContainer.appendChild(pageButton); 
+            }); 
+        }
+        /**
+         * Shows a context menu for page actions (edit, delete).
+         * @param {number} x - The x-coordinate for the menu position.
+         * @param {number} y - The y-coordinate for the menu position.
+         * @param {string} pageName - The name of the page the context menu is for.
+         */
+        function showPageContextMenu(x, y, pageName) { 
+            const existingMenu = document.getElementById('pageContextMenu'); 
+            if (existingMenu) existingMenu.remove(); 
+            const menu = document.createElement('div'); 
+            menu.id = 'pageContextMenu'; 
+            menu.className = 'absolute bg-white rounded-lg shadow-lg py-2 z-50 text-sm'; 
+            menu.style.left = `${x}px`; 
+            menu.style.top = `${y}px`; 
+            menu.style.minWidth = '120px'; 
+            const editItem = document.createElement('button'); 
+            editItem.className = 'block w-full text-left px-4 py-2 hover:bg-gray-100'; 
+            editItem.textContent = 'Edit Name'; 
+            editItem.addEventListener('click', () => { editPageName(pageName); menu.remove(); }); 
+            const deleteItem = document.createElement('button'); 
+            deleteItem.className = 'block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50'; 
+            deleteItem.textContent = 'Delete Page'; 
+            deleteItem.addEventListener('click', () => { deletePage(pageName); menu.remove(); }); 
+            menu.appendChild(editItem); 
+            if (pageOrder.length > 1) menu.appendChild(deleteItem); // Only allow delete if not the last page
+            document.body.appendChild(menu); 
+            const closeMenu = (event) => { // Auto-close menu on click outside
+                if (!menu.contains(event.target)) { 
+                    menu.remove(); 
+                    document.removeEventListener('click', closeMenu); 
+                    document.removeEventListener('contextmenu', closeMenu); 
+                } 
+            }; 
+            setTimeout(() => { // Add listeners after current event cycle
+                document.addEventListener('click', closeMenu); 
+                document.addEventListener('contextmenu', closeMenu); 
+            }, 0); 
+        }
+
+        // --- Sticker Drag and Drop Handlers ---
+        /**
+         * Handles the start of dragging a sticker.
+         * @param {DragEvent} event - The dragstart event.
+         */
+        function handleDragStart(event) {
+            draggedStickerElement = event.target;
+            draggedStickerIndex = parseInt(draggedStickerElement.dataset.index);
+            draggedStickerElement.classList.add('dragging'); // Make dragged element semi-transparent
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', draggedStickerIndex); // Necessary for Firefox
+        }
+
+        /**
+         * Handles dragging a sticker over a potential drop target.
+         * @param {DragEvent} event - The dragover event.
+         */
+        function handleDragOver(event) {
+            event.preventDefault(); // Allow drop
+            const targetSticker = event.target.closest('.sticker-note');
+
+            // Remove glow from previously targeted sticker
+            if (draggedOverTargetElement && draggedOverTargetElement !== targetSticker) {
+                draggedOverTargetElement.classList.remove('drag-target-glow');
+                draggedOverTargetElement = null;
+            }
+
+            if (targetSticker && targetSticker !== draggedStickerElement) {
+                // Add glow to the new target sticker
+                targetSticker.classList.add('drag-target-glow');
+                draggedOverTargetElement = targetSticker;
+            } else if (!targetSticker && (event.target.id === 'stickerDisplayArea' || event.target.closest('#stickerDisplayArea'))) {
+                // If dragging over an empty part of the display area, ensure no sticker is glowing
+                if (draggedOverTargetElement) {
+                    draggedOverTargetElement.classList.remove('drag-target-glow');
+                    draggedOverTargetElement = null;
+                }
+            }
+        }
+        
+        /**
+         * Handles a dragged sticker leaving a potential drop target.
+         * @param {DragEvent} event - The dragleave event.
+         */
+        function handleDragLeave(event) {
+            // Remove glow when leaving a sticker or the entire display area
+            if (draggedOverTargetElement) {
+                draggedOverTargetElement.classList.remove('drag-target-glow');
+                draggedOverTargetElement = null;
+            }
+        }
+
+        /**
+         * Handles dropping a sticker.
+         * @param {DragEvent} event - The drop event.
+         */
+        function handleDrop(event) {
+            event.preventDefault();
+            
+            // Clean up glow effect immediately
+            if (draggedOverTargetElement) {
+                draggedOverTargetElement.classList.remove('drag-target-glow');
+                draggedOverTargetElement = null;
+            }
+
+            if (draggedStickerIndex === null) {
+                // Cleanup if drop is invalid or aborted
+                if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
+                draggedStickerIndex = null;
+                draggedStickerElement = null;
+                return;
+            }
+
+            const stickersInPage = pages[currentPage];
+            const stickerToMove = stickersInPage.splice(draggedStickerIndex, 1)[0]; // Remove sticker from old position
+            
+            const targetSticker = event.target.closest('.sticker-note');
+            let newIndex;
+
+            if (targetSticker && targetSticker !== draggedStickerElement) {
+                // Dropped over another sticker
+                const allStickers = Array.from(stickerDisplayArea.querySelectorAll('.sticker-note'));
+                const targetIndex = allStickers.indexOf(targetSticker);
+                const rect = targetSticker.getBoundingClientRect();
+                // Determine if dropping on the left or right half of the target sticker
+                const isAfter = event.clientX > rect.left + rect.width / 2;
+                
+                // Determine new index based on whether we're dropping before or after the target
+                newIndex = targetIndex;
+                if (isAfter) {
+                    newIndex = targetIndex + 1;
+                }
+                
+                // Adjust index if dragging from an earlier position to a later one
+                if (draggedStickerIndex < newIndex) {
+                    newIndex--; 
+                }
+
+            } else {
+                // Dropped into an empty area or not specifically on another sticker
+                // Append to the end of the list visually, which means the end of the array
+                newIndex = stickersInPage.length; 
+            }
+            
+            // Insert sticker at the new position
+            stickersInPage.splice(newIndex, 0, stickerToMove);
+            
+            saveAllData();
+            updateStickerList(); // Re-render stickers
+            
+            // Cleanup
+            if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
+            draggedStickerIndex = null;
+            draggedStickerElement = null;
+        }
+        
+        /**
+         * Handles the end of a sticker drag operation (success or failure).
+         * @param {DragEvent} event - The dragend event.
+         */
+        function handleDragEnd(event) {
+            // Cleanup classes and references
+            if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
+            if(draggedOverTargetElement) draggedOverTargetElement.classList.remove('drag-target-glow');
+            draggedStickerIndex = null;
+            draggedStickerElement = null;
+            draggedOverTargetElement = null;
+        }
+
+
+        // --- Sticker List Management ---
+
+        /**
+         * Updates and re-renders the list of stickers for the current page.
+         */
+        function updateStickerList() {
+            stickerDisplayArea.innerHTML = ''; // Clear the main display area
+            const currentStickers = pages[currentPage] || [];
+            currentStickers.forEach((stickerObj, index) => {
+                const stickerContainer = document.createElement('div');
+                stickerContainer.dataset.isEditing = 'false'; // Track if sticker is being edited
+                stickerContainer.dataset.index = index; // Store original index for operations
+                stickerContainer.dataset.stickerId = `${currentPage}-${index}`; // Unique ID for targeting
+                stickerContainer.setAttribute('draggable', 'true'); 
+
+                stickerContainer.className = `sticker-note relative p-4 rounded-xl shadow-md ${stickerObj.bgColorClass} ${getImportanceBorderClass(stickerObj.importance)}`;
+                
+                // Add drag and drop event listeners to each sticker
+                stickerContainer.addEventListener('dragstart', handleDragStart);
+                stickerContainer.addEventListener('dragover', handleDragOver); 
+                stickerContainer.addEventListener('dragleave', handleDragLeave); 
+                stickerContainer.addEventListener('drop', handleDrop);      
+                stickerContainer.addEventListener('dragend', handleDragEnd);
+
+                // Click to show details modal (if not clicking an.action button)
+                stickerContainer.addEventListener('click', (e) => { 
+                    if (!e.target.closest('.sticker-actions button') && stickerContainer.dataset.isEditing === 'false' && !stickerContainer.classList.contains('dragging')) { 
+                        showStickerDetailsModal(stickerObj, index); 
+                    } 
+                });
+
+                const nameParts = stickerObj.name.split(' - ', 2);
+                const baseName = nameParts[0] || stickerObj.name;
+                const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
+
+                const headerDiv = document.createElement('div'); 
+                headerDiv.className = "flex justify-between items-start mb-1"; 
+                headerDiv.innerHTML = `<div class="font-semibold text-gray-800 text-sm truncate pr-16 pointer-events-none">${baseName}${dateAndWeekPart}</div>`; 
+                stickerContainer.appendChild(headerDiv);
+
+                // Sticker content area (truncated for main display)
+                const contentArea = document.createElement('div'); 
+                contentArea.className = "flex-grow overflow-hidden mb-1 pointer-events-none"; 
+                const contentText = document.createElement('div'); 
+                contentText.className = 'sticker-content-text text-sm text-gray-700 h-full'; 
+                const lines = stickerObj.content.split('\n');
+                if (lines.length > MAX_STICKER_LINES) { 
+                    const lastVisibleLine = lines[MAX_STICKER_LINES -1]; 
+                    contentText.textContent = lines.slice(0, MAX_STICKER_LINES-1).join('\n') + '\n' + lastVisibleLine + ' ...'; 
+                } else { 
+                    contentText.textContent = stickerObj.content.trim(); // Trim for preview consistency
+                }
+                contentArea.appendChild(contentText); 
+                stickerContainer.appendChild(contentArea);
+                
+                // Timestamp display
+                const timestampDiv = document.createElement('div'); 
+                timestampDiv.className = 'sticker-timestamp pointer-events-none'; 
+                const date = new Date(stickerObj.timestamp); 
+                const formattedDate = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`; 
+                const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); 
+                timestampDiv.textContent = `${formattedDate} ${formattedTime}`; 
+                stickerContainer.appendChild(timestampDiv);
+                
+                // Importance indicator (light and label)
+                const importanceDisplayDiv = document.createElement('div');
+                importanceDisplayDiv.className = 'importance-display';
+                importanceDisplayDiv.innerHTML = `
+                    <div class="importance-light ${getImportanceLightClass(stickerObj.importance)}"></div>
+                    <span>${getImportanceLabel(stickerObj.importance)}</span>
+                `;
+                stickerContainer.appendChild(importanceDisplayDiv);
+
+                // Action buttons (Copy, Edit, Delete)
+                const actionsDiv = document.createElement('div'); 
+                actionsDiv.className = 'sticker-actions'; 
+                actionsDiv.innerHTML = `
+                    <button class="copy-button action-button text-white px-2 py-1 rounded-lg font-medium text-xs">Copy</button>
+                    <button class="edit-button action-button text-white px-2 py-1 rounded-lg font-medium text-xs">Edit</button>
+                    <button class="delete-button action-button text-white px-2 py-1 rounded-lg font-medium text-xs">Del</button>
+                `; 
+                stickerContainer.appendChild(actionsDiv);
+
+                actionsDiv.querySelector('.copy-button').addEventListener('click', (e) => { 
+                    e.stopPropagation(); // Prevent modal from opening
+                    copyToClipboard(stickerObj.content, stickerContainer); 
+                });
+                actionsDiv.querySelector('.edit-button').addEventListener('click', (e) => { e.stopPropagation(); editSticker(index, stickerContainer); });
+                actionsDiv.querySelector('.delete-button').addEventListener('click', (e) => { e.stopPropagation(); showDeleteConfirmationModal('Sticker', stickerObj.name, () => deleteSticker(index)); });
+                
+                // Append sticker directly to the main display area
+                stickerDisplayArea.appendChild(stickerContainer);
+            });
+            
+            // Add dragover listeners to the main display area for dropping into empty areas
+            stickerDisplayArea.addEventListener('dragover', handleDragOver); 
+            stickerDisplayArea.addEventListener('dragleave', handleDragLeave); 
+            stickerDisplayArea.addEventListener('drop', handleDrop); 
+
+            messageCount.textContent = `${currentStickers.length}/${maxStickers} stickers`;
+            updateSaveButtonState();
+        }
+        
+        /**
+         * Initiates editing of a specific sticker.
+         * @param {number} index - The index of the sticker to edit.
+         * @param {HTMLElement} stickerElement - The DOM element of the sticker.
+         */
+        function editSticker(index, stickerElement) { 
+            stickerElement.dataset.isEditing = 'true'; // Mark as editing
+            const currentSticker = pages[currentPage][index]; 
+            showEditStickerModal(currentSticker, 
+                (updatedData) => { // onSave callback
+                    pages[currentPage][index] = { 
+                        ...currentSticker, 
+                        name: updatedData.name, 
+                        content: updatedData.content, 
+                        importance: updatedData.importance, 
+                        bgColorClass: updatedData.bgColorClass, 
+                        timestamp: Date.now(), // Update timestamp on edit
+                    }; 
+                    saveAllData(); 
+                    updateStickerList(); 
+                    showNotification('Sticker updated! ✨'); 
+                    stickerElement.dataset.isEditing = 'false'; // Reset editing state
+                }, 
+                () => { // onCancel callback
+                    stickerElement.dataset.isEditing = 'false'; // Reset editing state
+                }
+            ); 
+        }
+        /**
+         * Deletes a sticker from the current page.
+         * @param {number} index - The index of the sticker to delete.
+         */
+        function deleteSticker(index) { 
+            pages[currentPage].splice(index, 1); 
+            saveAllData(); 
+            updateStickerList(); 
+        }
+        
+        // --- Date and Week Calculation Helpers ---
+
+        /**
+         * Formats a Date object to DD/MM/YYYY string.
+         * @param {Date} date - The date to format.
+         * @returns {string} The formatted date string.
+         */
+        function formatDate(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        /**
+         * Parses a DD/MM/YYYY string into a Date object.
+         * @param {string} dateString - The date string to parse.
+         * @returns {Date|null} The Date object, or null if parsing fails.
+         */
+        function parseDateString(dateString) {
+            const parts = dateString.split('/');
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed for Date constructor
+                const year = parseInt(parts[2], 10);
+                const date = new Date(year, month, day);
+                if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+                    return date;
+                }
+            }
+            return null; 
+        }
+
+        /**
+         * Gets the start date of the financial year (first Sunday on or after May 1st).
+         * @param {number} year - The calendar year.
+         * @returns {Date} The start date of the financial year.
+         */
+        function getFinancialYearStartDate(year) {
+            let may1 = new Date(year, 4, 1); 
+            let dayOfWeek = may1.getDay(); 
+            let daysToAdd = (7 - dayOfWeek) % 7; 
+            may1.setDate(may1.getDate() + daysToAdd);
+            may1.setHours(0, 0, 0, 0); 
+            return may1;
+        }
+
+        /**
+         * Calculates the financial week number for a given date.
+         * @param {Date} date - The date for which to calculate the financial week.
+         * @returns {string} The financial week string (e.g., "WK23 (24-25)").
+         */
+        function calculateFinancialWeek(date) {
+            const currentCalYear = date.getFullYear();
+            const fyStartCurrentCalYear = getFinancialYearStartDate(currentCalYear);
+            const fyStartPrevCalYear = getFinancialYearStartDate(currentCalYear - 1);
+
+            let actualFYStart; 
+            let actualFYLabel; 
+            let nextFYStartForActualFY; 
+
+            if (date < fyStartCurrentCalYear) { 
+                actualFYStart = fyStartPrevCalYear;
+                actualFYLabel = currentCalYear - 1;
+                nextFYStartForActualFY = fyStartCurrentCalYear;
+            } else { 
+                actualFYStart = fyStartCurrentCalYear;
+                actualFYLabel = currentCalYear;
+                nextFYStartForActualFY = getFinancialYearStartDate(currentCalYear + 1);
+            }
+
+            const daysInActualFY = Math.floor((nextFYStartForActualFY - actualFYStart) / (1000 * 60 * 60 * 24));
+            const is53WeekYear = (daysInActualFY === 371); // A 53-week year has 371 days (53*7)
+
+            const diffDaysFromActualFYStart = Math.floor((date - actualFYStart) / (1000 * 60 * 60 * 24));
+            let weekNumber = Math.floor(diffDaysFromActualFYStart / 7) + 1;
+
+            if (is53WeekYear && weekNumber > 53) {
+                weekNumber = 53; // Cap at 53 for a 53-week year
+            } else if (!is53WeekYear && weekNumber > 52) {
+                weekNumber = 52; // Cap at 52 for a 52-week year
+            }
+            if (weekNumber <=0) weekNumber = 1; // Ensure week number is at least 1
+
+
+            const startYearShort = String(actualFYLabel).slice(-2);
+            const endYearShort = String(actualFYLabel + 1).slice(-2);
+            return `WK${weekNumber} (${startYearShort}-${endYearShort})`;
+        }
+
+        /**
+         * Updates the date and week input fields to today's date and corresponding financial week.
+         */
+        function updateDateAndWeekInputs() {
+            const today = new Date();
+            stickerDateInput.value = formatDate(today);
+            stickerWeekInput.value = calculateFinancialWeek(today);
+        }
+
+        /**
+         * Updates the sticker week input based on the value in the sticker date input.
+         */
+        function updateStickerWeekBasedOnDateInput() {
+            const dateString = stickerDateInput.value.trim();
+            const parsedDate = parseDateString(dateString);
+            if (parsedDate) {
+                stickerWeekInput.value = calculateFinancialWeek(parsedDate);
+            } else {
+                stickerWeekInput.value = ''; 
+            }
+        }
+
+        // --- Input Handling and Saving ---
+
+        /**
+         * Updates the enabled/disabled state of the save button based on input validity.
+         */
+        function updateSaveButtonState() { 
+            const messageLength = messageInput.value.trim().length; 
+            const nameLength = stickerNameInput.value.trim().length; 
+            const dateLength = stickerDateInput.value.trim().length; 
+            const weekLength = stickerWeekInput.value.trim().length; 
+            const currentStickers = pages[currentPage] || []; 
+            saveButton.disabled = messageLength === 0 || nameLength === 0 || dateLength === 0 || weekLength === 0 || currentStickers.length >= maxStickers || selectedImportance === null; 
+        }
+
+        importanceButtonsContainer.addEventListener('click', (e) => {
+            const clickedButton = e.target.closest('.importance-button');
+            if (clickedButton) {
+                importanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                clickedButton.classList.add('selected');
+                selectedImportance = clickedButton.dataset.importance; 
+                updateSaveButtonState(); 
+            }
+        });
+
+        messageInput.addEventListener('input', () => { 
+            charCount.textContent = `${messageInput.value.length} characters`; 
+            updateSaveButtonState(); 
+        });
+        stickerNameInput.addEventListener('input', updateSaveButtonState);
+        stickerDateInput.addEventListener('input', () => {
+            updateStickerWeekBasedOnDateInput(); 
+            updateSaveButtonState();
+        }); 
+        stickerWeekInput.addEventListener('input', updateSaveButtonState); 
+
+        saveButton.addEventListener('click', () => { 
+            const message = messageInput.value.trim(); 
+            const stickerNameBase = stickerNameInput.value.trim(); 
+            const stickerDateString = stickerDateInput.value.trim(); 
+            const stickerWeekString = stickerWeekInput.value.trim(); 
+            const importance = selectedImportance; 
+            const currentStickers = pages[currentPage] || []; 
+
+            const fullStickerName = `${stickerNameBase} - ${stickerDateString} ${stickerWeekString}`;
+
+            if (stickerNameBase && stickerDateString && stickerWeekString && message && importance && currentStickers.length < maxStickers) { 
+                const stickerObj = { 
+                    name: fullStickerName, 
+                    content: messageInput.value, 
+                    importance, 
+                    timestamp: Date.now(), 
+                    bgColorClass: getRandomStickerBgClass() 
+                }; 
+                if (!pages[currentPage]) pages[currentPage] = []; 
+                pages[currentPage].unshift(stickerObj); 
+                saveAllData(); 
+                
+                messageInput.value = ''; 
+                stickerNameInput.value = ''; 
+                charCount.textContent = `0 characters`; 
+                selectedImportance = null;
+                importanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                updateDateAndWeekInputs(); 
+                updateUI(); 
+                showNotification('Sticker saved! ✨'); 
+            } else if (currentStickers.length >= maxStickers) { 
+                showNotification('Maximum sticker limit reached for this page.'); 
+            } else if (!stickerNameBase) { 
+                showNotification('Sticker name cannot be empty.'); stickerNameInput.focus(); 
+            } else if (!stickerDateString) { 
+                showNotification('Sticker date cannot be empty.'); stickerDateInput.focus(); 
+            } else if (!stickerWeekString) { 
+                showNotification('Sticker week cannot be empty.'); stickerWeekInput.focus(); 
+            } else if (!message) { 
+                showNotification('Message content cannot be empty.'); messageInput.focus(); 
+            } else if (!importance) { 
+                showNotification('Please select an importance level.'); 
+            } 
+        });
+        addPageButton.addEventListener('click', () => { 
+            const newPageName = newPageNameInput.value.trim(); 
+            if (newPageName) { 
+                addPage(newPageName); 
+                newPageNameInput.value = ''; 
+            } else { 
+                showNotification('Page name cannot be empty.'); 
+            } 
+        });
+        newPageNameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addPageButton.click(); });
+
+        // --- Page Drag and Drop Handlers ---
+        let pageDropIndicator = null; 
+        function handlePageDragStart(event) {
+            draggedPageName = event.target.dataset.pageName;
+            event.target.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', draggedPageName);
+            if (!pageDropIndicator) {
+                pageDropIndicator = document.createElement('div');
+                pageDropIndicator.className = 'page-drop-indicator-line';
+            }
+        }
+        function handlePageDragOver(event) {
+            event.preventDefault();
+            const targetPageButton = event.target.closest('#pagesContainer .action-button');
+
+            // Remove glow from previously targeted page button
+            if (draggedOverPageTargetElement && draggedOverPageTargetElement !== targetPageButton) {
+                draggedOverPageTargetElement.classList.remove('drag-target-glow');
+                draggedOverPageTargetElement = null;
+            }
+
+            if (targetPageButton && targetPageButton.dataset.pageName !== draggedPageName) {
+                // Add glow to the new target page button
+                targetPageButton.classList.add('drag-target-glow');
+                draggedOverPageTargetElement = targetPageButton;
+
+                const rect = targetPageButton.getBoundingClientRect();
+                const isAfter = event.clientX > rect.left + rect.width / 2; 
+                if (isAfter) {
+                    pagesContainer.insertBefore(pageDropIndicator, targetPageButton.nextSibling);
+                } else {
+                    pagesContainer.insertBefore(pageDropIndicator, targetPageButton);
+                }
+            } else if (!targetPageButton && event.currentTarget === pagesContainer) { 
+                // If dragging over an empty part of the pages container, ensure no page button is glowing
+                if (draggedOverPageTargetElement) {
+                    draggedOverPageTargetElement.classList.remove('drag-target-glow');
+                    draggedOverPageTargetElement = null;
+                }
+                pagesContainer.appendChild(pageDropIndicator);
+            }
+        }
+        function handlePageDragLeave(event) {
+            // Remove glow when leaving a page button or the entire pages container
+            if (draggedOverPageTargetElement) {
+                draggedOverPageTargetElement.classList.remove('drag-target-glow');
+                draggedOverPageTargetElement = null;
+            }
+            if (pageDropIndicator && pageDropIndicator.parentNode && !event.currentTarget.contains(event.relatedTarget)) {
+                pageDropIndicator.remove();
+            }
+        }
+        function handlePageDrop(event) {
+            event.preventDefault();
+            
+            // Clean up glow effect immediately
+            if (draggedOverPageTargetElement) {
+                draggedOverPageTargetElement.classList.remove('drag-target-glow');
+                draggedOverPageTargetElement = null;
+            }
+
+            if (!draggedPageName || !pageDropIndicator || !pageDropIndicator.parentNode) {
+                if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+                const draggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
+                if(draggingElem) draggingElem.classList.remove('dragging');
+                draggedPageName = null;
+                return;
+            }
+
+            const oldIndex = pageOrder.indexOf(draggedPageName);
+            pageOrder.splice(oldIndex, 1); 
+
+            const buttonsAndIndicator = Array.from(pagesContainer.children).filter(c => c.classList.contains('action-button') || c === pageDropIndicator);
+            let newIndex = buttonsAndIndicator.indexOf(pageDropIndicator);
+            
+            pageOrder.splice(newIndex, 0, draggedPageName); 
+
+            saveAllData();
+            renderPages(); 
+
+            if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+            const finalDraggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
+            if(finalDraggingElem) finalDraggingElem.classList.remove('dragging');
+            draggedPageName = null;
+        }
+        function handlePageDragEnd(event) {
+            if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+            const elem = event.target.closest('.action-button');
+            if(elem) elem.classList.remove('dragging');
+            if(draggedOverPageTargetElement) draggedOverPageTargetElement.classList.remove('drag-target-glow');
+            draggedPageName = null;
+            draggedOverPageTargetElement = null;
+        }
+
+
+        // --- Global Search Functions ---
+        function performGlobalSearch() { 
+            const allStickers = [];
+            pageOrder.forEach(pageName => {
+                if (pages[pageName]) {
+                    pages[pageName].forEach((sticker, index) => {
+                        allStickers.push({ ...sticker, pageName, originalIndex: index, stickerId: `${pageName}-${index}` });
+                    });
+                }
+            });
+            displaySearchResultsModal(allStickers, ''); // Pass all stickers and an empty initial search term
+        }
+
+        /**
+         * Displays a modal with search results and enables instant search within it.
+         * @param {Array<Object>} allStickers - An array of all stickers from all pages.
+         * @param {string} initialSearchTerm - The initial search term to pre-populate the search field.
+         */
+        function displaySearchResultsModal(allStickers, initialSearchTerm) {
+            const existingModal = document.getElementById('searchResultsModal'); 
+            if(existingModal) existingModal.remove(); 
+            
+            const overlay = document.createElement('div'); 
+            overlay.id = 'searchResultsModal'; 
+            overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-[100]';
+            const modal = document.createElement('div'); 
+            modal.className = 'modal-content search-results-modal-content fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-3xl p-6 sm:p-8 shadow-2xl';
+            
+            modal.innerHTML = `
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-2xl font-semibold text-gray-800">Search Stickers</h3>
+                        <button id="closeSearchModalButton" class="text-gray-500 hover:text-gray-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="mb-4">
+                        <input type="text" id="modalSearchInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm" placeholder="Search all stickers..." value="${initialSearchTerm}">
+                    </div>
+                    <div class="search-modal-body scrollbar-custom pr-2">
+                        </div>
+                </div>
+            `;
+            overlay.appendChild(modal); 
+            document.body.appendChild(overlay); 
+            document.body.style.overflow = 'hidden'; 
+
+            const modalSearchInput = modal.querySelector('#modalSearchInput');
+            const searchResultsContainer = modal.querySelector('.search-modal-body');
+
+            /**
+             * Renders filtered search results within the modal.
+             * @param {string} searchTerm - The current search term.
+             */
+            const renderFilteredResults = (searchTerm) => {
+                const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
+                const filteredResults = allStickers.filter(sticker => {
+                    const importanceLabel = getImportanceLabel(sticker.importance).toLowerCase();
+                    return sticker.name.toLowerCase().includes(lowerCaseSearchTerm) || 
+                           sticker.content.toLowerCase().includes(lowerCaseSearchTerm) || 
+                           importanceLabel.includes(lowerCaseSearchTerm);
+                });
+
+                let resultsHTML = '';
+                if (filteredResults.length > 0) {
+                    filteredResults.forEach(sticker => {
+                        const date = new Date(sticker.timestamp); 
+                        const formattedDate = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`; 
+                        const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); 
+                        const displayTimestamp = `${formattedDate} ${formattedTime}`;
+                        
+                        const regex = new RegExp(`(${lowerCaseSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                        let displayName = sticker.name.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                        let displayContent = sticker.content.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                        let displayImportanceLabel = getImportanceLabel(sticker.importance).replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                        
+                        resultsHTML += `
+                            <div class="search-result-item ${getImportanceBorderClass(sticker.importance)} border-l-4 pl-3" data-target-page="${sticker.pageName}" data-sticker-id="${sticker.stickerId}">
+                                <h4 class="font-semibold text-lg text-gray-800 mb-1">${displayName}</h4>
+                                <p class="text-xs text-gray-500 mb-1">On page: ${sticker.pageName}</p>
+                                <div class="flex items-center gap-1 text-sm text-gray-700 mb-2">
+                                    <div class="importance-light ${getImportanceLightClass(sticker.importance)}"></div>
+                                    <span>${displayImportanceLabel}</span>
+                                </div>
+                                <div class="search-result-content text-sm text-gray-700 mb-2 whitespace-pre-wrap scrollbar-custom">${displayContent}</div>
+                                <p class="text-xs text-gray-500 text-right">${displayTimestamp}</p>
+                            </div>`;
+                    });
+                } else { 
+                    resultsHTML = '<p class="text-gray-600 text-center py-4">No stickers found matching your search.</p>'; 
+                }
+                searchResultsContainer.innerHTML = resultsHTML;
+
+                // Re-attach click listeners to newly rendered items
+                searchResultsContainer.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const targetPage = item.dataset.targetPage;
+                        const targetStickerId = item.dataset.stickerId;
+                        switchPage(targetPage); 
+                        setTimeout(() => { 
+                            const stickerElement = document.querySelector(`.sticker-note[data-sticker-id="${targetStickerId}"]`);
+                            if (stickerElement) {
+                                // Add vibration effect
+                                if (navigator.vibrate) {
+                                    navigator.vibrate(200); // Vibrate for 200ms
+                                }
+                                stickerElement.classList.add('sticker-highlight-effect');
+                                stickerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                setTimeout(() => { 
+                                    stickerElement.classList.remove('sticker-highlight-effect');
+                                }, 5000); 
+                            }
+                        }, 100); 
+                        document.body.style.overflow = ''; 
+                        overlay.remove(); 
+                    });
+                });
+            };
+
+            // Initial render of results when modal opens
+            renderFilteredResults(initialSearchTerm);
+
+            // Add event listener for instant search
+            modalSearchInput.addEventListener('input', (e) => {
+                renderFilteredResults(e.target.value);
+            });
+            modalSearchInput.focus(); // Focus the search input when modal opens
+
+            modal.querySelector('#closeSearchModalButton').addEventListener('click', () => { 
+                document.body.style.overflow = ''; 
+                overlay.remove(); 
+            });
+        }
+
+        globalSearchButton.addEventListener('click', performGlobalSearch);
+        // globalSearchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performGlobalSearch(); }); // Removed
+
+        // --- UI Update and Initialization ---
+
+        function updateUI() { 
+            if (!pages[currentPage] && pageOrder.length > 0) { 
+                currentPage = pageOrder[0]; 
+            } else if (!pages[currentPage]) { 
+                currentPage = 'default'; 
+                if(!pageOrder.includes('default')) pageOrder.push('default'); 
+                if(!pages.default) pages.default = []; 
+            } 
+            saveAllData(); 
+            renderPages(); 
+            updateStickerList(); 
+            const pageTitle = currentPage.charAt(0).toUpperCase() + currentPage.slice(1); 
+            currentStickerPageTitle.textContent = `${pageTitle} Stickers`; 
+            updateSaveButtonState(); 
+            updateDateAndWeekInputs(); 
+            
+            selectedImportance = null;
+            importanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+        }
+        
+        loadAllData();
+    </script>
+</body>
+</html>
