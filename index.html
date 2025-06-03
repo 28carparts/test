@@ -879,6 +879,7 @@
 
             const nameParts = stickerData.name.split(' - ', 2);
             const baseName = nameParts[0] || stickerData.name;
+            // Updated to correctly display weekday and week part
             const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
 
             modal.innerHTML = `
@@ -1304,6 +1305,7 @@
 
                 const nameParts = stickerObj.name.split(' - ', 2);
                 const baseName = nameParts[0] || stickerObj.name;
+                // Updated to correctly display weekday and week part
                 const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
 
                 const headerDiv = document.createElement('div'); 
@@ -1424,6 +1426,16 @@
             const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
             const year = date.getFullYear();
             return `${day}/${month}/${year}`;
+        }
+
+        /**
+         * Gets the abbreviated weekday name (e.g., "SUN", "MON").
+         * @param {Date} date - The date object.
+         * @returns {string} The three-letter uppercase abbreviation of the weekday.
+         */
+        function getWeekdayAbbreviation(date) {
+            const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            return weekdays[date.getDay()];
         }
 
         /**
@@ -1569,7 +1581,10 @@
             const importance = selectedImportance; 
             const currentStickers = pages[currentPage] || []; 
 
-            const fullStickerName = `${stickerNameBase} - ${stickerDateString} ${stickerWeekString}`;
+            const parsedDateForWeekday = parseDateString(stickerDateString);
+            const weekdayAbbr = parsedDateForWeekday ? getWeekdayAbbreviation(parsedDateForWeekday) : '';
+
+            const fullStickerName = `${stickerNameBase} - ${stickerDateString} ${weekdayAbbr} | ${stickerWeekString}`;
 
             if (stickerNameBase && stickerDateString && stickerWeekString && message && importance && currentStickers.length < maxStickers) { 
                 const stickerObj = { 
