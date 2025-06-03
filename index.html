@@ -389,11 +389,11 @@
         }
 
         .page-drop-indicator-line {
-            width: 2px; 
+            width: 0; /* Set width to 0 to hide the line */
             height: 24px; 
-            background-color: #9ca3af;
-            margin: 0 2px; 
-            border-radius: 1px;
+            background-color: transparent; /* Set background to transparent */
+            margin: 0; /* Remove margin */
+            border-radius: 0; /* Remove border-radius */
         }
 
         /* NEW: Importance light and label styles */
@@ -1640,10 +1640,7 @@
             event.target.classList.add('dragging');
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', draggedPageName);
-            if (!pageDropIndicator) {
-                pageDropIndicator = document.createElement('div');
-                pageDropIndicator.className = 'page-drop-indicator-line';
-            }
+            // No longer create the drop indicator, as it will be hidden by CSS
         }
         function handlePageDragOver(event) {
             event.preventDefault();
@@ -1660,20 +1657,16 @@
                 targetPageButton.classList.add('drag-target-glow');
                 draggedOverPageTargetElement = targetPageButton;
 
-                const rect = targetPageButton.getBoundingClientRect();
-                const isAfter = event.clientX > rect.left + rect.width / 2; 
-                if (isAfter) {
-                    pagesContainer.insertBefore(pageDropIndicator, targetPageButton.nextSibling);
-                } else {
-                    pagesContainer.insertBefore(pageDropIndicator, targetPageButton);
-                }
+                // No longer insert the indicator line, as it's hidden.
+                // The reordering logic still relies on the position of elements,
+                // but the visual indicator is gone.
             } else if (!targetPageButton && event.currentTarget === pagesContainer) { 
                 // If dragging over an empty part of the pages container, ensure no page button is glowing
                 if (draggedOverPageTargetElement) {
                     draggedOverPageTargetElement.classList.remove('drag-target-glow');
                     draggedOverPageTargetElement = null;
                 }
-                pagesContainer.appendChild(pageDropIndicator);
+                // No longer append the indicator line.
             }
         }
         function handlePageDragLeave(event) {
@@ -1682,9 +1675,7 @@
                 draggedOverPageTargetElement.classList.remove('drag-target-glow');
                 draggedOverPageTargetElement = null;
             }
-            if (pageDropIndicator && pageDropIndicator.parentNode && !event.currentTarget.contains(event.relatedTarget)) {
-                pageDropIndicator.remove();
-            }
+            // No longer remove the indicator, as it's not visually present.
         }
         function handlePageDrop(event) {
             event.preventDefault();
@@ -1695,8 +1686,7 @@
                 draggedOverPageTargetElement = null;
             }
 
-            if (!draggedPageName || !pageDropIndicator || !pageDropIndicator.parentNode) {
-                if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+            if (!draggedPageName) { // Simplified check as pageDropIndicator is no longer used for visual presence
                 const draggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
                 if(draggingElem) draggingElem.classList.remove('dragging');
                 draggedPageName = null;
@@ -1706,21 +1696,36 @@
             const oldIndex = pageOrder.indexOf(draggedPageName);
             pageOrder.splice(oldIndex, 1); 
 
-            const buttonsAndIndicator = Array.from(pagesContainer.children).filter(c => c.classList.contains('action-button') || c === pageDropIndicator);
-            let newIndex = buttonsAndIndicator.indexOf(pageDropIndicator);
+            // Determine the new index based on where the drop occurred relative to other page buttons
+            const allPageButtons = Array.from(pagesContainer.querySelectorAll('.action-button'));
+            let newIndex = allPageButtons.length; // Default to end if no specific target
+            const targetPageButton = event.target.closest('.action-button');
+
+            if (targetPageButton && targetPageButton.dataset.pageName !== draggedPageName) {
+                const targetIndex = allPageButtons.indexOf(targetPageButton);
+                const rect = targetPageButton.getBoundingClientRect();
+                const isAfter = event.clientX > rect.left + rect.width / 2;
+                newIndex = targetIndex;
+                if (isAfter) {
+                    newIndex = targetIndex + 1;
+                }
+                if (oldIndex < newIndex) {
+                    newIndex--; 
+                }
+            }
             
             pageOrder.splice(newIndex, 0, draggedPageName); 
 
             saveAllData();
             renderPages(); 
 
-            if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+            // No longer remove pageDropIndicator as it's not visually present.
             const finalDraggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
             if(finalDraggingElem) finalDraggingElem.classList.remove('dragging');
             draggedPageName = null;
         }
         function handlePageDragEnd(event) {
-            if(pageDropIndicator && pageDropIndicator.parentNode) pageDropIndicator.remove();
+            // No longer remove pageDropIndicator as it's not visually present.
             const elem = event.target.closest('.action-button');
             if(elem) elem.classList.remove('dragging');
             if(draggedOverPageTargetElement) draggedOverPageTargetElement.classList.remove('drag-target-glow');
