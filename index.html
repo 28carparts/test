@@ -354,13 +354,27 @@
 
         /* NEW: Sticker highlight effect */
         @keyframes stickerHighlight {
-            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); } /* Bright purple glow */
-            70% { box-shadow: 0 0 0 15px rgba(139, 92, 246, 0); } /* Larger spread, fades out */
-            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } /* Bright green glow */
+            70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); } /* Larger spread, fades out */
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
         .sticker-highlight-effect {
             animation: stickerHighlight 5s ease-out; /* Glow for 5 seconds */
         }
+
+        /* NEW: Shake effect */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .sticker-shake-effect {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0);
+            backface-visibility: hidden;
+            perspective: 1000px;
+        }
+
 
         /* Page button drag styles */
         #pagesContainer .action-button { cursor: grab; }
@@ -831,8 +845,6 @@
                     try {
                         document.execCommand('copy');
                         showNotification('Sticker content copied! 📋');
-                    } catch (err) {
-                        throw new Error('Fallback copy failed');
                     } finally {
                         document.body.removeChild(textarea);
                     }
@@ -1804,15 +1816,17 @@
                         setTimeout(() => { 
                             const stickerElement = document.querySelector(`.sticker-note[data-sticker-id="${targetStickerId}"]`);
                             if (stickerElement) {
-                                // Add vibration effect
-                                if (navigator.vibrate) {
-                                    navigator.vibrate(200); // Vibrate for 200ms
-                                }
-                                stickerElement.classList.add('sticker-highlight-effect');
-                                stickerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                setTimeout(() => { 
-                                    stickerElement.classList.remove('sticker-highlight-effect');
-                                }, 5000); 
+                                // Add visual shake effect
+                                stickerElement.classList.add('sticker-shake-effect');
+                                setTimeout(() => {
+                                    stickerElement.classList.remove('sticker-shake-effect');
+                                    // Then add the glow effect after the shake
+                                    stickerElement.classList.add('sticker-highlight-effect');
+                                    stickerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    setTimeout(() => { 
+                                        stickerElement.classList.remove('sticker-highlight-effect');
+                                    }, 5000); 
+                                }, 500); // Shake for 0.5 seconds
                             }
                         }, 100); 
                         document.body.style.overflow = ''; 
