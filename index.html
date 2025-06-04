@@ -462,14 +462,16 @@
         .importance-button:hover::before {
             left: 100%;
         }
+        /* New hover for non-selected importance button, matching page buttons */
+        .importance-button:not(.selected):hover {
+            background-color: #d1d5db; /* Tailwind gray-300 */
+            transform: none; /* Ensure no transform */
+            box-shadow: none; /* Ensure no box-shadow */
+        }
         .importance-button.selected {
             color: white; /* text-white */
             background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-        }
-        .importance-button:hover { /* Adjust hover for non-selected */
-            transform: translateY(-1px);
-            box-shadow: 0 44px 12px rgba(99, 102, 241, 0.2);
         }
         .importance-button.selected:hover {
             transform: translateY(-2px);
@@ -550,7 +552,7 @@
             
             <div class="lg:col-span-3">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 id="currentStickerPageTitle" class="text-xl font-semibold text-gray-700">Your Stickers</h2>
+                    <h2 id="currentStickerPageTitle" class="text-2xl font-semibold text-gray-700">Your Stickers</h2>
                     <div class="flex items-center gap-2">
                         <button id="globalSearchButton" class="action-button primary-button text-white px-3 py-2 rounded-xl text-sm flex items-center gap-1">
                             🔎 <span>Search Message</span>
@@ -691,7 +693,7 @@
                 } 
             }); 
             cancelBtn.addEventListener('click', () => { onCancel(); overlay.remove(); }); 
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) { onCancel(); overlay.remove(); } }); 
+            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) { onCancel(); overlay.remove(); } }); 
             inputField.addEventListener('keypress', (e) => { if (e.key === 'Enter') saveBtn.click(); }); 
         }
         
@@ -779,6 +781,7 @@
                         swatch.classList.remove('selected');
                     });
                     clickedSwatch.classList.add('selected');
+                    // FIX: Changed dataset.color-class to dataset.colorClass
                     selectedBgColorClass = clickedSwatch.dataset.colorClass; 
                 }
             });
@@ -799,7 +802,7 @@
             }); 
             const closeModal = () => { document.body.style.overflow = ''; overlay.remove(); onCancel(); }; 
             cancelBtn.addEventListener('click', closeModal); 
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); }); 
+            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); }); 
             nameInput.focus(); 
         }
         /**
@@ -820,7 +823,7 @@
             const cancelButton = modal.querySelector('.cancel-button'); 
             deleteButton.addEventListener('click', () => { onDeleteConfirm(); overlay.remove(); showNotification(`${itemType} deleted successfully!`); }); 
             cancelButton.addEventListener('click', () => overlay.remove()); 
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); 
+            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); 
         }
         /**
          * Copies text to the clipboard.
@@ -875,7 +878,7 @@
 
             // Trim only leading/trailing whitespace from the entire content block.
             // Internal leading spaces on lines and blank lines should be preserved by this.
-            const processedContent = stickerData.content.trim(); 
+            const originalContent = stickerData.content; 
 
             const nameParts = stickerData.name.split(' - ', 2);
             const baseName = nameParts[0] || stickerData.name;
@@ -890,11 +893,12 @@
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
-                    <div class="mb-4">
+                    <div class="mb-4 flex items-center gap-4">
                         <div class="modal-importance-display">
                             <div class="importance-light ${getImportanceLightClass(stickerData.importance)}"></div>
                             <span>Importance: ${getImportanceLabel(stickerData.importance)}</span>
                         </div>
+                        <input type="text" id="detailsSearchInput" class="input-field flex-1 p-2 rounded-xl focus:outline-none text-sm" placeholder="Search within sticker content...">
                     </div>
                     <div class="mb-6">
                         <label for="stickerDetailsContent" class="block text-sm font-medium text-gray-700 mb-1">Content:</label>
@@ -912,11 +916,28 @@
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
             
-            // ** NEW APPROACH: Set content using textContent **
             const detailsContentDiv = modal.querySelector('#stickerDetailsContent');
-            if (detailsContentDiv) {
-                detailsContentDiv.textContent = processedContent;
-            }
+            const detailsSearchInput = modal.querySelector('#detailsSearchInput');
+
+            // Function to render content with highlighting
+            const renderContentWithHighlight = (content, searchTerm) => {
+                if (!searchTerm) {
+                    detailsContentDiv.textContent = content;
+                    return;
+                }
+                const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                const regex = new RegExp(`(${lowerCaseSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                detailsContentDiv.innerHTML = content.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+            };
+
+            // Initial render of content
+            renderContentWithHighlight(originalContent, '');
+
+            // Event listener for search input within the details modal
+            detailsSearchInput.addEventListener('input', (e) => {
+                renderContentWithHighlight(originalContent, e.target.value);
+            });
+            detailsSearchInput.focus(); // Focus the search input when modal opens
 
             document.body.style.overflow = 'hidden'; // Prevent background scrolling
 
@@ -931,11 +952,7 @@
             };
 
             closeBtn.addEventListener('click', closeModal);
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    closeModal();
-                }
-            });
+            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) { closeModal(); } });
 
             copyBtn.addEventListener('click', () => {
                 copyToClipboard(stickerData.content, modal); 
@@ -1041,7 +1058,7 @@
                         showNotification('Page name not changed.'); 
                         return; 
                     } 
-                    if (pages[newPageName]) { 
+                    if (newPageName.toLowerCase() in pages) { // Check if new page name (case-insensitive) already exists
                         showNotification(`Page "${newPageName}" already exists!`); 
                         return; 
                     } 
@@ -1130,11 +1147,11 @@
             if (pageOrder.length > 1) menu.appendChild(deleteItem); // Only allow delete if not the last page
             document.body.appendChild(menu); 
             const closeMenu = (event) => { // Auto-close menu on click outside
-                if (!menu.contains(event.target)) { 
+                // Removed: if (!menu.contains(event.target)) { 
                     menu.remove(); 
                     document.removeEventListener('click', closeMenu); 
                     document.removeEventListener('contextmenu', closeMenu); 
-                } 
+                // Removed: } 
             }; 
             setTimeout(() => { // Add listeners after current event cycle
                 document.addEventListener('click', closeMenu); 
@@ -1790,11 +1807,14 @@
              */
             const renderFilteredResults = (searchTerm) => {
                 const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
+                const keywords = lowerCaseSearchTerm.split(/\s+/).filter(word => word.length > 0); // Split by spaces and filter empty strings
+
                 const filteredResults = allStickers.filter(sticker => {
                     const importanceLabel = getImportanceLabel(sticker.importance).toLowerCase();
-                    return sticker.name.toLowerCase().includes(lowerCaseSearchTerm) || 
-                           sticker.content.toLowerCase().includes(lowerCaseSearchTerm) || 
-                           importanceLabel.includes(lowerCaseSearchTerm);
+                    const searchableText = `${sticker.name.toLowerCase()} ${sticker.content.toLowerCase()} ${importanceLabel}`;
+                    
+                    // Check if all keywords are present in the searchable text
+                    return keywords.every(keyword => searchableText.includes(keyword));
                 });
 
                 let resultsHTML = '';
@@ -1805,10 +1825,17 @@
                         const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); 
                         const displayTimestamp = `${formattedDate} ${formattedTime}`;
                         
-                        const regex = new RegExp(`(${lowerCaseSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                        let displayName = sticker.name.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
-                        let displayContent = sticker.content.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
-                        let displayImportanceLabel = getImportanceLabel(sticker.importance).replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                        // Highlight all keywords in the display text
+                        let displayName = sticker.name;
+                        let displayContent = sticker.content;
+                        let displayImportanceLabel = getImportanceLabel(sticker.importance);
+
+                        keywords.forEach(keyword => {
+                            const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                            displayName = displayName.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                            displayContent = displayContent.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                            displayImportanceLabel = displayImportanceLabel.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
+                        });
                         
                         resultsHTML += `
                             <div class="search-result-item ${getImportanceBorderClass(sticker.importance)} border-l-4 pl-3" data-target-page="${sticker.pageName}" data-sticker-id="${sticker.stickerId}">
