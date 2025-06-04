@@ -6,6 +6,8 @@
     <title>Sticker Notes App</title>
     <link rel="shortcut icon" type="image/png" href="https://placehold.co/32x32/764ba2/ffffff?text=SN">
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
@@ -41,7 +43,6 @@
 
         .sticker-note.dragging { 
             opacity: 0.5;
-            /* Removed border-style: dashed; */
         }
         
         .sticker-note:hover {
@@ -149,7 +150,7 @@
         
         .cancel-button {
             background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4); /* Corrected shadow property */
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
         }
         
         .input-field {
@@ -243,7 +244,6 @@
             font-weight: 700;
         }
 
-        /* Original importance levels (will be mapped to new ones) */
         .importance-level-1 { border-left-color: #22c55e; } /* Green */
         .importance-level-2 { border-left-color: #4ade80; }  
         .importance-level-3 { border-left-color: #84cc16; } 
@@ -255,7 +255,6 @@
         .importance-level-9 { border-left-color: #dc2626; } /* Red */
         .importance-level-10 { border-left-color: #b91c1c; }
 
-        /* NEW: Custom importance level for 'Complete' */
         .importance-level-complete { border-left-color: #3b82f6; } /* Blue */
 
         .sticker-bg-0 { background-color: #fef9c3; } .sticker-bg-1 { background-color: #dbeafe; }
@@ -306,11 +305,10 @@
             border-radius: 3px;
         }
 
-        /* NEW: Sticker details modal content scrollbar */
         .sticker-details-content-area {
             max-height: 300px; 
             overflow-y: auto;
-            white-space: pre-wrap; /* This is important for preserving spaces and newlines */
+            white-space: pre-wrap;
             word-break: break-word;
             padding-right: 8px; 
             scrollbar-width: thin;
@@ -333,7 +331,6 @@
             background: rgba(99, 102, 241, 0.5);
         }
 
-        /* NEW: Color swatch styling for edit modal */
         .color-swatch {
             width: 32px;
             height: 32px;
@@ -346,23 +343,20 @@
             transform: scale(1.05);
         }
         .color-swatch.selected {
-            border-color: #6366f1; /* Tailwind indigo-500 */
+            border-color: #6366f1; 
             box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
             transform: scale(1.05);
         }
 
-
-        /* NEW: Sticker highlight effect */
         @keyframes stickerHighlight {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } /* Bright green glow */
-            70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); } /* Larger spread, fades out */
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); } 
             100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
         .sticker-highlight-effect {
-            animation: stickerHighlight 5s ease-out; /* Glow for 5 seconds */
+            animation: stickerHighlight 5s ease-out; 
         }
 
-        /* NEW: Shake effect */
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
             10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
@@ -375,28 +369,24 @@
             perspective: 1000px;
         }
 
-
-        /* Page button drag styles */
         #pagesContainer .action-button { cursor: grab; }
         #pagesContainer .action-button.dragging { 
             opacity: 0.5; 
-            /* Removed border-style: dashed; */
         }
         #pagesContainer .action-button.drag-target-glow {
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.15); /* Indigo glow */
-            transform: translateY(-2px); /* Slight lift */
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.15); 
+            transform: translateY(-2px); 
             transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
         }
 
         .page-drop-indicator-line {
-            width: 0; /* Set width to 0 to hide the line */
+            width: 0; 
             height: 24px; 
-            background-color: transparent; /* Set background to transparent */
-            margin: 0; /* Remove margin */
-            border-radius: 0; /* Remove border-radius */
+            background-color: transparent; 
+            margin: 0; 
+            border-radius: 0; 
         }
 
-        /* NEW: Importance light and label styles */
         .importance-display {
             position: absolute;
             top: 8px;
@@ -406,11 +396,11 @@
             gap: 4px;
             font-size: 0.75rem;
             font-weight: 600;
-            color: #4b5563; /* gray-700 */
+            color: #4b5563; 
             background-color: rgba(255, 255, 255, 0.7);
             padding: 4px 8px;
             border-radius: 12px;
-            z-index: 9; /* Below sticker-actions */
+            z-index: 9; 
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             transition: opacity 0.2s ease, transform 0.2s ease;
         }
@@ -427,29 +417,26 @@
             border: 1px solid rgba(0,0,0,0.1);
         }
 
-        .light-on-track { background-color: #22c55e; } /* green-500 */
-        .light-caution { background-color: #facc15; } /* yellow-400 */
-        .light-urgent { background-color: #dc2626; } /* red-600 */
-        .light-complete { background-color: #3b82f6; } /* blue-500 */
+        .light-on-track { background-color: #22c55e; } 
+        .light-caution { background-color: #facc15; } 
+        .light-urgent { background-color: #dc2626; } 
+        .light-complete { background-color: #3b82f6; } 
 
-        /* Importance button styles */
         .importance-button {
-            /* Inherit common action button styles */
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            /* Specific styles for non-selected importance button */
-            padding: 8px 16px; /* px-4 py-2 */
-            border-radius: 12px; /* rounded-xl */
-            font-weight: 500; /* font-medium */
-            font-size: 0.875rem; /* text-sm */
-            background-color: #e5e7eb; /* gray-200 */
-            color: #4b5563; /* gray-700 */
-            display: flex; /* Added for light dot */
-            align-items: center; /* Added for light dot */
-            gap: 6px; /* Added for spacing between light and text */
+            padding: 8px 16px; 
+            border-radius: 12px; 
+            font-weight: 500; 
+            font-size: 0.875rem; 
+            background-color: #e5e7eb; 
+            color: #4b5563; 
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
         }
-        .importance-button::before { /* Add the shimmer effect */
+        .importance-button::before { 
             content: '';
             position: absolute;
             top: 0;
@@ -462,14 +449,13 @@
         .importance-button:hover::before {
             left: 100%;
         }
-        /* New hover for non-selected importance button, matching page buttons */
         .importance-button:not(.selected):hover {
-            background-color: #d1d5db; /* Tailwind gray-300 */
-            transform: none; /* Ensure no transform */
-            box-shadow: none; /* Ensure no box-shadow */
+            background-color: #d1d5db; 
+            transform: none; 
+            box-shadow: none; 
         }
         .importance-button.selected {
-            color: white; /* text-white */
+            color: white; 
             background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
         }
@@ -478,20 +464,113 @@
             box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
         }
 
-        /* Specific style for importance display in modal */
         .modal-importance-display {
             display: flex;
             align-items: center;
-            gap: 8px; /* Slightly more space than sticker-note display */
-            font-size: 1rem; /* Larger font size */
+            gap: 8px; 
+            font-size: 1rem; 
             font-weight: 600;
             color: #4b5563;
             background-color: rgba(255, 255, 255, 0.7);
-            padding: 8px 12px; /* More padding */
+            padding: 8px 12px; 
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            width: fit-content; /* Adjust width to content */
+            width: fit-content; 
         }
+
+        /* Flatpickr custom theme to match app */
+        .flatpickr-calendar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(209, 213, 219, 0.5); /* gray-300 with opacity */
+            border-radius: 1rem; /* rounded-2xl */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            font-family: 'Inter', sans-serif;
+            width: auto; /* Adjust width as needed */
+        }
+        .flatpickr-months .flatpickr-month {
+            color: #4b5563; /* gray-600 */
+            fill: #4b5563;
+        }
+        .flatpickr-months .flatpickr-prev-month,
+        .flatpickr-months .flatpickr-next-month {
+            color: #6366f1; /* indigo-500 */
+            fill: #6366f1;
+        }
+        .flatpickr-months .flatpickr-prev-month:hover svg,
+        .flatpickr-months .flatpickr-next-month:hover svg {
+            fill: #4f46e5; /* indigo-600 */
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #374151; /* gray-700 */
+        }
+        .flatpickr-current-month input.cur-year {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #374151; /* gray-700 */
+        }
+        .flatpickr-weekdays {
+            background: rgba(243, 244, 246, 0.5); /* gray-100 with opacity */
+        }
+        span.flatpickr-weekday {
+            color: #4b5563; /* gray-600 */
+            font-weight: 500;
+        }
+        .flatpickr-day {
+            color: #374151; /* gray-700 */
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .flatpickr-day:hover,
+        .flatpickr-day.prevMonthDay:hover,
+        .flatpickr-day.nextMonthDay:hover {
+            background: rgba(224, 231, 255, 0.8); /* indigo-100 with opacity */
+            color: #4f46e5; /* indigo-600 */
+            border-color: transparent;
+        }
+        .flatpickr-day.selected,
+        .flatpickr-day.startRange,
+        .flatpickr-day.endRange,
+        .flatpickr-day.selected.inRange,
+        .flatpickr-day.startRange.inRange,
+        .flatpickr-day.endRange.inRange,
+        .flatpickr-day.selected:focus,
+        .flatpickr-day.startRange:focus,
+        .flatpickr-day.endRange:focus,
+        .flatpickr-day.selected:hover,
+        .flatpickr-day.startRange:hover,
+        .flatpickr-day.endRange:hover,
+        .flatpickr-day.selected.prevMonthDay,
+        .flatpickr-day.startRange.prevMonthDay,
+        .flatpickr-day.endRange.prevMonthDay,
+        .flatpickr-day.selected.nextMonthDay,
+        .flatpickr-day.startRange.nextMonthDay,
+        .flatpickr-day.endRange.nextMonthDay {
+            background: #6366f1; /* indigo-500 */
+            border-color: #6366f1;
+            color: white;
+            box-shadow: none;
+        }
+        .flatpickr-day.today {
+            border-color: #8b5cf6; /* purple-500 */
+            color: #7c3aed; /* purple-600 */
+        }
+        .flatpickr-day.today:hover {
+            background: rgba(224, 231, 255, 0.8); /* indigo-100 with opacity */
+            color: #4f46e5; /* indigo-600 */
+        }
+        .flatpickr-day.disabled,
+        .flatpickr-day.disabled:hover {
+            color: #9ca3af; /* gray-400 */
+            background: transparent;
+        }
+        .flatpickr-day.prevMonthDay,
+        .flatpickr-day.nextMonthDay {
+            color: #9ca3af; /* gray-400 */
+        }
+
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -517,7 +596,15 @@
                     <input type="text" id="stickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm mb-3" placeholder="Enter sticker name..." maxlength="50"/>
                     
                     <label for="stickerDateInput" class="text-gray-700 font-medium block mb-1">Sticker Date:</label>
-                    <input type="text" id="stickerDateInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm mb-3" placeholder="DD/MM/YYYY" maxlength="10"/>
+                    <!-- Modified stickerDateInput for date picker -->
+                    <div class="relative mb-3">
+                        <input type="text" id="stickerDateInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm pr-10" placeholder="DD/MM/YYYY" maxlength="10"/>
+                        <div id="stickerDateIcon" class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-500 hover:text-indigo-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-3.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Zm0 2.25h.008v.008H16.5v-.008Z" />
+                            </svg>
+                        </div>
+                    </div>
                     
                     <label for="stickerWeekInput" class="text-gray-700 font-medium block mb-1">Sticker Week:</label>
                     <input type="text" id="stickerWeekInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm" placeholder="WKX ofYYYY-YY" maxlength="15"/>
@@ -568,11 +655,14 @@
         </div>
     </div>
 
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
         // DOM Element References
         const messageInput = document.getElementById('messageInput');
         const stickerNameInput = document.getElementById('stickerNameInput');
         const stickerDateInput = document.getElementById('stickerDateInput'); 
+        const stickerDateIcon = document.getElementById('stickerDateIcon'); // New: Date picker icon
         const stickerWeekInput = document.getElementById('stickerWeekInput'); 
         const importanceButtonsContainer = document.getElementById('importanceButtonsContainer');
         const saveButton = document.getElementById('saveButton');
@@ -583,74 +673,50 @@
         const newPageNameInput = document.getElementById('newPageNameInput');
         const addPageButton = document.getElementById('addPageButton');
         const currentStickerPageTitle = document.getElementById('currentStickerPageTitle');
-        // const globalSearchInput = document.getElementById('globalSearchInput'); // Removed from main UI
         const globalSearchButton = document.getElementById('globalSearchButton');
-        const exportButton = document.getElementById('exportButton'); // New export button
-        const stickerDisplayArea = document.getElementById('stickerDisplayArea'); // Main area for sticker columns
+        const exportButton = document.getElementById('exportButton'); 
+        const stickerDisplayArea = document.getElementById('stickerDisplayArea'); 
 
         // Global State Variables
-        let pages = {}; // Stores stickers, keyed by page name: { pageName: [stickerObj, ...], ... }
-        let pageOrder = []; // Array to maintain the order of pages for display
-        let currentPage = 'default'; // The currently active page
-        const maxStickers = 53; // Maximum number of stickers per page
-        const stickerBgColors = [ // Array of background color classes for stickers
+        let pages = {}; 
+        let pageOrder = []; 
+        let currentPage = 'default'; 
+        const maxStickers = 53; 
+        const stickerBgColors = [ 
             'sticker-bg-0', 'sticker-bg-1', 'sticker-bg-2', 'sticker-bg-3', 'sticker-bg-4',
             'sticker-bg-5', 'sticker-bg-6', 'sticker-bg-7', 'sticker-bg-8', 'sticker-bg-9',
             'sticker-bg-10', 'sticker-bg-11', 'sticker-bg-12', 'sticker-bg-13', 'sticker-bg-14', 'sticker-bg-15'
         ];
-        const MAX_STICKER_LINES = 6; // Max lines to show in the sticker preview on the main page
-        let draggedStickerIndex = null; // Index of the sticker being dragged
-        let draggedStickerElement = null; // DOM element of the sticker being dragged
-        let draggedOverTargetElement = null; // Stores the element currently being dragged over (for sticker glow effect)
-        let draggedPageName = null; // Name of the page tab being dragged
-        let draggedOverPageTargetElement = null; // Stores the element currently being dragged over (for page glow effect)
+        const MAX_STICKER_LINES = 6; 
+        let draggedStickerIndex = null; 
+        let draggedStickerElement = null; 
+        let draggedOverTargetElement = null; 
+        let draggedPageName = null; 
+        let draggedOverPageTargetElement = null; 
+        let flatpickrInstance = null; // New: To store flatpickr instance
 
-        // Importance levels configuration
         const importanceLevels = {
             onTrack: { label: 'On track', lightClass: 'light-on-track', borderColorClass: 'importance-level-1' },
             caution: { label: 'Caution', lightClass: 'light-caution', borderColorClass: 'importance-level-5' },
             urgent: { label: 'Urgent', lightClass: 'light-urgent', borderColorClass: 'importance-level-9' },
             complete: { label: 'Complete', lightClass: 'light-complete', borderColorClass: 'importance-level-complete' }
         };
-        let selectedImportance = null; // Stores the currently selected importance level for a new sticker
+        let selectedImportance = null; 
 
         // --- Utility Functions ---
 
-        /**
-         * Returns a random background color class for a sticker.
-         * @returns {string} A CSS class name.
-         */
         function getRandomStickerBgClass() { return stickerBgColors[Math.floor(Math.random() * stickerBgColors.length)]; }
         
-        /**
-         * Gets the border color class based on the sticker's importance level.
-         * @param {string} importance - The importance level key (e.g., 'onTrack', 'urgent').
-         * @returns {string} The CSS class for border color.
-         */
         function getImportanceBorderClass(importance) { 
             return importanceLevels[importance] ? importanceLevels[importance].borderColorClass : '';
         }
-        /**
-         * Gets the light color class for the importance indicator.
-         * @param {string} importance - The importance level key.
-         * @returns {string} The CSS class for the importance light.
-         */
         function getImportanceLightClass(importance) {
             return importanceLevels[importance] ? importanceLevels[importance].lightClass : '';
         }
-        /**
-         * Gets the display label for an importance level.
-         * @param {string} importance - The importance level key.
-         * @returns {string} The human-readable label.
-         */
         function getImportanceLabel(importance) {
             return importanceLevels[importance] ? importanceLevels[importance].label : '';
         }
 
-        /**
-         * Shows a temporary floating notification message.
-         * @param {string} messageText - The text to display in the notification.
-         */
         function showNotification(messageText) { 
             const notification = document.createElement('div'); 
             notification.className = 'floating-notification'; 
@@ -662,15 +728,6 @@
             }, 2000); 
         }
 
-        /**
-         * Displays a generic input modal.
-         * @param {string} title - The title of the modal.
-         * @param {string} placeholder - Placeholder text for the input field.
-         * @param {string} initialValue - Initial value for the input field.
-         * @param {number} maxLength - Maximum length for the input.
-         * @param {function} onSave - Callback function when save is clicked, passed the input value.
-         * @param {function} onCancel - Callback function when cancel is clicked or modal is dismissed.
-         */
         function showInputModal(title, placeholder, initialValue, maxLength, onSave, onCancel) { 
             const overlay = document.createElement('div'); 
             overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-50'; 
@@ -697,16 +754,9 @@
                 } 
             }); 
             cancelBtn.addEventListener('click', () => { onCancel(); overlay.remove(); }); 
-            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) { onCancel(); overlay.remove(); } }); 
             inputField.addEventListener('keypress', (e) => { if (e.key === 'Enter') saveBtn.click(); }); 
         }
         
-        /**
-         * Displays a modal for editing an existing sticker.
-         * @param {object} stickerData - The data of the sticker to be edited.
-         * @param {function} onSave - Callback function when changes are saved.
-         * @param {function} onCancel - Callback function when editing is cancelled.
-         */
         function showEditStickerModal(stickerData, onSave, onCancel) { 
             const overlay = document.createElement('div'); 
             overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-[100]'; 
@@ -758,7 +808,7 @@
             `; 
             overlay.appendChild(modal); 
             document.body.appendChild(overlay); 
-            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            document.body.style.overflow = 'hidden'; 
             
             const nameInput = modal.querySelector('#editStickerNameInput'); 
             const contentInput = modal.querySelector('#editStickerContentInput'); 
@@ -785,18 +835,17 @@
                         swatch.classList.remove('selected');
                     });
                     clickedSwatch.classList.add('selected');
-                    // FIX: Changed dataset.color-class to dataset.colorClass
                     selectedBgColorClass = clickedSwatch.dataset.colorClass; 
                 }
             });
 
             saveBtn.addEventListener('click', () => { 
                 const newName = nameInput.value.trim(); 
-                const newContent = contentInput.value; // Keep original content with spaces for editing
+                const newContent = contentInput.value; 
                 const newBgColorClass = selectedBgColorClass; 
                 const newImportance = currentEditImportance;
 
-                if (newName && newContent.trim() && newImportance) { // Check trimmed content for validation
+                if (newName && newContent.trim() && newImportance) { 
                     onSave({ name: newName, content: newContent, importance: newImportance, bgColorClass: newBgColorClass }); 
                     document.body.style.overflow = ''; 
                     overlay.remove(); 
@@ -806,15 +855,8 @@
             }); 
             const closeModal = () => { document.body.style.overflow = ''; overlay.remove(); onCancel(); }; 
             cancelBtn.addEventListener('click', closeModal); 
-            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); }); 
             nameInput.focus(); 
         }
-        /**
-         * Displays a confirmation modal for deleting an item (page or sticker).
-         * @param {string} itemType - The type of item being deleted (e.g., "Page", "Sticker").
-         * @param {string} itemName - The name of the item.
-         * @param {function} onDeleteConfirm - Callback function when deletion is confirmed.
-         */
         function showDeleteConfirmationModal(itemType, itemName, onDeleteConfirm) { 
             const overlay = document.createElement('div'); 
             overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-50'; 
@@ -827,13 +869,7 @@
             const cancelButton = modal.querySelector('.cancel-button'); 
             deleteButton.addEventListener('click', () => { onDeleteConfirm(); overlay.remove(); showNotification(`${itemType} deleted successfully!`); }); 
             cancelButton.addEventListener('click', () => overlay.remove()); 
-            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); 
         }
-        /**
-         * Copies text to the clipboard.
-         * @param {string} text - The text to copy.
-         * @param {HTMLElement} sourceElement - The element triggering the copy, used to check edit state.
-         */
         async function copyToClipboard(text, sourceElement) { 
             if (sourceElement.dataset.isEditing === 'true') { 
                 showNotification('Cannot copy while editing.');
@@ -841,10 +877,10 @@
             }
 
             try {
-                if (navigator.clipboard && window.isSecureContext) { // Use modern clipboard API if available
+                if (navigator.clipboard && window.isSecureContext) { 
                     await navigator.clipboard.writeText(text);
                     showNotification('Sticker content copied! 📋');
-                } else { // Fallback for older browsers or insecure contexts
+                } else { 
                     const textarea = document.createElement('textarea');
                     textarea.value = text;
                     document.body.appendChild(textarea);
@@ -864,11 +900,6 @@
             }
         }
 
-        /**
-         * Displays a modal with the full details of a sticker.
-         * @param {object} stickerData - The data of the sticker to display.
-         * @param {number} stickerIndex - The index of the sticker in the current page's array.
-         */
         function showStickerDetailsModal(stickerData, stickerIndex) { 
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay fixed inset-0 flex items-center justify-center z-[100]';
@@ -880,13 +911,10 @@
             const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             const displayTimestamp = `${formattedDate} ${formattedTime}`;
 
-            // Trim only leading/trailing whitespace from the entire content block.
-            // Internal leading spaces on lines and blank lines should be preserved by this.
             const originalContent = stickerData.content; 
 
             const nameParts = stickerData.name.split(' - ', 2);
             const baseName = nameParts[0] || stickerData.name;
-            // Updated to correctly display weekday and week part
             const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
 
             modal.innerHTML = `
@@ -923,7 +951,6 @@
             const detailsContentDiv = modal.querySelector('#stickerDetailsContent');
             const detailsSearchInput = modal.querySelector('#detailsSearchInput');
 
-            // Function to render content with highlighting
             const renderContentWithHighlight = (content, searchTerm) => {
                 if (!searchTerm) {
                     detailsContentDiv.textContent = content;
@@ -934,16 +961,14 @@
                 detailsContentDiv.innerHTML = content.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
             };
 
-            // Initial render of content
             renderContentWithHighlight(originalContent, '');
 
-            // Event listener for search input within the details modal
             detailsSearchInput.addEventListener('input', (e) => {
                 renderContentWithHighlight(originalContent, e.target.value);
             });
-            detailsSearchInput.focus(); // Focus the search input when modal opens
+            detailsSearchInput.focus(); 
 
-            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            document.body.style.overflow = 'hidden'; 
 
             const closeBtn = modal.querySelector('#closeDetailsModalButton');
             const copyBtn = modal.querySelector('#detailsModalCopyButton');
@@ -956,7 +981,6 @@
             };
 
             closeBtn.addEventListener('click', closeModal);
-            // Removed: overlay.addEventListener('click', (e) => { if (e.target === overlay) { closeModal(); } });
 
             copyBtn.addEventListener('click', () => {
                 copyToClipboard(stickerData.content, modal); 
@@ -974,15 +998,12 @@
 
             deleteBtn.addEventListener('click', () => {
                 closeModal(); 
-                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(index)); 
+                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(stickerIndex)); 
             });
         }
 
         // --- Data Persistence (localStorage) ---
 
-        /**
-         * Loads all sticker data and page configurations from localStorage.
-         */
         function loadAllData() { 
             const storedPages = localStorage.getItem('stickerPages'); 
             if (storedPages) pages = JSON.parse(storedPages); 
@@ -991,10 +1012,9 @@
             const storedPageOrder = localStorage.getItem('stickerPageOrder');
             if (storedPageOrder) {
                 pageOrder = JSON.parse(storedPageOrder);
-                // Ensure pageOrder is consistent with pages
                 const pageKeys = Object.keys(pages);
-                pageOrder = pageOrder.filter(pName => pageKeys.includes(pName)); // Remove non-existent pages
-                pageKeys.forEach(pKey => { // Add any missing pages from 'pages' object
+                pageOrder = pageOrder.filter(pName => pageKeys.includes(pName)); 
+                pageKeys.forEach(pKey => { 
                     if (!pageOrder.includes(pKey)) pageOrder.push(pKey);
                 });
             } else {
@@ -1002,7 +1022,6 @@
             }
 
             currentPage = localStorage.getItem('currentPage') || (pageOrder.length > 0 ? pageOrder[0] : 'default'); 
-            // Ensure currentPage exists, if not, reset to a valid page
             if (!pages[currentPage]) { 
                 currentPage = pageOrder.length > 0 ? pageOrder[0] : 'default'; 
                 if (!pages[currentPage] && currentPage === 'default' && !pageOrder.includes('default')) {
@@ -1012,9 +1031,6 @@
             } 
             updateUI(); 
         }
-        /**
-         * Saves all current sticker data and page configurations to localStorage.
-         */
         function saveAllData() { 
             localStorage.setItem('stickerPages', JSON.stringify(pages)); 
             localStorage.setItem('stickerPageOrder', JSON.stringify(pageOrder)); 
@@ -1023,10 +1039,6 @@
 
         // --- Page Management Functions ---
 
-        /**
-         * Adds a new page.
-         * @param {string} pageName - The name for the new page.
-         */
         function addPage(pageName) { 
             if (pages[pageName]) { 
                 showNotification(`Page "${pageName}" already exists!`); 
@@ -1039,22 +1051,13 @@
             updateUI(); 
             showNotification(`Page "${pageName}" created! 🎉`); 
         }
-        /**
-         * Switches the currently active page.
-         * @param {string} pageName - The name of the page to switch to.
-         */
         function switchPage(pageName) { 
             if (currentPage === pageName) return; 
             currentPage = pageName; 
             saveAllData(); 
             updateUI(); 
             showNotification(`Switched to page: "${pageName}"`); 
-            // globalSearchInput.value = ''; // No longer needed here
         }
-        /**
-         * Initiates editing the name of an existing page.
-         * @param {string} oldPageName - The current name of the page to edit.
-         */
         function editPageName(oldPageName) { 
             showInputModal('Edit Page Name', 'Enter new page name...', oldPageName, 20, 
                 (newPageName) => { 
@@ -1062,7 +1065,7 @@
                         showNotification('Page name not changed.'); 
                         return; 
                     } 
-                    if (newPageName.toLowerCase() in pages) { // Check if new page name (case-insensitive) already exists
+                    if (newPageName.toLowerCase() in pages) { 
                         showNotification(`Page "${newPageName}" already exists!`); 
                         return; 
                     } 
@@ -1071,24 +1074,20 @@
                     pages[newPageName] = pageMessages; 
                     const oldIndex = pageOrder.indexOf(oldPageName); 
                     if(oldIndex > -1) pageOrder.splice(oldIndex, 1, newPageName); 
-                    else pageOrder.push(newPageName); // Should not happen if page existed
+                    else pageOrder.push(newPageName); 
                     if (currentPage === oldPageName) currentPage = newPageName; 
                     saveAllData(); 
                     updateUI(); 
                     showNotification(`Page "${oldPageName}" renamed to "${newPageName}"!`); 
                 }, 
-                () => {} // onCancel callback
+                () => {} 
             ); 
         }
-        /**
-         * Deletes a page after confirmation.
-         * @param {string} pageName - The name of the page to delete.
-         */
         function deletePage(pageName) { 
             showDeleteConfirmationModal('Page', pageName, () => { 
                 delete pages[pageName]; 
                 pageOrder = pageOrder.filter(p => p !== pageName); 
-                if (pageOrder.length === 0) { // Ensure there's always at least one page
+                if (pageOrder.length === 0) { 
                     pages['default'] = []; 
                     pageOrder.push('default'); 
                 } 
@@ -1098,13 +1097,10 @@
             }); 
         }
         
-        /**
-         * Renders the page navigation buttons.
-         */
         function renderPages() { 
             pagesContainer.innerHTML = ''; 
             pageOrder.forEach(pageName => { 
-                if (!pages[pageName]) return; // Skip if page data somehow missing
+                if (!pages[pageName]) return; 
                 const pageButton = document.createElement('button'); 
                 pageButton.className = `action-button px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 ${currentPage === pageName ? 'primary-button text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`; 
                 pageButton.textContent = pageName; 
@@ -1114,7 +1110,6 @@
                 pageButton.addEventListener('click', () => switchPage(pageName)); 
                 pageButton.addEventListener('contextmenu', (e) => { e.preventDefault(); showPageContextMenu(e.clientX, e.clientY, pageName); }); 
                 
-                // Drag and drop event listeners for page reordering
                 pageButton.addEventListener('dragstart', handlePageDragStart);
                 pageButton.addEventListener('dragover', handlePageDragOver);
                 pageButton.addEventListener('dragleave', handlePageDragLeave);
@@ -1124,12 +1119,6 @@
                 pagesContainer.appendChild(pageButton); 
             }); 
         }
-        /**
-         * Shows a context menu for page actions (edit, delete).
-         * @param {number} x - The x-coordinate for the menu position.
-         * @param {number} y - The y-coordinate for the menu position.
-         * @param {string} pageName - The name of the page the context menu is for.
-         */
         function showPageContextMenu(x, y, pageName) { 
             const existingMenu = document.getElementById('pageContextMenu'); 
             if (existingMenu) existingMenu.remove(); 
@@ -1148,54 +1137,41 @@
             deleteItem.textContent = 'Delete Page'; 
             deleteItem.addEventListener('click', () => { deletePage(pageName); menu.remove(); }); 
             menu.appendChild(editItem); 
-            if (pageOrder.length > 1) menu.appendChild(deleteItem); // Only allow delete if not the last page
+            if (pageOrder.length > 1) menu.appendChild(deleteItem); 
             document.body.appendChild(menu); 
-            const closeMenu = (event) => { // Auto-close menu on click outside
-                // Removed: if (!menu.contains(event.target)) { 
+            const closeMenu = (event) => { 
                     menu.remove(); 
                     document.removeEventListener('click', closeMenu); 
                     document.removeEventListener('contextmenu', closeMenu); 
-                // Removed: } 
             }; 
-            setTimeout(() => { // Add listeners after current event cycle
+            setTimeout(() => { 
                 document.addEventListener('click', closeMenu); 
                 document.addEventListener('contextmenu', closeMenu); 
             }, 0); 
         }
 
         // --- Sticker Drag and Drop Handlers ---
-        /**
-         * Handles the start of dragging a sticker.
-         * @param {DragEvent} event - The dragstart event.
-         */
         function handleDragStart(event) {
             draggedStickerElement = event.target;
             draggedStickerIndex = parseInt(draggedStickerElement.dataset.index);
-            draggedStickerElement.classList.add('dragging'); // Make dragged element semi-transparent
+            draggedStickerElement.classList.add('dragging'); 
             event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', draggedStickerIndex); // Necessary for Firefox
+            event.dataTransfer.setData('text/plain', draggedStickerIndex); 
         }
 
-        /**
-         * Handles dragging a sticker over a potential drop target.
-         * @param {DragEvent} event - The dragover event.
-         */
         function handleDragOver(event) {
-            event.preventDefault(); // Allow drop
+            event.preventDefault(); 
             const targetSticker = event.target.closest('.sticker-note');
 
-            // Remove glow from previously targeted sticker
             if (draggedOverTargetElement && draggedOverTargetElement !== targetSticker) {
                 draggedOverTargetElement.classList.remove('drag-target-glow');
                 draggedOverTargetElement = null;
             }
 
             if (targetSticker && targetSticker !== draggedStickerElement) {
-                // Add glow to the new target sticker
                 targetSticker.classList.add('drag-target-glow');
                 draggedOverTargetElement = targetSticker;
             } else if (!targetSticker && (event.target.id === 'stickerDisplayArea' || event.target.closest('#stickerDisplayArea'))) {
-                // If dragging over an empty part of the display area, ensure no sticker is glowing
                 if (draggedOverTargetElement) {
                     draggedOverTargetElement.classList.remove('drag-target-glow');
                     draggedOverTargetElement = null;
@@ -1203,33 +1179,22 @@
             }
         }
         
-        /**
-         * Handles a dragged sticker leaving a potential drop target.
-         * @param {DragEvent} event - The dragleave event.
-         */
         function handleDragLeave(event) {
-            // Remove glow when leaving a sticker or the entire display area
             if (draggedOverTargetElement) {
                 draggedOverTargetElement.classList.remove('drag-target-glow');
                 draggedOverTargetElement = null;
             }
         }
 
-        /**
-         * Handles dropping a sticker.
-         * @param {DragEvent} event - The drop event.
-         */
         function handleDrop(event) {
             event.preventDefault();
             
-            // Clean up glow effect immediately
             if (draggedOverTargetElement) {
                 draggedOverTargetElement.classList.remove('drag-target-glow');
                 draggedOverTargetElement = null;
             }
 
             if (draggedStickerIndex === null) {
-                // Cleanup if drop is invalid or aborted
                 if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
                 draggedStickerIndex = null;
                 draggedStickerElement = null;
@@ -1237,54 +1202,41 @@
             }
 
             const stickersInPage = pages[currentPage];
-            const stickerToMove = stickersInPage.splice(draggedStickerIndex, 1)[0]; // Remove sticker from old position
+            const stickerToMove = stickersInPage.splice(draggedStickerIndex, 1)[0]; 
             
             const targetSticker = event.target.closest('.sticker-note');
             let newIndex;
 
             if (targetSticker && targetSticker !== draggedStickerElement) {
-                // Dropped over another sticker
                 const allStickers = Array.from(stickerDisplayArea.querySelectorAll('.sticker-note'));
                 const targetIndex = allStickers.indexOf(targetSticker);
                 const rect = targetSticker.getBoundingClientRect();
-                // Determine if dropping on the left or right half of the target sticker
                 const isAfter = event.clientX > rect.left + rect.width / 2;
                 
-                // Determine new index based on whether we're dropping before or after the target
                 newIndex = targetIndex;
                 if (isAfter) {
                     newIndex = targetIndex + 1;
                 }
                 
-                // Adjust index if dragging from an earlier position to a later one
                 if (draggedStickerIndex < newIndex) {
                     newIndex--; 
                 }
 
             } else {
-                // Dropped into an empty area or not specifically on another sticker
-                // Append to the end of the list visually, which means the end of the array
                 newIndex = stickersInPage.length; 
             }
             
-            // Insert sticker at the new position
             stickersInPage.splice(newIndex, 0, stickerToMove);
             
             saveAllData();
-            updateStickerList(); // Re-render stickers
+            updateStickerList(); 
             
-            // Cleanup
             if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
             draggedStickerIndex = null;
             draggedStickerElement = null;
         }
         
-        /**
-         * Handles the end of a sticker drag operation (success or failure).
-         * @param {DragEvent} event - The dragend event.
-         */
         function handleDragEnd(event) {
-            // Cleanup classes and references
             if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
             if(draggedOverTargetElement) draggedOverTargetElement.classList.remove('drag-target-glow');
             draggedStickerIndex = null;
@@ -1295,29 +1247,24 @@
 
         // --- Sticker List Management ---
 
-        /**
-         * Updates and re-renders the list of stickers for the current page.
-         */
         function updateStickerList() {
-            stickerDisplayArea.innerHTML = ''; // Clear the main display area
+            stickerDisplayArea.innerHTML = ''; 
             const currentStickers = pages[currentPage] || [];
             currentStickers.forEach((stickerObj, index) => {
                 const stickerContainer = document.createElement('div');
-                stickerContainer.dataset.isEditing = 'false'; // Track if sticker is being edited
-                stickerContainer.dataset.index = index; // Store original index for operations
-                stickerContainer.dataset.stickerId = `${currentPage}-${index}`; // Unique ID for targeting
+                stickerContainer.dataset.isEditing = 'false'; 
+                stickerContainer.dataset.index = index; 
+                stickerContainer.dataset.stickerId = `${currentPage}-${index}`; 
                 stickerContainer.setAttribute('draggable', 'true'); 
 
                 stickerContainer.className = `sticker-note relative p-4 rounded-xl shadow-md ${stickerObj.bgColorClass} ${getImportanceBorderClass(stickerObj.importance)}`;
                 
-                // Add drag and drop event listeners to each sticker
                 stickerContainer.addEventListener('dragstart', handleDragStart);
                 stickerContainer.addEventListener('dragover', handleDragOver); 
                 stickerContainer.addEventListener('dragleave', handleDragLeave); 
                 stickerContainer.addEventListener('drop', handleDrop);      
                 stickerContainer.addEventListener('dragend', handleDragEnd);
 
-                // Click to show details modal (if not clicking an.action button)
                 stickerContainer.addEventListener('click', (e) => { 
                     if (!e.target.closest('.sticker-actions button') && stickerContainer.dataset.isEditing === 'false' && !stickerContainer.classList.contains('dragging')) { 
                         showStickerDetailsModal(stickerObj, index); 
@@ -1326,7 +1273,6 @@
 
                 const nameParts = stickerObj.name.split(' - ', 2);
                 const baseName = nameParts[0] || stickerObj.name;
-                // Updated to correctly display weekday and week part
                 const dateAndWeekPart = nameParts[1] ? `<br>${nameParts[1]}` : '';
 
                 const headerDiv = document.createElement('div'); 
@@ -1334,7 +1280,6 @@
                 headerDiv.innerHTML = `<div class="font-semibold text-gray-800 text-sm truncate pr-16 pointer-events-none">${baseName}${dateAndWeekPart}</div>`; 
                 stickerContainer.appendChild(headerDiv);
 
-                // Sticker content area (truncated for main display)
                 const contentArea = document.createElement('div'); 
                 contentArea.className = "flex-grow overflow-hidden mb-1 pointer-events-none"; 
                 const contentText = document.createElement('div'); 
@@ -1344,12 +1289,11 @@
                     const lastVisibleLine = lines[MAX_STICKER_LINES -1]; 
                     contentText.textContent = lines.slice(0, MAX_STICKER_LINES-1).join('\n') + '\n' + lastVisibleLine + ' ...'; 
                 } else { 
-                    contentText.textContent = stickerObj.content.trim(); // Trim for preview consistency
+                    contentText.textContent = stickerObj.content.trim(); 
                 }
                 contentArea.appendChild(contentText); 
                 stickerContainer.appendChild(contentArea);
                 
-                // Timestamp display
                 const timestampDiv = document.createElement('div'); 
                 timestampDiv.className = 'sticker-timestamp pointer-events-none'; 
                 const date = new Date(stickerObj.timestamp); 
@@ -1358,7 +1302,6 @@
                 timestampDiv.textContent = `${formattedDate} ${formattedTime}`; 
                 stickerContainer.appendChild(timestampDiv);
                 
-                // Importance indicator (light and label)
                 const importanceDisplayDiv = document.createElement('div');
                 importanceDisplayDiv.className = 'importance-display';
                 importanceDisplayDiv.innerHTML = `
@@ -1367,7 +1310,6 @@
                 `;
                 stickerContainer.appendChild(importanceDisplayDiv);
 
-                // Action buttons (Copy, Edit, Delete)
                 const actionsDiv = document.createElement('div'); 
                 actionsDiv.className = 'sticker-actions'; 
                 actionsDiv.innerHTML = `
@@ -1378,17 +1320,15 @@
                 stickerContainer.appendChild(actionsDiv);
 
                 actionsDiv.querySelector('.copy-button').addEventListener('click', (e) => { 
-                    e.stopPropagation(); // Prevent modal from opening
+                    e.stopPropagation(); 
                     copyToClipboard(stickerObj.content, stickerContainer); 
                 });
                 actionsDiv.querySelector('.edit-button').addEventListener('click', (e) => { e.stopPropagation(); editSticker(index, stickerContainer); });
                 actionsDiv.querySelector('.delete-button').addEventListener('click', (e) => { e.stopPropagation(); showDeleteConfirmationModal('Sticker', stickerObj.name, () => deleteSticker(index)); });
                 
-                // Append sticker directly to the main display area
                 stickerDisplayArea.appendChild(stickerContainer);
             });
             
-            // Add dragover listeners to the main display area for dropping into empty areas
             stickerDisplayArea.addEventListener('dragover', handleDragOver); 
             stickerDisplayArea.addEventListener('dragleave', handleDragLeave); 
             stickerDisplayArea.addEventListener('drop', handleDrop); 
@@ -1397,38 +1337,29 @@
             updateSaveButtonState();
         }
         
-        /**
-         * Initiates editing of a specific sticker.
-         * @param {number} index - The index of the sticker to edit.
-         * @param {HTMLElement} stickerElement - The DOM element of the sticker.
-         */
         function editSticker(index, stickerElement) { 
-            stickerElement.dataset.isEditing = 'true'; // Mark as editing
+            stickerElement.dataset.isEditing = 'true'; 
             const currentSticker = pages[currentPage][index]; 
             showEditStickerModal(currentSticker, 
-                (updatedData) => { // onSave callback
+                (updatedData) => { 
                     pages[currentPage][index] = { 
                         ...currentSticker, 
                         name: updatedData.name, 
                         content: updatedData.content, 
                         importance: updatedData.importance, 
                         bgColorClass: updatedData.bgColorClass, 
-                        timestamp: Date.now(), // Update timestamp on edit
+                        timestamp: Date.now(), 
                     }; 
                     saveAllData(); 
                     updateStickerList(); 
                     showNotification('Sticker updated! ✨'); 
-                    stickerElement.dataset.isEditing = 'false'; // Reset editing state
+                    stickerElement.dataset.isEditing = 'false'; 
                 }, 
-                () => { // onCancel callback
-                    stickerElement.dataset.isEditing = 'false'; // Reset editing state
+                () => { 
+                    stickerElement.dataset.isEditing = 'false'; 
                 }
             ); 
         }
-        /**
-         * Deletes a sticker from the current page.
-         * @param {number} index - The index of the sticker to delete.
-         */
         function deleteSticker(index) { 
             pages[currentPage].splice(index, 1); 
             saveAllData(); 
@@ -1437,52 +1368,36 @@
         
         // --- Date and Week Calculation Helpers ---
 
-        /**
-         * Formats a Date object to DD/MM/YYYY string.
-         * @param {Date} date - The date to format.
-         * @returns {string} The formatted date string.
-         */
         function formatDate(date) {
             const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const month = String(date.getMonth() + 1).padStart(2, '0'); 
             const year = date.getFullYear();
             return `${day}/${month}/${year}`;
         }
 
-        /**
-         * Gets the abbreviated weekday name (e.g., "SUN", "MON").
-         * @param {Date} date - The date object.
-         * @returns {string} The three-letter uppercase abbreviation of the weekday.
-         */
         function getWeekdayAbbreviation(date) {
             const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
             return weekdays[date.getDay()];
         }
 
-        /**
-         * Parses a DD/MM/YYYY string into a Date object.
-         * @param {string} dateString - The date string to parse.
-         * @returns {Date|null} The Date object, or null if parsing fails.
-         */
         function parseDateString(dateString) {
             const parts = dateString.split('/');
             if (parts.length === 3) {
                 const day = parseInt(parts[0], 10);
-                const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed for Date constructor
+                const month = parseInt(parts[1], 10) - 1; 
                 const year = parseInt(parts[2], 10);
-                const date = new Date(year, month, day);
-                if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
-                    return date;
+                // Basic validation for year, month, and day ranges
+                if (year > 0 && month >= 0 && month < 12 && day > 0 && day <= 31) {
+                    const date = new Date(year, month, day);
+                    // Final check to ensure Date object wasn't coerced (e.g. Feb 30 -> Mar 2)
+                    if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+                        return date;
+                    }
                 }
             }
             return null; 
         }
 
-        /**
-         * Gets the start date of the financial year (first Sunday on or after May 1st).
-         * @param {number} year - The calendar year.
-         * @returns {Date} The start date of the financial year.
-         */
         function getFinancialYearStartDate(year) {
             let may1 = new Date(year, 4, 1); 
             let dayOfWeek = may1.getDay(); 
@@ -1492,11 +1407,6 @@
             return may1;
         }
 
-        /**
-         * Calculates the financial week number for a given date.
-         * @param {Date} date - The date for which to calculate the financial week.
-         * @returns {string} The financial week string (e.g., "WK23 (24-25)").
-         */
         function calculateFinancialWeek(date) {
             const currentCalYear = date.getFullYear();
             const fyStartCurrentCalYear = getFinancialYearStartDate(currentCalYear);
@@ -1517,17 +1427,17 @@
             }
 
             const daysInActualFY = Math.floor((nextFYStartForActualFY - actualFYStart) / (1000 * 60 * 60 * 24));
-            const is53WeekYear = (daysInActualFY === 371); // A 53-week year has 371 days (53*7)
+            const is53WeekYear = (daysInActualFY === 371); 
 
             const diffDaysFromActualFYStart = Math.floor((date - actualFYStart) / (1000 * 60 * 60 * 24));
             let weekNumber = Math.floor(diffDaysFromActualFYStart / 7) + 1;
 
             if (is53WeekYear && weekNumber > 53) {
-                weekNumber = 53; // Cap at 53 for a 53-week year
+                weekNumber = 53; 
             } else if (!is53WeekYear && weekNumber > 52) {
-                weekNumber = 52; // Cap at 52 for a 52-week year
+                weekNumber = 52; 
             }
-            if (weekNumber <=0) weekNumber = 1; // Ensure week number is at least 1
+            if (weekNumber <=0) weekNumber = 1; 
 
 
             const startYearShort = String(actualFYLabel).slice(-2);
@@ -1535,20 +1445,19 @@
             return `WK${weekNumber} (${startYearShort}-${endYearShort})`;
         }
 
-        /**
-         * Updates the date and week input fields to today's date and corresponding financial week.
-         */
         function updateDateAndWeekInputs() {
             const today = new Date();
-            stickerDateInput.value = formatDate(today);
-            stickerWeekInput.value = calculateFinancialWeek(today);
+            if (flatpickrInstance) {
+                flatpickrInstance.setDate(today, true); 
+            } else {
+                stickerDateInput.value = formatDate(today);
+                 // Manually trigger update if flatpickr not yet ready (should ideally not happen here)
+                updateStickerWeekBasedOnDateInput();
+            }
         }
 
-        /**
-         * Updates the sticker week input based on the value in the sticker date input.
-         */
         function updateStickerWeekBasedOnDateInput() {
-            const dateString = stickerDateInput.value.trim();
+            const dateString = stickerDateInput.value.trim(); // Read from original input
             const parsedDate = parseDateString(dateString);
             if (parsedDate) {
                 stickerWeekInput.value = calculateFinancialWeek(parsedDate);
@@ -1559,9 +1468,6 @@
 
         // --- Input Handling and Saving ---
 
-        /**
-         * Updates the enabled/disabled state of the save button based on input validity.
-         */
         function updateSaveButtonState() { 
             const messageLength = messageInput.value.trim().length; 
             const nameLength = stickerNameInput.value.trim().length; 
@@ -1588,6 +1494,10 @@
             updateSaveButtonState(); 
         });
         stickerNameInput.addEventListener('input', updateSaveButtonState);
+        
+        // Listener for the original (hidden or underlying) stickerDateInput.
+        // This is triggered by flatpickr's onChange (via dispatched event)
+        // and by the altInput's 'change' event (via dispatched event).
         stickerDateInput.addEventListener('input', () => {
             updateStickerWeekBasedOnDateInput(); 
             updateSaveButtonState();
@@ -1627,7 +1537,7 @@
                     btn.classList.remove('selected');
                 });
                 updateDateAndWeekInputs(); 
-                updateUI(); 
+                updateUI(); // Explicitly call updateUI to refresh the sticker list and other UI elements
                 showNotification('Sticker saved! ✨'); 
             } else if (currentStickers.length >= maxStickers) { 
                 showNotification('Maximum sticker limit reached for this page.'); 
@@ -1655,59 +1565,48 @@
         newPageNameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addPageButton.click(); });
 
         // --- Page Drag and Drop Handlers ---
+        // ... (Page drag and drop handlers remain unchanged) ...
         let pageDropIndicator = null; 
         function handlePageDragStart(event) {
             draggedPageName = event.target.dataset.pageName;
             event.target.classList.add('dragging');
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', draggedPageName);
-            // No longer create the drop indicator, as it will be hidden by CSS
         }
         function handlePageDragOver(event) {
             event.preventDefault();
             const targetPageButton = event.target.closest('#pagesContainer .action-button');
 
-            // Remove glow from previously targeted page button
             if (draggedOverPageTargetElement && draggedOverPageTargetElement !== targetPageButton) {
                 draggedOverPageTargetElement.classList.remove('drag-target-glow');
                 draggedOverPageTargetElement = null;
             }
 
             if (targetPageButton && targetPageButton.dataset.pageName !== draggedPageName) {
-                // Add glow to the new target page button
                 targetPageButton.classList.add('drag-target-glow');
                 draggedOverPageTargetElement = targetPageButton;
-
-                // No longer insert the indicator line, as it's hidden.
-                // The reordering logic still relies on the position of elements,
-                // but the visual indicator is gone.
             } else if (!targetPageButton && event.currentTarget === pagesContainer) { 
-                // If dragging over an empty part of the pages container, ensure no page button is glowing
                 if (draggedOverPageTargetElement) {
                     draggedOverPageTargetElement.classList.remove('drag-target-glow');
                     draggedOverPageTargetElement = null;
                 }
-                // No longer append the indicator line.
             }
         }
         function handlePageDragLeave(event) {
-            // Remove glow when leaving a page button or the entire pages container
             if (draggedOverPageTargetElement) {
                 draggedOverPageTargetElement.classList.remove('drag-target-glow');
                 draggedOverPageTargetElement = null;
             }
-            // No longer remove the indicator, as it's not visually present.
         }
         function handlePageDrop(event) {
             event.preventDefault();
             
-            // Clean up glow effect immediately
             if (draggedOverPageTargetElement) {
                 draggedOverPageTargetElement.classList.remove('drag-target-glow');
                 draggedOverPageTargetElement = null;
             }
 
-            if (!draggedPageName) { // Simplified check as pageDropIndicator is no longer used for visual presence
+            if (!draggedPageName) { 
                 const draggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
                 if(draggingElem) draggingElem.classList.remove('dragging');
                 draggedPageName = null;
@@ -1717,9 +1616,8 @@
             const oldIndex = pageOrder.indexOf(draggedPageName);
             pageOrder.splice(oldIndex, 1); 
 
-            // Determine the new index based on where the drop occurred relative to other page buttons
             const allPageButtons = Array.from(pagesContainer.querySelectorAll('.action-button'));
-            let newIndex = allPageButtons.length; // Default to end if no specific target
+            let newIndex = allPageButtons.length; 
             const targetPageButton = event.target.closest('.action-button');
 
             if (targetPageButton && targetPageButton.dataset.pageName !== draggedPageName) {
@@ -1740,13 +1638,11 @@
             saveAllData();
             renderPages(); 
 
-            // No longer remove pageDropIndicator as it's not visually present.
             const finalDraggingElem = pagesContainer.querySelector(`.action-button[data-page-name="${draggedPageName}"]`);
             if(finalDraggingElem) finalDraggingElem.classList.remove('dragging');
             draggedPageName = null;
         }
         function handlePageDragEnd(event) {
-            // No longer remove pageDropIndicator as it's not visually present.
             const elem = event.target.closest('.action-button');
             if(elem) elem.classList.remove('dragging');
             if(draggedOverPageTargetElement) draggedOverPageTargetElement.classList.remove('drag-target-glow');
@@ -1754,8 +1650,8 @@
             draggedOverPageTargetElement = null;
         }
 
-
         // --- Global Search Functions ---
+        // ... (Global search functions remain unchanged) ...
         function performGlobalSearch() { 
             const allStickers = [];
             pageOrder.forEach(pageName => {
@@ -1765,14 +1661,8 @@
                     });
                 }
             });
-            displaySearchResultsModal(allStickers, ''); // Pass all stickers and an empty initial search term
+            displaySearchResultsModal(allStickers, ''); 
         }
-
-        /**
-         * Displays a modal with search results and enables instant search within it.
-         * @param {Array<Object>} allStickers - An array of all stickers from all pages.
-         * @param {string} initialSearchTerm - The initial search term to pre-populate the search field.
-         */
         function displaySearchResultsModal(allStickers, initialSearchTerm) {
             const existingModal = document.getElementById('searchResultsModal'); 
             if(existingModal) existingModal.remove(); 
@@ -1805,19 +1695,14 @@
             const modalSearchInput = modal.querySelector('#modalSearchInput');
             const searchResultsContainer = modal.querySelector('.search-modal-body');
 
-            /**
-             * Renders filtered search results within the modal.
-             * @param {string} searchTerm - The current search term.
-             */
             const renderFilteredResults = (searchTerm) => {
                 const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
-                const keywords = lowerCaseSearchTerm.split(/\s+/).filter(word => word.length > 0); // Split by spaces and filter empty strings
+                const keywords = lowerCaseSearchTerm.split(/\s+/).filter(word => word.length > 0); 
 
                 const filteredResults = allStickers.filter(sticker => {
                     const importanceLabel = getImportanceLabel(sticker.importance).toLowerCase();
                     const searchableText = `${sticker.name.toLowerCase()} ${sticker.content.toLowerCase()} ${importanceLabel}`;
                     
-                    // Check if all keywords are present in the searchable text
                     return keywords.every(keyword => searchableText.includes(keyword));
                 });
 
@@ -1829,7 +1714,6 @@
                         const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); 
                         const displayTimestamp = `${formattedDate} ${formattedTime}`;
                         
-                        // Highlight all keywords in the display text
                         let displayName = sticker.name;
                         let displayContent = sticker.content;
                         let displayImportanceLabel = getImportanceLabel(sticker.importance);
@@ -1858,7 +1742,6 @@
                 }
                 searchResultsContainer.innerHTML = resultsHTML;
 
-                // Re-attach click listeners to newly rendered items
                 searchResultsContainer.querySelectorAll('.search-result-item').forEach(item => {
                     item.addEventListener('click', () => {
                         const targetPage = item.dataset.targetPage;
@@ -1867,17 +1750,15 @@
                         setTimeout(() => { 
                             const stickerElement = document.querySelector(`.sticker-note[data-sticker-id="${targetStickerId}"]`);
                             if (stickerElement) {
-                                // Add visual shake effect
                                 stickerElement.classList.add('sticker-shake-effect');
                                 setTimeout(() => {
                                     stickerElement.classList.remove('sticker-shake-effect');
-                                    // Then add the glow effect after the shake
                                     stickerElement.classList.add('sticker-highlight-effect');
                                     stickerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     setTimeout(() => { 
                                         stickerElement.classList.remove('sticker-highlight-effect');
                                     }, 5000); 
-                                }, 500); // Shake for 0.5 seconds
+                                }, 500); 
                             }
                         }, 100); 
                         document.body.style.overflow = ''; 
@@ -1886,25 +1767,22 @@
                 });
             };
 
-            // Initial render of results when modal opens
             renderFilteredResults(initialSearchTerm);
 
-            // Add event listener for instant search
             modalSearchInput.addEventListener('input', (e) => {
                 renderFilteredResults(e.target.value);
             });
-            modalSearchInput.focus(); // Focus the search input when modal opens
+            modalSearchInput.focus(); 
 
             modal.querySelector('#closeSearchModalButton').addEventListener('click', () => { 
                 document.body.style.overflow = ''; 
                 overlay.remove(); 
             });
         }
-
         globalSearchButton.addEventListener('click', performGlobalSearch);
-        // globalSearchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performGlobalSearch(); }); // Removed
 
         // --- Export to Excel Functionality ---
+        // ... (Export to Excel function remains unchanged) ...
         function exportToExcel() {
             const currentStickers = pages[currentPage] || [];
             if (currentStickers.length === 0) {
@@ -1917,11 +1795,10 @@
 
             currentStickers.forEach(sticker => {
                 const name = `"${sticker.name.replace(/"/g, '""')}"`;
-                // Ensure content is properly quoted and internal quotes are escaped
                 const content = `"${sticker.content.replace(/"/g, '""')}"`; 
                 const importance = `"${getImportanceLabel(sticker.importance).replace(/"/g, '""')}"`;
                 const date = new Date(sticker.timestamp);
-                const formattedTimestamp = `"${date.toLocaleString().replace(/"/g, '""')}"`; // Use locale string for full date/time
+                const formattedTimestamp = `"${date.toLocaleString().replace(/"/g, '""')}"`; 
 
                 csvContent += [name, content, importance, formattedTimestamp].join(',') + '\n';
             });
@@ -1932,17 +1809,15 @@
 
             link.setAttribute('href', url);
             link.setAttribute('download', `${currentPage}_stickers.csv`);
-            link.style.visibility = 'hidden'; // Hide the link
-            document.body.appendChild(link); // Append to body to make it clickable
-            link.click(); // Programmatically click the link to trigger download
-            document.body.removeChild(link); // Clean up
-            URL.revokeObjectURL(url); // Release the object URL
+            link.style.visibility = 'hidden'; 
+            document.body.appendChild(link); 
+            link.click(); 
+            document.body.removeChild(link); 
+            URL.revokeObjectURL(url); 
 
             showNotification(`Exported ${currentStickers.length} stickers from "${currentPage}"!`);
         }
-
         exportButton.addEventListener('click', exportToExcel);
-
 
         // --- UI Update and Initialization ---
 
@@ -1960,7 +1835,7 @@
             const pageTitle = currentPage.charAt(0).toUpperCase() + currentPage.slice(1); 
             currentStickerPageTitle.textContent = `${pageTitle} Stickers`; 
             updateSaveButtonState(); 
-            updateDateAndWeekInputs(); 
+            // updateDateAndWeekInputs(); // Called after flatpickr init in the main script execution
             
             selectedImportance = null;
             importanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
@@ -1968,7 +1843,57 @@
             });
         }
         
-        loadAllData();
+        // Initialize Flatpickr
+        flatpickrInstance = flatpickr(stickerDateInput, {
+            dateFormat: "d/m/Y",      // Format for the original hidden input
+            altInput: true,          // Create a user-visible alternate input
+            altFormat: "d/m/Y",      // Format for the visible alternate input
+            allowInput: true,        // Allow users to type into the altInput
+            clickOpens: false,       // PREVENT calendar from opening when altInput is clicked
+            defaultDate: "today",
+            onChange: function(selectedDates, dateStr, instance) {
+                // This hook is called when a date is selected from the picker,
+                // or when a valid date is typed into the altInput and flatpickr processes it (e.g., on blur/enter).
+                // Flatpickr automatically updates the original input (instance.input) with the new date string (dateStr).
+                
+                // Manually dispatch an 'input' event on the original stickerDateInput.
+                // This ensures that our existing 'input' event listener on stickerDateInput
+                // (which calls updateStickerWeekBasedOnDateInput and updateSaveButtonState) is triggered.
+                const event = new Event('input', { bubbles: true });
+                instance.input.dispatchEvent(event);
+            }
+        });
+
+        // Add a 'change' event listener to the user-visible alternate input (flatpickrInstance.altInput).
+        // The 'change' event fires when the input loses focus (blur) AND its value has been modified by typing.
+        if (flatpickrInstance && flatpickrInstance.altInput) {
+            flatpickrInstance.altInput.addEventListener('change', () => {
+                // When the user types into the altInput and then clicks away (blur), this 'change' event fires.
+                // At this point, flatpickr has already attempted to parse the altInput's value.
+                // - If the typed date was valid, flatpickr updates the original input (stickerDateInput)
+                //   and its 'onChange' hook (defined above) would have already fired, dispatching the 'input' event.
+                // - If the typed date was invalid, flatpickr might clear or revert the altInput,
+                //   and potentially also clear or leave the original stickerDateInput.
+                //   In this scenario, flatpickr's 'onChange' might not fire if no *new valid date* was set.
+
+                // To ensure our week recalculation logic (including clearing the week if the date is now invalid/empty)
+                // always runs after manual input and blur, we re-dispatch the 'input' event on the original stickerDateInput.
+                // The `stickerDateInput.addEventListener('input', ...)` will then read the current state
+                // of `stickerDateInput` (which flatpickr should have just settled) and update accordingly.
+                const event = new Event('input', { bubbles: true });
+                stickerDateInput.dispatchEvent(event); // stickerDateInput is flatpickrInstance.input
+            });
+        }
+
+        // Make the calendar icon also trigger the date picker
+        stickerDateIcon.addEventListener('click', () => {
+            if (flatpickrInstance) {
+                flatpickrInstance.open();
+            }
+        });
+        
+        loadAllData(); // Load data (which calls updateUI)
+        updateDateAndWeekInputs(); // Set initial date, which will trigger onChange and then the input event flow
     </script>
 </body>
 </html>
