@@ -554,6 +554,9 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 id="currentStickerPageTitle" class="text-2xl font-semibold text-gray-700">Your Stickers</h2>
                     <div class="flex items-center gap-2">
+                        <button id="exportButton" class="action-button primary-button text-white px-3 py-2 rounded-xl text-sm flex items-center gap-1">
+                            📊 <span>Export to Excel</span>
+                        </button>
                         <button id="globalSearchButton" class="action-button primary-button text-white px-3 py-2 rounded-xl text-sm flex items-center gap-1">
                             🔎 <span>Search Message</span>
                         </button>
@@ -582,6 +585,7 @@
         const currentStickerPageTitle = document.getElementById('currentStickerPageTitle');
         // const globalSearchInput = document.getElementById('globalSearchInput'); // Removed from main UI
         const globalSearchButton = document.getElementById('globalSearchButton');
+        const exportButton = document.getElementById('exportButton'); // New export button
         const stickerDisplayArea = document.getElementById('stickerDisplayArea'); // Main area for sticker columns
 
         // Global State Variables
@@ -1899,6 +1903,46 @@
 
         globalSearchButton.addEventListener('click', performGlobalSearch);
         // globalSearchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performGlobalSearch(); }); // Removed
+
+        // --- Export to Excel Functionality ---
+        function exportToExcel() {
+            const currentStickers = pages[currentPage] || [];
+            if (currentStickers.length === 0) {
+                showNotification('No stickers on this page to export.');
+                return;
+            }
+
+            const headers = ["Name", "Content", "Importance", "Timestamp"];
+            let csvContent = headers.map(header => `"${header.replace(/"/g, '""')}"`).join(',') + '\n';
+
+            currentStickers.forEach(sticker => {
+                const name = `"${sticker.name.replace(/"/g, '""')}"`;
+                // Ensure content is properly quoted and internal quotes are escaped
+                const content = `"${sticker.content.replace(/"/g, '""')}"`; 
+                const importance = `"${getImportanceLabel(sticker.importance).replace(/"/g, '""')}"`;
+                const date = new Date(sticker.timestamp);
+                const formattedTimestamp = `"${date.toLocaleString().replace(/"/g, '""')}"`; // Use locale string for full date/time
+
+                csvContent += [name, content, importance, formattedTimestamp].join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${currentPage}_stickers.csv`);
+            link.style.visibility = 'hidden'; // Hide the link
+            document.body.appendChild(link); // Append to body to make it clickable
+            link.click(); // Programmatically click the link to trigger download
+            document.body.removeChild(link); // Clean up
+            URL.revokeObjectURL(url); // Release the object URL
+
+            showNotification(`Exported ${currentStickers.length} stickers from "${currentPage}"!`);
+        }
+
+        exportButton.addEventListener('click', exportToExcel);
+
 
         // --- UI Update and Initialization ---
 
