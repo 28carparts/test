@@ -478,6 +478,32 @@
             width: fit-content; 
         }
 
+        /* New styles for filter buttons */
+        .filter-importance-button {
+            transition: all 0.2s ease;
+            padding: 6px 12px; /* Slightly smaller than save importance buttons */
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.8rem; /* Smaller font size */
+            background-color: #e5e7eb; /* gray-200 */
+            color: #4b5563; /* gray-600 */
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            white-space: nowrap; /* Prevent wrapping */
+        }
+
+        .filter-importance-button:hover:not(.selected) {
+            background-color: #d1d5db; /* gray-300 */
+        }
+
+        .filter-importance-button.selected {
+            color: white;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); /* primary button gradient */
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
         /* Flatpickr custom theme to match app */
         .flatpickr-calendar {
             background: rgba(255, 255, 255, 0.95);
@@ -638,9 +664,17 @@
             </div>
             
             <div class="lg:col-span-3">
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                     <h2 id="currentStickerPageTitle" class="text-2xl font-semibold text-gray-700">Your Stickers</h2>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- New importance filter buttons -->
+                        <div id="importanceFilterContainer" class="flex items-center gap-2">
+                            <button class="filter-importance-button" data-filter="all"><span class="importance-light bg-gray-400"></span>All</button>
+                            <button class="filter-importance-button" data-filter="onTrack"><span class="importance-light light-on-track"></span>On track</button>
+                            <button class="filter-importance-button" data-filter="caution"><span class="importance-light light-caution"></span>Caution</button>
+                            <button class="filter-importance-button" data-filter="urgent"><span class="importance-light light-urgent"></span>Urgent</button>
+                            <button class="filter-importance-button" data-filter="complete"><span class="importance-light light-complete"></span>Complete</button>
+                        </div>
                         <button id="exportButton" class="action-button primary-button text-white px-3 py-2 rounded-xl text-sm flex items-center gap-1">
                             📊 <span>Export to Excel</span>
                         </button>
@@ -676,6 +710,7 @@
         const globalSearchButton = document.getElementById('globalSearchButton');
         const exportButton = document.getElementById('exportButton'); 
         const stickerDisplayArea = document.getElementById('stickerDisplayArea'); 
+        const importanceFilterContainer = document.getElementById('importanceFilterContainer'); // New: Importance filter container
 
         // Global State Variables
         let pages = {}; 
@@ -702,6 +737,7 @@
             complete: { label: 'Complete', lightClass: 'light-complete', borderColorClass: 'importance-level-complete' }
         };
         let selectedImportance = null; 
+        let currentFilter = 'all'; // New: To store the active importance filter
 
         // --- Utility Functions ---
 
@@ -1004,7 +1040,7 @@
 
             deleteBtn.addEventListener('click', () => {
                 closeModal(); 
-                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(stickerIndex)); 
+                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(index)); 
             });
         }
 
@@ -1255,7 +1291,13 @@
 
         function updateStickerList() {
             stickerDisplayArea.innerHTML = ''; 
-            const currentStickers = pages[currentPage] || [];
+            let currentStickers = pages[currentPage] || [];
+
+            // Apply filter based on currentFilter
+            if (currentFilter !== 'all') {
+                currentStickers = currentStickers.filter(sticker => sticker.importance === currentFilter);
+            }
+
             currentStickers.forEach((stickerObj, index) => {
                 const stickerContainer = document.createElement('div');
                 stickerContainer.dataset.isEditing = 'false'; 
@@ -1339,6 +1381,7 @@
             stickerDisplayArea.addEventListener('dragleave', handleDragLeave); 
             stickerDisplayArea.addEventListener('drop', handleDrop); 
 
+            // Only count stickers that are currently displayed, not total
             messageCount.textContent = `${currentStickers.length}/${maxStickers} stickers`;
             updateSaveButtonState();
         }
@@ -1479,8 +1522,8 @@
             const nameLength = stickerNameInput.value.trim().length; 
             const dateLength = stickerDateInput.value.trim().length; 
             const weekLength = stickerWeekInput.value.trim().length; 
-            const currentStickers = pages[currentPage] || []; 
-            saveButton.disabled = messageLength === 0 || nameLength === 0 || dateLength === 0 || weekLength === 0 || currentStickers.length >= maxStickers || selectedImportance === null; 
+            const totalStickers = pages[currentPage] ? pages[currentPage].length : 0; // Use actual total here
+            saveButton.disabled = messageLength === 0 || nameLength === 0 || dateLength === 0 || weekLength === 0 || totalStickers >= maxStickers || selectedImportance === null; 
         }
 
         importanceButtonsContainer.addEventListener('click', (e) => {
@@ -1857,14 +1900,39 @@
             const pageTitle = currentPage.charAt(0).toUpperCase() + currentPage.slice(1); 
             currentStickerPageTitle.textContent = `${pageTitle} Stickers`; 
             updateSaveButtonState(); 
-            // updateDateAndWeekInputs(); // Called after flatpickr init in the main script execution
             
             selectedImportance = null;
             importanceButtonsContainer.querySelectorAll('.importance-button').forEach(btn => {
                 btn.classList.remove('selected');
             });
+
+            // Set initial filter button state
+            importanceFilterContainer.querySelectorAll('.filter-importance-button').forEach(btn => {
+                if (btn.dataset.filter === currentFilter) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
         }
         
+        // Event listener for filter buttons:
+        importanceFilterContainer.addEventListener('click', (e) => {
+            const clickedButton = e.target.closest('.filter-importance-button');
+            if (clickedButton) {
+                // Remove 'selected' from all filter buttons
+                importanceFilterContainer.querySelectorAll('.filter-importance-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                // Add 'selected' to the clicked button
+                clickedButton.classList.add('selected');
+                // Update the filter state
+                currentFilter = clickedButton.dataset.filter;
+                // Re-render the sticker list with the new filter
+                updateStickerList();
+            }
+        });
+
         // Initialize Flatpickr
         flatpickrInstance = flatpickr(stickerDateInput, {
             dateFormat: "d/m/Y",      // Format for the original hidden input
