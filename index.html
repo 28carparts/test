@@ -597,6 +597,11 @@
             color: #9ca3af; /* gray-400 */
         }
 
+        /* Added for task 2: Disable drag-and-drop when filter active */
+        .cursor-not-allowed {
+            cursor: not-allowed !important;
+        }
+
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -604,6 +609,7 @@
         
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div class="space-y-6">
+                <!-- Left Column Content (Page Management, Sticker Input) -->
                 <div class="text-center">
                     <h1 class="text-3xl title-gradient mb-2">Sticker Notes</h1>
                     <p class="text-gray-600 text-sm">Organize your daily work messages</p>
@@ -622,7 +628,6 @@
                     <input type="text" id="stickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm mb-3" placeholder="Enter sticker name..." maxlength="50"/>
                     
                     <label for="stickerDateInput" class="text-gray-700 font-medium block mb-1">Sticker Date:</label>
-                    <!-- Modified stickerDateInput for date picker -->
                     <div class="relative mb-3">
                         <input type="text" id="stickerDateInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm pr-10" placeholder="DD/MM/YYYY" maxlength="10"/>
                         <div id="stickerDateIcon" class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-500 hover:text-indigo-500">
@@ -664,10 +669,10 @@
             </div>
             
             <div class="lg:col-span-3">
+                 <!-- Right Column Content (Sticker Display Area) -->
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                     <h2 id="currentStickerPageTitle" class="text-2xl font-semibold text-gray-700">Your Stickers</h2>
                     <div class="flex flex-wrap items-center gap-2">
-                        <!-- New importance filter buttons -->
                         <div id="importanceFilterContainer" class="flex items-center gap-2">
                             <button class="filter-importance-button" data-filter="all"><span class="importance-light bg-gray-400"></span>All</button>
                             <button class="filter-importance-button" data-filter="onTrack"><span class="importance-light light-on-track"></span>On track</button>
@@ -683,8 +688,11 @@
                         </button>
                     </div>
                 </div>
+                <!-- Added for task 2: Message for disabled drag-and-drop -->
+                <div id="filterNotificationArea" class="text-sm text-blue-700 bg-blue-100 p-3 rounded-xl my-3 hidden text-center"></div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="stickerDisplayArea">
-                    </div>
+                    <!-- Stickers will be dynamically added here -->
+                </div>
             </div>
         </div>
     </div>
@@ -696,7 +704,7 @@
         const messageInput = document.getElementById('messageInput');
         const stickerNameInput = document.getElementById('stickerNameInput');
         const stickerDateInput = document.getElementById('stickerDateInput'); 
-        const stickerDateIcon = document.getElementById('stickerDateIcon'); // New: Date picker icon
+        const stickerDateIcon = document.getElementById('stickerDateIcon');
         const stickerWeekInput = document.getElementById('stickerWeekInput'); 
         const importanceButtonsContainer = document.getElementById('importanceButtonsContainer');
         const saveButton = document.getElementById('saveButton');
@@ -710,7 +718,8 @@
         const globalSearchButton = document.getElementById('globalSearchButton');
         const exportButton = document.getElementById('exportButton'); 
         const stickerDisplayArea = document.getElementById('stickerDisplayArea'); 
-        const importanceFilterContainer = document.getElementById('importanceFilterContainer'); // New: Importance filter container
+        const importanceFilterContainer = document.getElementById('importanceFilterContainer');
+        const filterNotificationArea = document.getElementById('filterNotificationArea'); // Added for task 2
 
         // Global State Variables
         let pages = {}; 
@@ -728,7 +737,7 @@
         let draggedOverTargetElement = null; 
         let draggedPageName = null; 
         let draggedOverPageTargetElement = null; 
-        let flatpickrInstance = null; // New: To store flatpickr instance
+        let flatpickrInstance = null;
 
         const importanceLevels = {
             onTrack: { label: 'On track', lightClass: 'light-on-track', borderColorClass: 'importance-level-1' },
@@ -737,7 +746,7 @@
             complete: { label: 'Complete', lightClass: 'light-complete', borderColorClass: 'importance-level-complete' }
         };
         let selectedImportance = null; 
-        let currentFilter = 'all'; // New: To store the active importance filter
+        let currentFilter = 'all'; // To store the active importance filter
 
         // --- Utility Functions ---
 
@@ -753,9 +762,16 @@
             return importanceLevels[importance] ? importanceLevels[importance].label : '';
         }
 
-        function showNotification(messageText) { 
+        function showNotification(messageText, type = 'success') { // Added type for different notification styles
             const notification = document.createElement('div'); 
             notification.className = 'floating-notification'; 
+            if (type === 'error') {
+                notification.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'; // Red gradient for error
+                notification.style.boxShadow = '0 10px 25px rgba(239, 68, 68, 0.4)';
+            } else if (type === 'info') {
+                notification.style.background = 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'; // Blue gradient for info
+                notification.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.4)';
+            }
             notification.textContent = messageText; 
             document.body.appendChild(notification); 
             setTimeout(() => { 
@@ -886,7 +902,7 @@
                     document.body.style.overflow = ''; 
                     overlay.remove(); 
                 } else { 
-                    showNotification('Name, content, and importance cannot be empty.'); 
+                    showNotification('Name, content, and importance cannot be empty.', 'error'); 
                 } 
             }); 
             const closeModal = () => { document.body.style.overflow = ''; overlay.remove(); onCancel(); }; 
@@ -908,7 +924,7 @@
         }
         async function copyToClipboard(text, sourceElement) { 
             if (sourceElement.dataset.isEditing === 'true') { 
-                showNotification('Cannot copy while editing.');
+                showNotification('Cannot copy while editing.', 'info');
                 return;
             }
 
@@ -996,7 +1012,6 @@
                 const regex = new RegExp(`(${lowerCaseSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
                 detailsContentDiv.innerHTML = content.replace(regex, '<mark class="bg-yellow-200 rounded">$1</mark>');
 
-                // Auto-scroll to the first highlighted match
                 const firstHighlight = detailsContentDiv.querySelector('mark');
                 if (firstHighlight) {
                     firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1034,13 +1049,13 @@
                 if (stickerElement) {
                     editSticker(stickerIndex, stickerElement);
                 } else {
-                    showNotification('Could not find sticker to edit.');
+                    showNotification('Could not find sticker to edit.', 'error');
                 }
             });
 
             deleteBtn.addEventListener('click', () => {
                 closeModal(); 
-                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(index)); 
+                showDeleteConfirmationModal('Sticker', stickerData.name, () => deleteSticker(stickerIndex)); 
             });
         }
 
@@ -1083,7 +1098,7 @@
 
         function addPage(pageName) { 
             if (pages[pageName]) { 
-                showNotification(`Page "${pageName}" already exists!`); 
+                showNotification(`Page "${pageName}" already exists!`, 'info'); 
                 return; 
             } 
             pages[pageName] = []; 
@@ -1098,17 +1113,17 @@
             currentPage = pageName; 
             saveAllData(); 
             updateUI(); 
-            showNotification(`Switched to page: "${pageName}"`); 
+            showNotification(`Switched to page: "${pageName}"`, 'info'); 
         }
         function editPageName(oldPageName) { 
             showInputModal('Edit Page Name', 'Enter new page name...', oldPageName, 20, 
                 (newPageName) => { 
                     if (newPageName === oldPageName) { 
-                        showNotification('Page name not changed.'); 
+                        showNotification('Page name not changed.', 'info'); 
                         return; 
                     } 
                     if (newPageName.toLowerCase() in pages) { 
-                        showNotification(`Page "${newPageName}" already exists!`); 
+                        showNotification(`Page "${newPageName}" already exists!`, 'error'); 
                         return; 
                     } 
                     const pageMessages = pages[oldPageName]; 
@@ -1194,6 +1209,13 @@
 
         // --- Sticker Drag and Drop Handlers ---
         function handleDragStart(event) {
+            // Task 2: Disable drag-and-drop when a filter is active
+            if (currentFilter !== 'all') {
+                event.preventDefault(); // Prevent the drag operation
+                showNotification('Drag and drop is disabled when a filter is active.', 'info');
+                return;
+            }
+
             draggedStickerElement = event.target;
             draggedStickerIndex = parseInt(draggedStickerElement.dataset.index);
             draggedStickerElement.classList.add('dragging'); 
@@ -1202,6 +1224,10 @@
         }
 
         function handleDragOver(event) {
+            // Task 2: If dragging is disabled, don't show drag over effects
+            if (currentFilter !== 'all') {
+                return;
+            }
             event.preventDefault(); 
             const targetSticker = event.target.closest('.sticker-note');
 
@@ -1222,6 +1248,10 @@
         }
         
         function handleDragLeave(event) {
+            // Task 2: If dragging is disabled, don't manage drag leave effects
+            if (currentFilter !== 'all') {
+                return;
+            }
             if (draggedOverTargetElement) {
                 draggedOverTargetElement.classList.remove('drag-target-glow');
                 draggedOverTargetElement = null;
@@ -1230,6 +1260,10 @@
 
         function handleDrop(event) {
             event.preventDefault();
+            // Task 2: If dragging is disabled, do nothing on drop
+            if (currentFilter !== 'all') {
+                return;
+            }
             
             if (draggedOverTargetElement) {
                 draggedOverTargetElement.classList.remove('drag-target-glow');
@@ -1279,6 +1313,16 @@
         }
         
         function handleDragEnd(event) {
+            // Task 2: If dragging is disabled, ensure state is clean
+            if (currentFilter !== 'all') {
+                if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
+                if(draggedOverTargetElement) draggedOverTargetElement.classList.remove('drag-target-glow');
+                draggedStickerIndex = null;
+                draggedStickerElement = null;
+                draggedOverTargetElement = null;
+                return;
+            }
+
             if(draggedStickerElement) draggedStickerElement.classList.remove('dragging');
             if(draggedOverTargetElement) draggedOverTargetElement.classList.remove('drag-target-glow');
             draggedStickerIndex = null;
@@ -1291,31 +1335,50 @@
 
         function updateStickerList() {
             stickerDisplayArea.innerHTML = ''; 
-            let currentStickers = pages[currentPage] || [];
+            let currentStickersSource = pages[currentPage] || [];
+            let displayedStickers = currentStickersSource;
 
             // Apply filter based on currentFilter
             if (currentFilter !== 'all') {
-                currentStickers = currentStickers.filter(sticker => sticker.importance === currentFilter);
+                displayedStickers = currentStickersSource.filter(sticker => sticker.importance === currentFilter);
             }
 
-            currentStickers.forEach((stickerObj, index) => {
+            // Task 2: Determine if stickers should be draggable
+            const isDraggable = currentFilter === 'all';
+
+            displayedStickers.forEach((stickerObj, displayIndex) => { // Use displayIndex for elements if needed, but originalIndex for data ops
+                // Find original index in the unfiltered list if needed for data operations
+                const originalIndex = currentStickersSource.indexOf(stickerObj); 
+
                 const stickerContainer = document.createElement('div');
                 stickerContainer.dataset.isEditing = 'false'; 
-                stickerContainer.dataset.index = index; 
-                stickerContainer.dataset.stickerId = `${currentPage}-${index}`; 
-                stickerContainer.setAttribute('draggable', 'true'); 
+                // Important: data-index should refer to the original index in pages[currentPage] for edit/delete
+                stickerContainer.dataset.index = originalIndex; 
+                stickerContainer.dataset.stickerId = `${currentPage}-${originalIndex}`; 
+                
+                // Task 2: Set draggable attribute and cursor style
+                stickerContainer.setAttribute('draggable', isDraggable);
+                if (!isDraggable) {
+                    stickerContainer.classList.add('cursor-not-allowed');
+                } else {
+                    stickerContainer.classList.remove('cursor-not-allowed');
+                }
+
 
                 stickerContainer.className = `sticker-note relative p-4 rounded-xl shadow-md ${stickerObj.bgColorClass} ${getImportanceBorderClass(stickerObj.importance)}`;
                 
-                stickerContainer.addEventListener('dragstart', handleDragStart);
-                stickerContainer.addEventListener('dragover', handleDragOver); 
-                stickerContainer.addEventListener('dragleave', handleDragLeave); 
-                stickerContainer.addEventListener('drop', handleDrop);      
-                stickerContainer.addEventListener('dragend', handleDragEnd);
+                if (isDraggable) { // Only add drag listeners if draggable
+                    stickerContainer.addEventListener('dragstart', handleDragStart);
+                    stickerContainer.addEventListener('dragover', handleDragOver); 
+                    stickerContainer.addEventListener('dragleave', handleDragLeave); 
+                    stickerContainer.addEventListener('drop', handleDrop);      
+                    stickerContainer.addEventListener('dragend', handleDragEnd);
+                }
+
 
                 stickerContainer.addEventListener('click', (e) => { 
                     if (!e.target.closest('.sticker-actions button') && stickerContainer.dataset.isEditing === 'false' && !stickerContainer.classList.contains('dragging')) { 
-                        showStickerDetailsModal(stickerObj, index); 
+                        showStickerDetailsModal(stickerObj, originalIndex); 
                     } 
                 });
 
@@ -1371,18 +1434,24 @@
                     e.stopPropagation(); 
                     copyToClipboard(stickerObj.content, stickerContainer); 
                 });
-                actionsDiv.querySelector('.edit-button').addEventListener('click', (e) => { e.stopPropagation(); editSticker(index, stickerContainer); });
-                actionsDiv.querySelector('.delete-button').addEventListener('click', (e) => { e.stopPropagation(); showDeleteConfirmationModal('Sticker', stickerObj.name, () => deleteSticker(index)); });
+                // Pass originalIndex for edit/delete operations
+                actionsDiv.querySelector('.edit-button').addEventListener('click', (e) => { e.stopPropagation(); editSticker(originalIndex, stickerContainer); });
+                actionsDiv.querySelector('.delete-button').addEventListener('click', (e) => { e.stopPropagation(); showDeleteConfirmationModal('Sticker', stickerObj.name, () => deleteSticker(originalIndex)); });
                 
                 stickerDisplayArea.appendChild(stickerContainer);
             });
             
-            stickerDisplayArea.addEventListener('dragover', handleDragOver); 
-            stickerDisplayArea.addEventListener('dragleave', handleDragLeave); 
-            stickerDisplayArea.addEventListener('drop', handleDrop); 
+            if (isDraggable) { // Only add container drag listeners if draggable
+                stickerDisplayArea.addEventListener('dragover', handleDragOver); 
+                stickerDisplayArea.addEventListener('dragleave', handleDragLeave); 
+                stickerDisplayArea.addEventListener('drop', handleDrop); 
+            } else { // Remove if not draggable to prevent interference
+                stickerDisplayArea.removeEventListener('dragover', handleDragOver);
+                stickerDisplayArea.removeEventListener('dragleave', handleDragLeave);
+                stickerDisplayArea.removeEventListener('drop', handleDrop);
+            }
 
-            // Only count stickers that are currently displayed, not total
-            messageCount.textContent = `${currentStickers.length}/${maxStickers} stickers`;
+            messageCount.textContent = `${displayedStickers.length}/${maxStickers} stickers`; // Count displayed stickers
             updateSaveButtonState();
         }
         
@@ -1435,10 +1504,8 @@
                 const day = parseInt(parts[0], 10);
                 const month = parseInt(parts[1], 10) - 1; 
                 const year = parseInt(parts[2], 10);
-                // Basic validation for year, month, and day ranges
                 if (year > 0 && month >= 0 && month < 12 && day > 0 && day <= 31) {
                     const date = new Date(year, month, day);
-                    // Final check to ensure Date object wasn't coerced (e.g. Feb 30 -> Mar 2)
                     if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
                         return date;
                     }
@@ -1500,13 +1567,12 @@
                 flatpickrInstance.setDate(today, true); 
             } else {
                 stickerDateInput.value = formatDate(today);
-                 // Manually trigger update if flatpickr not yet ready (should ideally not happen here)
                 updateStickerWeekBasedOnDateInput();
             }
         }
 
         function updateStickerWeekBasedOnDateInput() {
-            const dateString = stickerDateInput.value.trim(); // Read from original input
+            const dateString = stickerDateInput.value.trim();
             const parsedDate = parseDateString(dateString);
             if (parsedDate) {
                 stickerWeekInput.value = calculateFinancialWeek(parsedDate);
@@ -1522,8 +1588,9 @@
             const nameLength = stickerNameInput.value.trim().length; 
             const dateLength = stickerDateInput.value.trim().length; 
             const weekLength = stickerWeekInput.value.trim().length; 
-            const totalStickers = pages[currentPage] ? pages[currentPage].length : 0; // Use actual total here
-            saveButton.disabled = messageLength === 0 || nameLength === 0 || dateLength === 0 || weekLength === 0 || totalStickers >= maxStickers || selectedImportance === null; 
+            const currentStickers = pages[currentPage] || []; // Use actual total for the current page
+            const totalStickersOnPage = currentStickers.length;
+            saveButton.disabled = messageLength === 0 || nameLength === 0 || dateLength === 0 || weekLength === 0 || totalStickersOnPage >= maxStickers || selectedImportance === null; 
         }
 
         importanceButtonsContainer.addEventListener('click', (e) => {
@@ -1544,9 +1611,6 @@
         });
         stickerNameInput.addEventListener('input', updateSaveButtonState);
         
-        // Listener for the original (hidden or underlying) stickerDateInput.
-        // This is triggered by flatpickr's onChange (via dispatched event)
-        // and by the altInput's 'change' event (via dispatched event).
         stickerDateInput.addEventListener('input', () => {
             updateStickerWeekBasedOnDateInput(); 
             updateSaveButtonState();
@@ -1586,20 +1650,20 @@
                     btn.classList.remove('selected');
                 });
                 updateDateAndWeekInputs(); 
-                updateUI(); // Explicitly call updateUI to refresh the sticker list and other UI elements
+                updateUI(); 
                 showNotification('Sticker saved! ✨'); 
             } else if (currentStickers.length >= maxStickers) { 
-                showNotification('Maximum sticker limit reached for this page.'); 
+                showNotification('Maximum sticker limit reached for this page.', 'error'); 
             } else if (!stickerNameBase) { 
-                showNotification('Sticker name cannot be empty.'); stickerNameInput.focus(); 
+                showNotification('Sticker name cannot be empty.', 'error'); stickerNameInput.focus(); 
             } else if (!stickerDateString) { 
-                showNotification('Sticker date cannot be empty.'); stickerDateInput.focus(); 
+                showNotification('Sticker date cannot be empty.', 'error'); stickerDateInput.focus(); 
             } else if (!stickerWeekString) { 
-                showNotification('Sticker week cannot be empty.'); stickerWeekInput.focus(); 
+                showNotification('Sticker week cannot be empty.', 'error'); stickerWeekInput.focus(); 
             } else if (!message) { 
-                showNotification('Message content cannot be empty.'); messageInput.focus(); 
+                showNotification('Message content cannot be empty.', 'error'); messageInput.focus(); 
             } else if (!importance) { 
-                showNotification('Please select an importance level.'); 
+                showNotification('Please select an importance level.', 'error'); 
             } 
         });
         addPageButton.addEventListener('click', () => { 
@@ -1608,13 +1672,12 @@
                 addPage(newPageName); 
                 newPageNameInput.value = ''; 
             } else { 
-                showNotification('Page name cannot be empty.'); 
+                showNotification('Page name cannot be empty.', 'error'); 
             } 
         });
         newPageNameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addPageButton.click(); });
 
         // --- Page Drag and Drop Handlers ---
-        // ... (Page drag and drop handlers remain unchanged) ...
         let pageDropIndicator = null; 
         function handlePageDragStart(event) {
             draggedPageName = event.target.dataset.pageName;
@@ -1700,7 +1763,6 @@
         }
 
         // --- Global Search Functions ---
-        // ... (Global search functions remain unchanged) ...
         function performGlobalSearch() { 
             const allStickers = [];
             pageOrder.forEach(pageName => {
@@ -1791,7 +1853,6 @@
                 }
                 searchResultsContainer.innerHTML = resultsHTML;
 
-                // Auto-scroll each search result content to its first highlighted match
                 searchResultsContainer.querySelectorAll('.search-result-content').forEach(contentDiv => {
                     const firstHighlight = contentDiv.querySelector('mark');
                     if (firstHighlight) {
@@ -1812,12 +1873,10 @@
                                 setTimeout(() => {
                                     stickerElement.classList.remove('sticker-shake-effect');
                                     stickerElement.classList.add('sticker-highlight-effect');
-                                    // Find the first highlighted element within the sticker and scroll to it
                                     const firstHighlightInSticker = stickerElement.querySelector('mark');
                                     if (firstHighlightInSticker) {
                                         firstHighlightInSticker.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     } else {
-                                        // Fallback to scrolling the sticker itself if no highlight found (e.g., search term in name only)
                                         stickerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     }
                                     setTimeout(() => { 
@@ -1844,14 +1903,32 @@
                 overlay.remove(); 
             });
         }
-        globalSearchButton.addEventListener('click', performGlobalSearch);
+        
+        // Task 1: Modified globalSearchButton event listener
+        globalSearchButton.addEventListener('click', () => {
+            // Reset filters to "All"
+            currentFilter = 'all';
+            importanceFilterContainer.querySelectorAll('.filter-importance-button').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.filter === 'all');
+            });
+
+            // Update sticker list (this will also re-enable draggable if it was disabled)
+            updateStickerList(); 
+
+            // Hide the filter active message as filter is now "all"
+            if (filterNotificationArea) {
+                filterNotificationArea.classList.add('hidden');
+            }
+
+            performGlobalSearch(); // Original action: open search modal
+        });
+
 
         // --- Export to Excel Functionality ---
-        // ... (Export to Excel function remains unchanged) ...
         function exportToExcel() {
             const currentStickers = pages[currentPage] || [];
             if (currentStickers.length === 0) {
-                showNotification('No stickers on this page to export.');
+                showNotification('No stickers on this page to export.', 'info');
                 return;
             }
 
@@ -1906,84 +1983,73 @@
                 btn.classList.remove('selected');
             });
 
-            // Set initial filter button state
             importanceFilterContainer.querySelectorAll('.filter-importance-button').forEach(btn => {
-                if (btn.dataset.filter === currentFilter) {
-                    btn.classList.add('selected');
-                } else {
-                    btn.classList.remove('selected');
-                }
+                btn.classList.toggle('selected', btn.dataset.filter === currentFilter);
             });
+
+            // Task 2: Manage filter active message
+            if (filterNotificationArea) {
+                if (currentFilter !== 'all') {
+                    filterNotificationArea.textContent = 'Drag-and-drop reordering is disabled while a filter is active.';
+                    filterNotificationArea.classList.remove('hidden');
+                } else {
+                    filterNotificationArea.classList.add('hidden');
+                }
+            }
         }
         
         // Event listener for filter buttons:
         importanceFilterContainer.addEventListener('click', (e) => {
             const clickedButton = e.target.closest('.filter-importance-button');
             if (clickedButton) {
-                // Remove 'selected' from all filter buttons
                 importanceFilterContainer.querySelectorAll('.filter-importance-button').forEach(btn => {
                     btn.classList.remove('selected');
                 });
-                // Add 'selected' to the clicked button
                 clickedButton.classList.add('selected');
-                // Update the filter state
                 currentFilter = clickedButton.dataset.filter;
-                // Re-render the sticker list with the new filter
-                updateStickerList();
+                updateStickerList(); // Re-render sticker list with new filter and draggable state
+
+                // Task 2: Update filter active message
+                if (filterNotificationArea) {
+                    if (currentFilter !== 'all') {
+                        filterNotificationArea.textContent = 'Drag-and-drop reordering is disabled while a filter is active.';
+                        filterNotificationArea.classList.remove('hidden');
+                    } else {
+                        filterNotificationArea.classList.add('hidden');
+                    }
+                }
             }
         });
 
         // Initialize Flatpickr
         flatpickrInstance = flatpickr(stickerDateInput, {
-            dateFormat: "d/m/Y",      // Format for the original hidden input
-            altInput: true,          // Create a user-visible alternate input
-            altFormat: "d/m/Y",      // Format for the visible alternate input
-            allowInput: true,        // Allow users to type into the altInput
-            clickOpens: false,       // PREVENT calendar from opening when altInput is clicked
+            dateFormat: "d/m/Y",      
+            altInput: true,          
+            altFormat: "d/m/Y",      
+            allowInput: true,        
+            clickOpens: false,       
             defaultDate: "today",
             onChange: function(selectedDates, dateStr, instance) {
-                // This hook is called when a date is selected from the picker,
-                // or when a valid date is typed into the altInput and flatpickr processes it (e.g., on blur/enter).
-                // Flatpickr automatically updates the original input (instance.input) with the new date string (dateStr).
-                
-                // Manually dispatch an 'input' event on the original stickerDateInput.
-                // This ensures that our existing 'input' event listener on stickerDateInput
-                // (which calls updateStickerWeekBasedOnDateInput and updateSaveButtonState) is triggered.
                 const event = new Event('input', { bubbles: true });
                 instance.input.dispatchEvent(event);
             }
         });
 
-        // Add a 'change' event listener to the user-visible alternate input (flatpickrInstance.altInput).
-        // The 'change' event fires when the input loses focus (blur) AND its value has been modified by typing.
         if (flatpickrInstance && flatpickrInstance.altInput) {
             flatpickrInstance.altInput.addEventListener('change', () => {
-                // When the user types into the altInput and then clicks away (blur), this 'change' event fires.
-                // At this point, flatpickr has already attempted to parse the altInput's value.
-                // - If the typed date was valid, flatpickr updates the original input (stickerDateInput)
-                //   and its 'onChange' hook (defined above) would have already fired, dispatching the 'input' event.
-                // - If the typed date was invalid, flatpickr might clear or revert the altInput,
-                //   and potentially also clear or leave the original stickerDateInput.
-                //   In this scenario, flatpickr's 'onChange' might not fire if no *new valid date* was set.
-
-                // To ensure our week recalculation logic (including clearing the week if the date is now invalid/empty)
-                // always runs after manual input and blur, we re-dispatch the 'input' event on the original stickerDateInput.
-                // The `stickerDateInput.addEventListener('input', ...)` will then read the current state
-                // of `stickerDateInput` (which flatpickr should have just settled) and update accordingly.
                 const event = new Event('input', { bubbles: true });
-                stickerDateInput.dispatchEvent(event); // stickerDateInput is flatpickrInstance.input
+                stickerDateInput.dispatchEvent(event); 
             });
         }
 
-        // Make the calendar icon also trigger the date picker
         stickerDateIcon.addEventListener('click', () => {
             if (flatpickrInstance) {
                 flatpickrInstance.open();
             }
         });
         
-        loadAllData(); // Load data (which calls updateUI)
-        updateDateAndWeekInputs(); // Set initial date, which will trigger onChange and then the input event flow
+        loadAllData(); 
+        updateDateAndWeekInputs(); 
     </script>
 </body>
 </html>
