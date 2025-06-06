@@ -178,9 +178,14 @@
             animation: modalSlideIn 0.3s ease;
         }
 
-        .edit-sticker-modal-content, .search-results-modal-content, .sticker-details-modal-content { 
+        .search-results-modal-content { 
             max-width: 600px; 
             width: 90%; 
+        }
+
+        .sticker-details-modal-content, .edit-sticker-modal-content {
+            max-width: 800px; /* Increased from 600px */
+            width: 90%;
         }
         
         @keyframes modalSlideIn {
@@ -306,7 +311,7 @@
         }
 
         .sticker-details-content-area {
-            max-height: 300px; 
+            max-height: 450px; /* Increased from 300px */
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-word;
@@ -831,14 +836,14 @@
 
             modal.innerHTML = `
                 <div>
-                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Edit Sticker</h3>
+                    <h3 class="text-3xl font-semibold text-gray-800 mb-6 text-center">Edit Sticker</h3>
                     <div class="mb-4">
                         <label for="editStickerNameInput" class="block text-sm font-medium text-gray-700 mb-1">Name:</label>
-                        <input type="text" id="editStickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-sm" value="${stickerData.name}" maxlength="50">
+                        <input type="text" id="editStickerNameInput" class="input-field w-full p-3 rounded-xl focus:outline-none text-base" value="${stickerData.name}" maxlength="50">
                     </div>
                     <div class="mb-4">
                         <label for="editStickerContentInput" class="block text-sm font-medium text-gray-700 mb-1">Content:</label>
-                        <textarea id="editStickerContentInput" class="input-field w-full p-3 rounded-xl focus:outline-none resize-y text-sm" rows="8">${stickerData.content}</textarea>
+                        <textarea id="editStickerContentInput" class="input-field w-full p-3 rounded-xl focus:outline-none resize-y text-base" rows="8">${stickerData.content}</textarea>
                     </div>
                     <div class="mb-6">
                         <label class="block text-sm font-medium text-gray-700 mb-2">Importance Level:</label>
@@ -971,8 +976,8 @@
 
             modal.innerHTML = `
                 <div>
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-2xl font-semibold text-gray-800">${baseName}${dateAndWeekPart}</h3>
+                    <div class="flex justify-between items-start mb-6">
+                        <h3 class="text-3xl font-semibold text-gray-800">${baseName}${dateAndWeekPart}</h3>
                         <button id="closeDetailsModalButton" class="text-gray-500 hover:text-gray-700">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                         </button>
@@ -986,7 +991,7 @@
                     </div>
                     <div class="mb-6">
                         <label for="stickerDetailsContent" class="block text-sm font-medium text-gray-700 mb-1">Content:</label>
-                        <div id="stickerDetailsContent" class="sticker-details-content-area text-sm text-gray-700 p-3 rounded-xl bg-gray-50 border border-gray-200 ${getImportanceBorderClass(stickerData.importance)}">
+                        <div id="stickerDetailsContent" class="sticker-details-content-area text-base text-gray-700 p-3 rounded-xl bg-gray-50 border border-gray-200 ${getImportanceBorderClass(stickerData.importance)}">
                             </div>
                     </div>
                     <p class="text-xs text-gray-500 text-right">${displayTimestamp}</p>
@@ -1203,7 +1208,7 @@
             }; 
             setTimeout(() => { 
                 document.addEventListener('click', closeMenu); 
-                document.addEventListener('contextmenu', closeMenu); 
+                document.removeEventListener('contextmenu', closeMenu); 
             }, 0); 
         }
 
