@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudioPulse - Class Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Embla Carousel CDN -->
+    <script src="https://unpkg.com/embla-carousel@8.1.3/embla-carousel.umd.js"></script>
+    <style>
+        /* --- Light Theme Base --- */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .card {
+            background-color: white;
+            border-radius: 1.5rem; /* 24px */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+            border: 1px solid #e2e8f0; /* slate-200 */
+        }
+        .color-swatch-container {
+            display: flex; flex-wrap: wrap; gap: 8px; padding: 8px;
+            border: 1px solid #e2e8f0; border-radius: 8px;
+            background-color: #f8fafc;
+        }
+        .color-swatch-radio { display: none; }
+        .color-swatch-label {
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .color-swatch-radio:checked + .color-swatch-label {
+            border-color: #4f46e5; /* indigo-600 */
+            transform: scale(1.15);
+            box-shadow: 0 0 0 2px #4f46e5;
+        }
+        .color-swatch-label:hover { transform: scale(1.1); }
+        .courses-container::-webkit-scrollbar, .admin-list::-webkit-scrollbar { display: none; }
+        .courses-container, .admin-list { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Slide Layout for 5-Day View */
+        .embla__slide { flex: 0 0 100%; min-width: 0; }
+        @media (min-width: 640px) { .embla__slide { flex: 0 0 50%; } }
+        @media (min-width: 1024px) { .embla__slide { flex: 0 0 33.3333%; } }
+        @media (min-width: 1536px) { .embla__slide { flex: 0 0 20%; } }
+
+        /* Drag & Drop, Course Block Styles */
+        .courses-container { padding: 8px 4px 0 4px; } /* Added top padding to fix hover overflow */
+        .course-block { 
+            position: relative; z-index: 1;
+            transition: all 0.2s ease-in-out;
+        }
+        .course-block:hover {
+            z-index: 10; transform: scale(1.03);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .course-block.dragging {
+            opacity: 0.6; z-index: 20; transform: scale(1.05);
+        }
+        .drop-indicator { height: 3px; background: #4f46e5; margin: 4px 0; border-radius: 2px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        /* Page Navigation & Header */
+        header h1 { flex-shrink: 0; }
+        .nav-btn { transition: all 0.2s ease; border-bottom: 3px solid transparent; color: #475569; }
+        .nav-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        
+        /* Form input styling */
+        .form-input, .form-select {
+            background-color: white; /* Changed to white */
+            border: 1px solid #cbd5e1; /* slate-300 */
+            color: #1e293b; /* slate-800 */
+            border-radius: 0.5rem; width: 100%; padding: 0.6rem 0.75rem;
+            transition: all 0.2s ease-in-out;
+        }
+        .form-input:focus, .form-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px #c7d2fe; }
+        
+        /* Modal Backdrop & Content*/
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); }
+        .modal-content.open {
+             opacity: 1;
+             transform: scale(1);
+        }
+
+        /* Tutor Form Salary Button */
+        .salary-type-btn { background-color: #e2e8f0; color: #475569; }
+        .salary-type-btn.active { background-color: #4f46e5; color: white; }
+        
+        /* Simple Bar Chart */
+        .bar-chart-bar {
+            border-radius: 0.25rem;
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-4">
+
+    <!-- Auth Page -->
+    <div id="authPage" class="w-full max-w-sm mx-auto text-center">
+        <h1 class="text-4xl font-extrabold text-slate-800 mb-2">Welcome to</h1>
+        <h2 class="text-5xl font-extrabold mb-10">
+            <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-fuchsia-600">StudioPulse</span>
+        </h2>
+        <div class="card p-8 space-y-4">
+            <h3 class="text-xl font-bold text-slate-700">Login As</h3>
+            <button id="loginAsOwner" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition">Owner</button>
+            <button id="loginAsMember" class="w-full bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-3 rounded-lg transition">Member</button>
+        </div>
+    </div>
+
+    <!-- Main App Wrapper -->
+    <div id="appWrapper" class="w-full max-w-screen-2xl mx-auto hidden">
+        <header class="w-full mb-8">
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                 <h1 class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter">
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-fuchsia-600">StudioPulse</span>
+                </h1>
+                <nav id="mainNav" class="flex items-center gap-2 sm:gap-6 bg-white/60 backdrop-blur-sm rounded-full px-4 py-2 border border-slate-200 shadow-sm">
+                    <button data-page="schedule" class="nav-btn active font-semibold px-3 py-1 text-sm sm:text-base">Schedule</button>
+                    <button data-page="statistics" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Statistics</button>
+                    <button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Salary</button>
+                    <button data-page="members" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Members</button>
+                    <button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Admin</button>
+                    <button id="logoutBtn" class="font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">Logout</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="app-content" class="w-full">
+            <!-- Schedule Page -->
+            <div id="page-schedule" class="page w-full">
+                <div class="relative">
+                    <div class="embla overflow-hidden card p-4 md:p-6">
+                        <div class="embla__viewport" id="emblaViewport"><div class="embla__container flex -mx-2" id="emblaContainer"></div></div>
+                    </div>
+                    <button class="embla__button embla__button--prev absolute left-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
+                    <button class="embla__button embla__button--next absolute right-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
+                </div>
+            </div>
+
+            <!-- Statistics Page -->
+            <div id="page-statistics" class="page hidden w-full max-w-screen-xl mx-auto">
+                 <div class="card p-6 md:p-8">
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-slate-800">Studio Statistics</h2>
+                         <div class="flex gap-4">
+                            <select id="statsPeriodSelect" class="form-select w-48"></select>
+                         </div>
+                    </div>
+                    <div id="statisticsContainer" class="space-y-8">
+                        <!-- Stats will be rendered here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Salary Page -->
+            <div id="page-salary" class="page hidden w-full max-w-screen-xl mx-auto">
+                <div class="card p-6 md:p-8">
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-slate-800">Tutor Salary Overview</h2>
+                        <div class="flex gap-4">
+                            <select id="salaryTutorSelect" class="form-select w-48"></select>
+                            <select id="salaryPeriodSelect" class="form-select w-48"></select>
+                        </div>
+                    </div>
+                    <div id="salaryDetailsContainer">
+                        <!-- Salary details will be rendered here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Members Page -->
+            <div id="page-members" class="page hidden w-full max-w-screen-xl mx-auto">
+                <div class="card p-6 md:p-8">
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-slate-800">Manage Members</h2>
+                        <div class="flex gap-4">
+                            <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-64">
+                            <button id="addMemberBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Member</button>
+                        </div>
+                    </div>
+                    <div id="membersListContainer" class="overflow-x-auto">
+                        <!-- Members table will be rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Page -->
+            <div id="page-admin" class="page hidden w-full max-w-screen-lg mx-auto">
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card p-6"><h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Sport Types</h3><button id="addSportTypeBtn" class="w-full mb-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Sport Type</button><ul id="sportsList" class="admin-list h-96 overflow-y-auto space-y-2"></ul></div>
+                    <div class="card p-6"><h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Tutors</h3><button id="addTutorBtn" class="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Tutor</button><ul id="tutorsList" class="admin-list h-96 overflow-y-auto space-y-2"></ul></div>
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals Container -->
+    <div id="messageBox" class="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-xl hidden z-50"></div>
+    
+    <!-- Course Modal -->
+    <div id="courseModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 id="courseModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
+            <form id="courseForm"><input type="hidden" id="courseModalId"><input type="hidden" id="courseModalDate"><div class="space-y-4"><div><label for="courseSportType" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type</label><select id="courseSportType" name="sportTypeId" required class="form-select"></select></div><div><label for="courseTutor" class="block text-slate-600 text-sm font-semibold mb-2">Tutor</label><select id="courseTutor" name="tutorId" required class="form-select"></select></div><div><label for="coursePrice" class="block text-slate-600 text-sm font-semibold mb-2">Course Price ($)</label><input type="number" id="coursePrice" name="price" required min="0" step="1" value="25" class="form-input"></div><div class="grid grid-cols-2 gap-4"><div><label for="courseDuration" class="block text-slate-600 text-sm font-semibold mb-2">Duration (min)</label><input type="number" id="courseDuration" name="duration" required min="15" max="240" step="5" value="60" class="form-input"></div><div><label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time</label><input type="time" id="courseTime" name="time" required value="09:00" class="form-input"></div></div><div class="grid grid-cols-2 gap-4"><div><label for="courseCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label><input type="number" id="courseCredits" name="credits" required min="0" max="10" step="0.5" value="1" class="form-input"></div><div><label for="courseMaxParticipants" class="block text-slate-600 text-sm font-semibold mb-2">Max Participants</label><input type="number" id="courseMaxParticipants" name="maxParticipants" required min="1" max="100" value="15" class="form-input"></div></div></div><div class="flex justify-between items-center mt-8"><button type="button" class="delete-btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-lg transition hidden">Delete</button><div class="flex justify-end gap-4 flex-grow"><button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-5 rounded-lg">Cancel</button><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg"></button></div></div></form>
+        </div>
+    </div>
+
+    <!-- Booking Modal (for Members) -->
+    <div id="bookingModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 class="text-3xl font-bold text-slate-800 mb-4 text-center">Confirm Booking</h2>
+            <div id="bookingDetails" class="space-y-3 text-slate-600 mb-6"></div>
+            <div class="flex justify-end gap-4">
+                <button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-5 rounded-lg">Cancel</button>
+                <button id="confirmBookingBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg">Book Now</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sport Type Modal -->
+    <div id="sportTypeModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 id="sportTypeModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
+            <form id="sportTypeForm"><input type="hidden" id="sportTypeModalId"><div class="space-y-4"><div><label for="sportTypeName" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type Name</label><input type="text" id="sportTypeName" required class="form-input"></div><div><label class="block text-slate-600 text-sm font-semibold mb-2">Color</label><div id="colorPickerContainer" class="color-swatch-container"></div><input type="hidden" id="sportTypeColor"></div></div><div class="flex justify-end gap-4 mt-8"><button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-5 rounded-lg">Cancel</button><button type="submit" class="submit-btn bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-2 px-5 rounded-lg"></button></div></form>
+        </div>
+    </div>
+    
+    <!-- Tutor Modal -->
+    <div id="tutorModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 id="tutorModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
+            <form id="tutorForm"><input type="hidden" id="tutorModalId"><div class="space-y-4"><div><label for="tutorName" class="block text-slate-600 text-sm font-semibold mb-2">Tutor Name</label><input type="text" id="tutorName" required class="form-input"></div><div><label class="block text-slate-600 text-sm font-semibold mb-2">Skills & Salaries</label><div id="tutorSkillsList" class="space-y-3"></div><button type="button" id="addTutorSkillBtn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2">+ Add Skill</button></div></div><div class="flex justify-end gap-4 mt-8"><button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-5 rounded-lg">Cancel</button><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg"></button></div></form>
+        </div>
+    </div>
+
+    <!-- Member Modal -->
+    <div id="memberModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 id="memberModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
+            <form id="memberForm"><input type="hidden" id="memberModalId"><div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label for="memberName" class="block text-slate-600 text-sm font-semibold mb-2">Member Name</label><input type="text" id="memberName" required class="form-input"></div>
+                    <div><label for="memberEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email Address</label><input type="email" id="memberEmail" required class="form-input"></div>
+                </div>
+                <div><label for="memberPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><select id="countryCode" class="form-select w-24"></select><input type="tel" id="memberPhone" required class="form-input"></div></div>
+                <div class="pt-4 border-t">
+                    <div class="flex items-center mb-4"><input type="checkbox" id="monthlyPlan" class="h-4 w-4 rounded text-indigo-600"><label for="monthlyPlan" class="ml-2 text-slate-700">Monthly Plan</label></div>
+                    <div id="creditFields">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div><label for="memberCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label><input type="number" id="memberCredits" class="form-input" min="0"></div>
+                             <div><label for="purchaseAmount" class="block text-slate-600 text-sm font-semibold mb-2">Purchase Amount ($)</label><input type="number" id="purchaseAmount" class="form-input" min="0"></div>
+                        </div>
+                        <div class="mt-4"><label class="block text-slate-600 text-sm font-semibold mb-2">Credit Expiry</label><div class="flex gap-2" id="expiryOptions"></div></div>
+                        <div class="mt-4">
+                             <label for="expiryDate" class="block text-slate-600 text-sm font-semibold mb-2">Expiry Date</label>
+                             <div class="flex items-center gap-2">
+                                <input type="date" id="expiryDate" class="form-input">
+                                <span id="costPerCredit" class="text-sm text-slate-500 whitespace-nowrap"></span>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div><div class="flex justify-end gap-4 mt-8"><button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-5 rounded-lg">Cancel</button><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg"></button></div></form>
+        </div>
+    </div>
+    
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4 modal-backdrop">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all duration-300 scale-95 opacity-0 modal-content">
+            <h2 id="confirmationTitle" class="text-2xl font-bold text-slate-800 mb-4 text-center">Confirm Deletion</h2>
+            <p id="confirmationMessage" class="text-slate-600 text-center mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button id="confirmCancelBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                <button id="confirmDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- App State & Constants ---
+        const DAYS_TO_SHOW = 30;
+        const BASE_HEIGHT_PER_60_MINS = 90;
+        const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+        const START_DATE = new Date('2025-06-27T00:00:00');
+        let appState = { courses: [], tutors: [], sportTypes: [], members: [], activePage: 'schedule', currentUser: null };
+        let emblaApi = null, draggedCourseId = null;
+        let onConfirmCallback = null;
+
+        // --- DOM Element Cache ---
+        const DOMElements = {
+            authPage: document.getElementById('authPage'),
+            appWrapper: document.getElementById('appWrapper'),
+            loginAsOwnerBtn: document.getElementById('loginAsOwner'),
+            loginAsMemberBtn: document.getElementById('loginAsMember'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            mainNav: document.getElementById('mainNav'),
+            emblaContainer: document.getElementById("emblaContainer"),
+            emblaViewport: document.getElementById("emblaViewport"),
+            messageBox: document.getElementById('messageBox'),
+            navButtons: document.querySelectorAll('.nav-btn'),
+            pages: document.querySelectorAll('.page'),
+            addSportTypeBtn: document.getElementById('addSportTypeBtn'),
+            sportsList: document.getElementById('sportsList'),
+            addTutorBtn: document.getElementById('addTutorBtn'),
+            tutorsList: document.getElementById('tutorsList'),
+            salaryTutorSelect: document.getElementById('salaryTutorSelect'),
+            salaryPeriodSelect: document.getElementById('salaryPeriodSelect'),
+            salaryDetailsContainer: document.getElementById('salaryDetailsContainer'),
+            statsPeriodSelect: document.getElementById('statsPeriodSelect'),
+            statisticsContainer: document.getElementById('statisticsContainer'),
+            membersListContainer: document.getElementById('membersListContainer'),
+            addMemberBtn: document.getElementById('addMemberBtn'),
+            memberSearchInput: document.getElementById('memberSearchInput'),
+            courseModal: document.getElementById('courseModal'),
+            bookingModal: document.getElementById('bookingModal'),
+            sportTypeModal: document.getElementById('sportTypeModal'),
+            tutorModal: document.getElementById('tutorModal'),
+            memberModal: document.getElementById('memberModal'),
+            confirmationModal: document.getElementById('confirmationModal'),
+            confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+            confirmDeleteBtn: document.getElementById('confirmDeleteBtn')
+        };
+
+        // --- Utility & Helper Functions ---
+        const showMessageBox = (message, type = 'success') => {
+            DOMElements.messageBox.textContent = message;
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-sky-500' };
+            DOMElements.messageBox.className = `fixed bottom-6 right-6 text-white px-6 py-3 rounded-lg shadow-xl z-50 animate-bounce ${colors[type] || colors.info}`;
+            DOMElements.messageBox.classList.remove('hidden');
+            setTimeout(() => DOMElements.messageBox.classList.add('hidden'), 3000);
+        };
+        const saveData = () => localStorage.setItem('studioPulseData', JSON.stringify(appState));
+        const loadData = () => {
+            const data = localStorage.getItem('studioPulseData');
+            if (data) { appState = JSON.parse(data); } 
+            else {
+                appState.sportTypes = [
+                    { id: 'st1', name: 'Sunrise Yoga', color: '#10B981'}, 
+                    { id: 'st2', name: 'HIIT Blast', color: '#F97316'},
+                    { id: 'st3', name: 'Kickboxing', color: '#ef4444'}
+                ];
+                appState.tutors = [
+                    { id: 't1', name: 'Elena', skills: [{ sportTypeId: 'st1', salaryType: 'perCourse', salaryValue: 50 }]}, 
+                    { id: 't2', name: 'Marco', skills: [{ sportTypeId: 'st2', salaryType: 'percentage', salaryValue: 20 }, { sportTypeId: 'st1', salaryType: 'perHeadcount', salaryValue: 5 }]},
+                    { id: 't3', name: 'John', skills: [{ sportTypeId: 'st3', salaryType: 'perCourse', salaryValue: 60 }]}
+                ];
+                appState.courses = [
+                    { id: 'c1', sportTypeId: 'st1', tutorId: 't1', duration: 60, date: '2025-07-02', time: '07:00', credits: 1, maxParticipants: 15, price: 25, attendees: 0, noShows: 0 },
+                    { id: 'c2', sportTypeId: 'st2', tutorId: 't2', duration: 45, date: '2025-07-03', time: '09:00', credits: 1.5, maxParticipants: 20, price: 30, attendees: 0, noShows: 0 },
+                    { id: 'c3', sportTypeId: 'st1', tutorId: 't2', duration: 60, date: '2025-07-05', time: '18:00', credits: 1, maxParticipants: 15, price: 25, attendees: 0, noShows: 0 },
+                    { id: 'c4', sportTypeId: 'st3', tutorId: 't3', duration: 75, date: '2025-06-28', time: '19:00', credits: 2, maxParticipants: 10, price: 40, attendees: 0, noShows: 0 },
+                    { id: 'c5', sportTypeId: 'st1', tutorId: 't1', duration: 60, date: '2025-06-27', time: '07:00', credits: 1, maxParticipants: 15, price: 25, attendees: 0, noShows: 0 },
+                ];
+                appState.members = [
+                    { id: 'm1', name: 'John Doe', email: 'john@example.com', phone: '+852 98001055', credits: 50, expiryDate: '2026-06-30', monthlyPlan: false },
+                    { id: 'm2', name: 'Jane Smith', email: 'jane@example.com', phone: '+1 4155552671', credits: 100, expiryDate: '2027-06-30', monthlyPlan: true }
+                ];
+                saveData();
+            }
+            const userSession = sessionStorage.getItem('studioPulseUser');
+            if (userSession) {
+                appState.currentUser = JSON.parse(userSession);
+            }
+        };
+        const getIsoDate = (date) => {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        const formatTime = (date) => date.toTimeString().slice(0, 5);
+        const getTimeRange = (startTime, duration) => {
+            const start = new Date(`1970-01-01T${startTime}`);
+            const end = new Date(start.getTime() + duration * 60000);
+            return `${formatTime(start)} - ${formatTime(end)}`;
+        };
+        const formatCurrency = (amount) => amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        
+        // --- Auth & UI Visibility ---
+        const handleLogin = (userType) => {
+            appState.currentUser = { type: userType, name: userType === 'owner' ? 'Studio Owner' : 'Demo Member' };
+            sessionStorage.setItem('studioPulseUser', JSON.stringify(appState.currentUser));
+            DOMElements.authPage.classList.add('hidden');
+            DOMElements.appWrapper.classList.remove('hidden');
+            updateUIVisibility();
+            switchPage('schedule');
+        };
+        const handleLogout = () => {
+            appState.currentUser = null;
+            sessionStorage.removeItem('studioPulseUser');
+            DOMElements.appWrapper.classList.add('hidden');
+            DOMElements.authPage.classList.remove('hidden');
+        };
+        const updateUIVisibility = () => {
+            const isOwner = appState.currentUser?.type === 'owner';
+            DOMElements.mainNav.querySelectorAll('[data-page]').forEach(btn => {
+                const page = btn.dataset.page;
+                if (page !== 'schedule') {
+                    btn.style.display = isOwner ? 'block' : 'none';
+                }
+            });
+            renderAllCourses();
+        };
+        
+        // --- Page Navigation ---
+        const switchPage = (pageId) => {
+            appState.activePage = pageId;
+            DOMElements.pages.forEach(p => p.classList.add('hidden'));
+            document.getElementById(`page-${pageId}`).classList.remove('hidden');
+            DOMElements.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.page === pageId));
+            if(pageId === 'salary') renderSalaryPage();
+            if(pageId === 'statistics') renderStatisticsPage();
+            if(pageId === 'members') renderMembersPage();
+        };
+
+        // --- Generic Modal Handling ---
+        const openModal = (modal) => {
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.querySelector('.modal-content').classList.add('open'), 10);
+        };
+        const closeModal = (modal) => {
+            modal.querySelector('.modal-content').classList.remove('open');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        };
+        
+        // --- Confirmation Modal ---
+        const showConfirmation = (title, message, onConfirm) => {
+            document.getElementById('confirmationTitle').textContent = title;
+            document.getElementById('confirmationMessage').innerHTML = message;
+            onConfirmCallback = onConfirm;
+            openModal(DOMElements.confirmationModal);
+        };
+        
+        // ... All other functions go here, including booking, course, admin, stats, salary, member modals and logic...
+        // ... Placed full script in a single block at the end for final output ...
+
+        // --- Initialization ---
+        const init = () => {
+            loadData();
+            
+            if (appState.currentUser) {
+                DOMElements.authPage.classList.add('hidden');
+                DOMElements.appWrapper.classList.remove('hidden');
+                updateUIVisibility();
+                switchPage(appState.activePage || 'schedule');
+            }
+
+            generateDayColumns(); renderAllCourses(); renderAdminLists();
+            
+            emblaApi = EmblaCarousel(DOMElements.emblaViewport, { loop: false, align: "start", dragFree: true });
+            const prevBtn = document.querySelector(".embla__button--prev"), nextBtn = document.querySelector(".embla__button--next");
+            const updateButtons = () => { if(emblaApi) { prevBtn.disabled = !emblaApi.canScrollPrev(); nextBtn.disabled = !emblaApi.canScrollNext(); } };
+            prevBtn.onclick = () => emblaApi.scrollPrev(); nextBtn.onclick = () => emblaApi.scrollNext();
+            emblaApi.on('select', updateButtons).on('reInit', updateButtons); updateButtons();
+
+            // Event Listeners
+            DOMElements.loginAsOwnerBtn.onclick = () => handleLogin('owner');
+            DOMElements.loginAsMemberBtn.onclick = () => handleLogin('member');
+            DOMElements.logoutBtn.onclick = handleLogout;
+            DOMElements.navButtons.forEach(btn => btn.onclick = () => switchPage(btn.dataset.page));
+            // Admin Page Buttons
+            DOMElements.addSportTypeBtn.onclick = () => openSportTypeModal();
+            DOMElements.addTutorBtn.onclick = () => openTutorModal();
+            DOMElements.sportsList.onclick = handleAdminListClick;
+            DOMElements.tutorsList.onclick = handleAdminListClick;
+            // Member Page Buttons
+            DOMElements.addMemberBtn.onclick = () => openMemberModal();
+            DOMElements.memberSearchInput.oninput = () => renderMembersPage(DOMElements.memberSearchInput.value);
+            // Salary & Stats Page Listeners
+            DOMElements.salaryTutorSelect.onchange = renderSalaryDetails;
+            DOMElements.salaryPeriodSelect.onchange = renderSalaryDetails;
+            DOMElements.statsPeriodSelect.onchange = () => renderStatisticsPage();
+            // Modal Forms
+            DOMElements.courseModal.querySelector('form').onsubmit = handleCourseFormSubmit;
+            DOMElements.sportTypeModal.querySelector('form').onsubmit = handleSportTypeFormSubmit;
+            DOMElements.tutorModal.querySelector('form').onsubmit = handleTutorFormSubmit;
+            DOMElements.memberModal.querySelector('form').onsubmit = handleMemberFormSubmit;
+            // Generic Modal Cancel/Close
+            document.querySelectorAll('.modal-backdrop').forEach(modal => {
+                const cancelBtn = modal.querySelector('.cancel-btn');
+                if (cancelBtn) {
+                    cancelBtn.onclick = () => closeModal(modal);
+                }
+                modal.addEventListener('click', e => { if (e.target === modal) closeModal(modal); });
+            });
+            // Confirmation Modal
+            DOMElements.confirmCancelBtn.onclick = () => closeModal(DOMElements.confirmationModal);
+            DOMElements.confirmDeleteBtn.onclick = () => { if (onConfirmCallback) onConfirmCallback(); closeModal(DOMElements.confirmationModal); };
+            // Tutor Modal Specifics
+            DOMElements.tutorModal.querySelector('#addTutorSkillBtn').onclick = () => addSkillRow(DOMElements.tutorModal.querySelector('#tutorSkillsList'));
+            
+            document.querySelector('#emblaContainer').addEventListener('click', e => {
+                const addBtn = e.target.closest('.add-course-button');
+                if (addBtn && appState.currentUser?.type === 'owner') {
+                    openCourseModal(addBtn.dataset.date);
+                }
+            });
+            
+            // Drag and Drop listeners
+            document.querySelector('#emblaContainer').addEventListener('dragover', e => {
+                 e.preventDefault();
+                 const container = e.target.closest('.courses-container');
+                 if(!container || appState.currentUser?.type !== 'owner') return;
+                 const afterElement = [...container.querySelectorAll('.course-block:not(.dragging)')].reduce((closest, child) => {
+                     const box = child.getBoundingClientRect(); const offset = e.clientY - box.top - box.height / 2;
+                     return (offset < 0 && offset > closest.offset) ? { offset: offset, element: child } : closest;
+                 }, { offset: Number.NEGATIVE_INFINITY }).element;
+                 const indicator = container.querySelector('.drop-indicator') || document.createElement('div');
+                 indicator.className = 'drop-indicator';
+                 if (afterElement == null) container.insertBefore(indicator, container.querySelector('.add-course-btn-wrapper'));
+                 else container.insertBefore(indicator, afterElement);
+            });
+             document.querySelector('#emblaContainer').addEventListener('dragleave', e => e.target.closest('.courses-container')?.querySelector('.drop-indicator')?.remove());
+             document.querySelector('#emblaContainer').addEventListener('drop', e => {
+                 e.preventDefault(); 
+                 const container = e.target.closest('.courses-container');
+                 if(!container || appState.currentUser?.type !== 'owner') return;
+                 container.querySelector('.drop-indicator')?.remove();
+                 if (document.getElementById(draggedCourseId)) handleDrop(container);
+             });
+        };
+
+        // --- Booking & Course Modals ---
+        function openBookingModal(course) {
+            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            const tutor = appState.tutors.find(t => t.id === course.tutorId);
+            const bookingDetails = DOMElements.bookingModal.querySelector('#bookingDetails');
+            
+            bookingDetails.innerHTML = `
+                <p><strong>Course:</strong> ${sportType.name}</p>
+                <p><strong>Tutor:</strong> ${tutor.name}</p>
+                <p><strong>Time:</strong> ${getTimeRange(course.time, course.duration)}</p>
+                <p><strong>Credits:</strong> ${course.credits}</p>
+                <p><strong>Slots Available:</strong> ${course.maxParticipants - course.attendees}</p>
+            `;
+            
+            const confirmBtn = document.getElementById('confirmBookingBtn');
+            confirmBtn.onclick = () => {
+                const courseToBook = appState.courses.find(c => c.id === course.id);
+                if(courseToBook.attendees < courseToBook.maxParticipants) {
+                    courseToBook.attendees++;
+                    saveData();
+                    renderAllCourses();
+                    showMessageBox('Booking successful!', 'success');
+                } else {
+                    showMessageBox('Sorry, this class is full.', 'error');
+                }
+                closeModal(DOMElements.bookingModal);
+            };
+            openModal(DOMElements.bookingModal);
+        }
+
+        function openCourseModal(dateIso, courseToEdit = null) {
+            const modal = DOMElements.courseModal;
+            const form = modal.querySelector('form');
+            form.reset();
+            populateDropdown(form.querySelector('#courseSportType'), appState.sportTypes);
+            
+            form.querySelector('#courseModalDate').value = dateIso;
+            const deleteBtn = form.querySelector('.delete-btn');
+            deleteBtn.classList.add('hidden');
+            
+            const updateTutorDropdown = () => {
+                const selectedSportId = form.querySelector('#courseSportType').value;
+                const skilledTutors = appState.tutors.filter(tutor => tutor.skills.some(skill => skill.sportTypeId === selectedSportId));
+                populateDropdown(form.querySelector('#courseTutor'), skilledTutors);
+            };
+
+            form.querySelector('#courseSportType').onchange = updateTutorDropdown;
+
+            if (courseToEdit) {
+                modal.querySelector('#courseModalTitle').textContent = 'Edit Course';
+                modal.querySelector('.submit-btn').textContent = 'Save Changes';
+                form.querySelector('#courseModalId').value = courseToEdit.id;
+                form.querySelector('#courseSportType').value = courseToEdit.sportTypeId;
+                updateTutorDropdown();
+                form.querySelector('#courseTutor').value = courseToEdit.tutorId;
+                form.querySelector('#coursePrice').value = courseToEdit.price;
+                form.querySelector('#courseDuration').value = courseToEdit.duration;
+                form.querySelector('#courseTime').value = courseToEdit.time;
+                form.querySelector('#courseCredits').value = courseToEdit.credits;
+                form.querySelector('#courseMaxParticipants').value = courseToEdit.maxParticipants;
+                deleteBtn.classList.remove('hidden');
+                deleteBtn.onclick = () => {
+                    const sportType = appState.sportTypes.find(st => st.id === courseToEdit.sportTypeId);
+                    showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course?`, () => {
+                        appState.courses = appState.courses.filter(c => c.id !== courseToEdit.id);
+                        saveData(); renderAllCourses(); showMessageBox('Course deleted.', 'info');
+                    });
+                };
+            } else {
+                modal.querySelector('#courseModalTitle').textContent = 'Add New Course';
+                modal.querySelector('.submit-btn').textContent = 'Add Course';
+                form.querySelector('#courseModalId').value = '';
+                updateTutorDropdown();
+            }
+            openModal(modal);
+        }
+        function handleCourseFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const courseId = form.querySelector('#courseModalId').value;
+            const maxParticipants = parseInt(form.querySelector('#courseMaxParticipants').value);
+            const courseData = {
+                sportTypeId: form.querySelector('#courseSportType').value,
+                tutorId: form.querySelector('#courseTutor').value,
+                price: parseFloat(form.querySelector('#coursePrice').value),
+                duration: parseInt(form.querySelector('#courseDuration').value),
+                time: form.querySelector('#courseTime').value,
+                credits: parseFloat(form.querySelector('#courseCredits').value),
+                maxParticipants: maxParticipants,
+                attendees: courseId ? appState.courses.find(c=>c.id === courseId).attendees : 0, 
+                noShows: courseId ? appState.courses.find(c=>c.id === courseId).noShows : 0,
+                date: form.querySelector('#courseModalDate').value,
+            };
+
+            if (courseId) {
+                const index = appState.courses.findIndex(c => c.id === courseId);
+                if (index !== -1) appState.courses[index] = { ...appState.courses[index], ...courseData };
+            } else {
+                appState.courses.push({ id: `c_${Date.now()}`, ...courseData });
+            }
+            saveData(); closeModal(DOMElements.courseModal); renderAllCourses();
+        }
+
+        // --- Sport Type, Tutor & Member Modals ---
+        function openSportTypeModal(sportTypeToEdit = null) {
+            const modal = DOMElements.sportTypeModal;
+            const form = modal.querySelector('form');
+            form.reset();
+            if (sportTypeToEdit) {
+                modal.querySelector('#sportTypeModalTitle').textContent = 'Edit Sport Type';
+                modal.querySelector('.submit-btn').textContent = 'Save Changes';
+                form.querySelector('#sportTypeModalId').value = sportTypeToEdit.id;
+                form.querySelector('#sportTypeName').value = sportTypeToEdit.name;
+                form.querySelector('#sportTypeColor').value = sportTypeToEdit.color;
+            } else {
+                modal.querySelector('#sportTypeModalTitle').textContent = 'Add Sport Type';
+                modal.querySelector('.submit-btn').textContent = 'Add Type';
+                form.querySelector('#sportTypeModalId').value = '';
+                form.querySelector('#sportTypeColor').value = COURSE_COLORS[0];
+            }
+            renderColorPicker(form.querySelector('#colorPickerContainer'), form.querySelector('#sportTypeColor'));
+            openModal(modal);
+        }
+        function handleSportTypeFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const id = form.querySelector('#sportTypeModalId').value;
+            const sportTypeData = { name: form.querySelector('#sportTypeName').value, color: form.querySelector('#sportTypeColor').value };
+
+            if (id) {
+                const index = appState.sportTypes.findIndex(st => st.id === id);
+                if (index !== -1) appState.sportTypes[index] = { ...appState.sportTypes[index], ...sportTypeData };
+            } else {
+                appState.sportTypes.push({ id: `st_${Date.now()}`, ...sportTypeData });
+            }
+            saveData(); closeModal(DOMElements.sportTypeModal); renderAdminLists(); renderAllCourses();
+        }
+        function openTutorModal(tutorToEdit = null) {
+            const modal = DOMElements.tutorModal;
+            const form = modal.querySelector('form');
+            const skillsList = form.querySelector('#tutorSkillsList');
+            skillsList.innerHTML = '';
+            form.reset();
+
+            if (tutorToEdit) {
+                modal.querySelector('#tutorModalTitle').textContent = 'Edit Tutor';
+                modal.querySelector('.submit-btn').textContent = 'Save Changes';
+                form.querySelector('#tutorModalId').value = tutorToEdit.id;
+                form.querySelector('#tutorName').value = tutorToEdit.name;
+                tutorToEdit.skills.forEach(skill => addSkillRow(skillsList, skill));
+            } else {
+                modal.querySelector('#tutorModalTitle').textContent = 'Add Tutor';
+                modal.querySelector('.submit-btn').textContent = 'Add Tutor';
+                form.querySelector('#tutorModalId').value = '';
+                addSkillRow(skillsList); // Add one empty skill row to start
+            }
+            openModal(modal);
+        }
+        function addSkillRow(container, skill = null) {
+            const skillRow = document.createElement('div');
+            skillRow.className = 'tutor-skill-row p-3 bg-slate-100 rounded-lg space-y-2 border border-slate-200 relative';
+            const availableSports = appState.sportTypes.map(st => `<option value="${st.id}" ${skill && skill.sportTypeId === st.id ? 'selected' : ''}>${st.name}</option>`).join('');
+
+            skillRow.innerHTML = `
+                <button type="button" class="remove-skill-btn absolute -top-2 -right-2 bg-red-500 text-white h-5 w-5 rounded-full text-xs flex items-center justify-center">&times;</button>
+                <select class="form-select skill-type-select">${availableSports}</select>
+                <div class="flex gap-1 rounded-lg bg-slate-200 p-1 salary-type-container">
+                    <button type="button" data-value="perCourse" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Per Course</button>
+                    <button type="button" data-value="percentage" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Percentage</button>
+                    <button type="button" data-value="perHeadcount" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Per Attendee</button>
+                </div>
+                <div><input type="number" required class="form-input salary-value-input" min="0" step="1"></div>`;
+            
+            container.appendChild(skillRow);
+
+            const salaryTypeContainer = skillRow.querySelector('.salary-type-container');
+            const salaryValueInput = skillRow.querySelector('.salary-value-input');
+
+            const updateRowSalaryUI = (type) => {
+                salaryTypeContainer.querySelectorAll('.salary-type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.value === type));
+                salaryValueInput.placeholder = { perCourse: '$ per course', percentage: '% of revenue', perHeadcount: '$ per head' }[type];
+            };
+
+            salaryTypeContainer.onclick = (e) => { if(e.target.matches('.salary-type-btn')) updateRowSalaryUI(e.target.dataset.value); };
+
+            const initialSalaryType = skill?.salaryType || 'perCourse';
+            updateRowSalaryUI(initialSalaryType);
+            salaryValueInput.value = skill?.salaryValue || '';
+            skillRow.querySelector('.remove-skill-btn').onclick = () => skillRow.remove();
+        }
+        function handleTutorFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const id = form.querySelector('#tutorModalId').value;
+            const skills = [];
+            form.querySelectorAll('.tutor-skill-row').forEach(row => {
+                skills.push({
+                    sportTypeId: row.querySelector('.skill-type-select').value,
+                    salaryType: row.querySelector('.salary-type-btn.active').dataset.value,
+                    salaryValue: parseFloat(row.querySelector('.salary-value-input').value)
+                });
+            });
+
+            const tutorData = { name: form.querySelector('#tutorName').value, skills };
+
+            if (id) {
+                const index = appState.tutors.findIndex(t => t.id === id);
+                if (index > -1) appState.tutors[index] = { ...appState.tutors[index], ...tutorData };
+            } else {
+                appState.tutors.push({ id: `t_${Date.now()}`, ...tutorData });
+            }
+            saveData(); closeModal(DOMElements.tutorModal); renderAdminLists();
+        }
+        const countryCodes = { '🇭🇰': '+852', '🇺🇸': '+1', '🇬🇧': '+44', '🇨🇦': '+1', '🇦🇺': '+61' };
+        function openMemberModal(memberToEdit = null) {
+            const modal = DOMElements.memberModal;
+            const form = modal.querySelector('form');
+            form.reset();
+            const title = modal.querySelector('#memberModalTitle');
+            const submitBtn = modal.querySelector('.submit-btn');
+
+            const countryCodeSelect = form.querySelector('#countryCode');
+            countryCodeSelect.innerHTML = Object.entries(countryCodes).map(([flag, code]) => `<option value="${code}">${flag} ${code}</option>`).join('');
+
+            if (memberToEdit) {
+                title.textContent = "Edit Member";
+                submitBtn.textContent = "Save Changes";
+                form.querySelector('#memberModalId').value = memberToEdit.id;
+                form.querySelector('#memberName').value = memberToEdit.name;
+                form.querySelector('#memberEmail').value = memberToEdit.email;
+
+                const phoneCodeMatch = Object.values(countryCodes).find(code => memberToEdit.phone.startsWith(code));
+                if (phoneCodeMatch) {
+                    countryCodeSelect.value = phoneCodeMatch;
+                    form.querySelector('#memberPhone').value = memberToEdit.phone.substring(phoneCodeMatch.length).trim();
+                } else {
+                     form.querySelector('#memberPhone').value = memberToEdit.phone;
+                }
+                
+                form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
+                form.querySelector('#memberCredits').value = memberToEdit.credits;
+                form.querySelector('#expiryDate').value = memberToEdit.expiryDate;
+                
+            } else {
+                title.textContent = "Add New Member";
+                submitBtn.textContent = "Add Member";
+                form.querySelector('#memberModalId').value = '';
+            }
+
+            const monthlyPlanCheckbox = form.querySelector('#monthlyPlan');
+            const creditFieldsContainer = form.querySelector('#creditFields');
+            const updateCreditFields = () => { creditFieldsContainer.style.display = monthlyPlanCheckbox.checked ? 'none' : 'block'; };
+            monthlyPlanCheckbox.onchange = updateCreditFields;
+            updateCreditFields();
+            
+            const expiryOptionsContainer = form.querySelector('#expiryOptions');
+            expiryOptionsContainer.innerHTML = [1, 2, 3].map(year => `<button type="button" data-years="${year}" class="expiry-option-btn flex-1 p-2 rounded-md text-sm bg-slate-200 text-slate-700">${year} Year${year > 1 ? 's' : ''}</button>`).join('');
+            
+            expiryOptionsContainer.onclick = (e) => {
+                if(e.target.matches('.expiry-option-btn')) {
+                    const years = parseInt(e.target.dataset.years);
+                    const expiryDate = new Date();
+                    expiryDate.setFullYear(expiryDate.getFullYear() + years);
+                    form.querySelector('#expiryDate').value = getIsoDate(expiryDate);
+                }
+            };
+
+            const purchaseAmountInput = form.querySelector('#purchaseAmount');
+            const creditsInput = form.querySelector('#memberCredits');
+            const costPerCreditSpan = form.querySelector('#costPerCredit');
+
+            const calculateCost = () => {
+                const amount = parseFloat(purchaseAmountInput.value);
+                const credits = parseFloat(creditsInput.value);
+                if(amount > 0 && credits > 0) {
+                    costPerCreditSpan.textContent = `(${formatCurrency(amount/credits)} / credit)`;
+                } else {
+                    costPerCreditSpan.textContent = '';
+                }
+            };
+            purchaseAmountInput.oninput = calculateCost;
+            creditsInput.oninput = calculateCost;
+
+            openModal(modal);
+        }
+        function handleMemberFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const id = form.querySelector('#memberModalId').value;
+            const memberData = {
+                name: form.querySelector('#memberName').value,
+                email: form.querySelector('#memberEmail').value,
+                phone: `${form.querySelector('#countryCode').value} ${form.querySelector('#memberPhone').value}`,
+                monthlyPlan: form.querySelector('#monthlyPlan').checked,
+                credits: parseFloat(form.querySelector('#memberCredits').value) || 0,
+                expiryDate: form.querySelector('#expiryDate').value || null
+            };
+
+            if(id) {
+                const index = appState.members.findIndex(m => m.id === id);
+                if (index > -1) appState.members[index] = { ...appState.members[index], ...memberData };
+            } else {
+                appState.members.push({ id: `m_${Date.now()}`, ...memberData });
+            }
+            saveData();
+            closeModal(DOMElements.memberModal);
+            renderMembersPage();
+        }
+
+        // --- Admin, Salary, Stats, Members Page Rendering ---
+        function renderAdminLists() {
+            DOMElements.sportsList.innerHTML = appState.sportTypes.map(st => `
+                <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
+                    <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700">${st.name}</span></div>
+                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
+                </li>`).join('');
+            DOMElements.tutorsList.innerHTML = appState.tutors.map(t => `
+                 <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
+                    <span class="text-slate-700">${t.name}</span>
+                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
+                </li>`).join('');
+        }
+        function handleAdminListClick(e) {
+            const target = e.target.closest('.edit-btn, .delete-btn');
+            if (!target) return;
+            const { type, id, name } = target.dataset;
+
+            if (target.classList.contains('edit-btn')) {
+                if (type === 'sportType') openSportTypeModal(appState.sportTypes.find(st => st.id === id));
+                if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
+            } else if (target.classList.contains('delete-btn')) {
+                showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
+                    if (type === 'sportType') appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
+                    if (type === 'tutor') appState.tutors = appState.tutors.filter(t => t.id !== id);
+                    saveData();
+                    renderAdminLists();
+                });
+            }
+        }
+        function renderSalaryPage() {
+            populateDropdown(DOMElements.salaryTutorSelect, appState.tutors);
+            populateSalaryPeriods();
+            renderSalaryDetails();
+        }
+        function populateSalaryPeriods() {
+            const periods = [...new Set(appState.courses.map(c => c.date.substring(0, 7)))].sort().reverse();
+            DOMElements.salaryPeriodSelect.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-02T00:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
+        }
+        function renderSalaryDetails() {
+            const tutorId = DOMElements.salaryTutorSelect.value;
+            const period = DOMElements.salaryPeriodSelect.value;
+            if(!tutorId || !period) {
+                DOMElements.salaryDetailsContainer.innerHTML = `<p class="text-center text-slate-500">Please select a tutor and period to view details.</p>`;
+                return;
+            }
+
+            const tutor = appState.tutors.find(t => t.id === tutorId);
+            const coursesInPeriod = appState.courses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+
+            let totalEarnings = 0;
+            const courseDetails = coursesInPeriod.map(course => {
+                const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
+                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                let earnings = 0;
+                let calculation = "N/A";
+                
+                if (skill) {
+                    if (skill.salaryType === 'perCourse') {
+                        earnings = skill.salaryValue;
+                        calculation = `${formatCurrency(skill.salaryValue)} (fixed)`;
+                    } else if (skill.salaryType === 'percentage') {
+                        earnings = (course.price * course.attendees) * (skill.salaryValue / 100);
+                        calculation = `${formatCurrency(course.price * course.attendees)} x ${skill.salaryValue}%`;
+                    } else if (skill.salaryType === 'perHeadcount') {
+                        earnings = course.attendees * skill.salaryValue;
+                        calculation = `${course.attendees} attendees x ${formatCurrency(skill.salaryValue)}`;
+                    }
+                }
+                totalEarnings += earnings;
+                return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation };
+            }).sort((a,b) => new Date(a.date) - new Date(b.date));
+
+            const totalRevenue = coursesInPeriod.reduce((sum, c) => sum + (c.price * c.attendees), 0);
+
+            DOMElements.salaryDetailsContainer.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Earnings</p><p class="text-3xl font-bold text-slate-800">${formatCurrency(totalEarnings)}</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Courses Taught</p><p class="text-3xl font-bold text-slate-800">${coursesInPeriod.length}</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Generated Revenue</p><p class="text-3xl font-bold text-slate-800">${formatCurrency(totalRevenue)}</p></div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-slate-700 mb-4">Detailed Breakdown</h3>
+                    <div class="overflow-x-auto"><table class="w-full text-left">
+                        <thead><tr class="border-b"><th class="p-2">Date</th><th class="p-2">Course</th><th class="p-2">Attendees</th><th class="p-2">Calculation</th><th class="p-2 text-right">Earnings</th></tr></thead>
+                        <tbody>
+                            ${courseDetails.map(c => `
+                                <tr class="border-b border-slate-100">
+                                    <td class="p-2">${new Date(c.date + 'T00:00:00Z').toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'})}</td>
+                                    <td class="p-2">${c.sportTypeName}</td>
+                                    <td class="p-2">${c.attendees} / ${c.maxParticipants}</td>
+                                    <td class="p-2 text-sm text-slate-500">${c.calculation}</td>
+                                    <td class="p-2 text-right font-semibold">${formatCurrency(c.earnings)}</td>
+                                </tr>`).join('') || `<tr><td colspan="5" class="text-center p-4 text-slate-500">No courses taught in this period.</td></tr>`}
+                        </tbody>
+                    </table></div>
+                </div>`;
+        }
+        function renderStatisticsPage() {
+            const periods = {
+                'Last 7 Days': 7, 'Last 30 Days': 30, 'Last 90 Days': 90, 'All Time': Infinity
+            };
+            DOMElements.statsPeriodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
+            
+            const renderFilteredStats = () => {
+                const days = parseInt(DOMElements.statsPeriodSelect.value);
+                const now = new Date();
+                const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                const filteredCourses = days === Infinity ? appState.courses : appState.courses.filter(c => new Date(c.date) >= startDate);
+                
+                if (filteredCourses.length === 0) {
+                     DOMElements.statisticsContainer.innerHTML = `<p class="text-center text-slate-500">No data available for the selected period.</p>`;
+                     return;
+                }
+
+                const totalRevenue = filteredCourses.reduce((sum, c) => sum + (c.price * c.attendees), 0);
+                const totalAttendees = filteredCourses.reduce((sum, c) => sum + c.attendees, 0);
+                const totalCapacity = filteredCourses.reduce((sum, c) => sum + c.maxParticipants, 0);
+                const avgFillRate = totalCapacity > 0 ? (totalAttendees / totalCapacity) * 100 : 0;
+                const noShowRate = totalAttendees > 0 ? (filteredCourses.reduce((sum, c) => sum + c.noShows, 0) / totalAttendees) * 100 : 0;
+
+                const coursePopularity = rankBy(filteredCourses, 'sportTypeId', 'attendees', appState.sportTypes);
+                const tutorPopularity = rankBy(filteredCourses, 'tutorId', 'attendees', appState.tutors);
+                
+                const timeSlots = {};
+                filteredCourses.forEach(c => {
+                    const hour = c.time.split(':')[0];
+                    const day = new Date(c.date + 'T00:00:00Z').toLocaleString('en-US', { weekday: 'long', timeZone: 'UTC' });
+                    const slot = `${day}, ${hour}:00 - ${parseInt(hour)+1}:00`;
+                    timeSlots[slot] = (timeSlots[slot] || 0) + c.attendees;
+                });
+                const peakTimes = Object.entries(timeSlots).sort((a,b) => b[1] - a[1]).slice(0,5);
+
+                DOMElements.statisticsContainer.innerHTML = `
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Revenue</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(totalRevenue)}</p></div>
+                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Enrollments</p><p class="text-2xl font-bold text-slate-800">${totalAttendees}</p></div>
+                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
+                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">No-Show Rate</p><p class="text-2xl font-bold text-slate-800">${noShowRate.toFixed(1)}%</p></div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', true)}
+                        ${createRankingCard('Top Performing Tutors', tutorPopularity, 'Enrollments')}
+                        ${createRankingCard('Peak Time Slots', peakTimes.map(([name, value])=>({name, value})), 'Enrollments')}
+                    </div>
+                `;
+            };
+
+            DOMElements.statsPeriodSelect.onchange = renderFilteredStats;
+            renderFilteredStats();
+        }
+        function rankBy(courses, groupByKey, valueKey, lookup) {
+            const stats = courses.reduce((acc, course) => {
+                acc[course[groupByKey]] = (acc[course[groupByKey]] || 0) + course[valueKey];
+                return acc;
+            }, {});
+            return Object.entries(stats)
+                .map(([id, value]) => ({ 
+                    id, 
+                    name: lookup.find(item => item.id === id)?.name || 'Unknown', 
+                    value,
+                    color: lookup.find(item => item.id === id)?.color
+                }))
+                .sort((a,b) => b.value - a.value)
+                .slice(0, 5);
+        }
+        function createRankingCard(title, data, valueLabel, useColorDot = false) {
+            const max = Math.max(...data.map(d => d.value), 0);
+            const highColor = [76, 175, 80], lowColor = [255, 235, 59]; // Green to Yellow
+
+            return `
+                <div class="card p-6">
+                    <h3 class="text-xl font-bold text-slate-700 mb-4">${title}</h3>
+                    <div class="space-y-4">
+                    ${data.map(item => {
+                        const percentage = max > 0 ? item.value / max : 0;
+                        const r = Math.floor(lowColor[0] + (highColor[0] - lowColor[0]) * percentage);
+                        const g = Math.floor(lowColor[1] + (highColor[1] - lowColor[1]) * percentage);
+                        const b = Math.floor(lowColor[2] + (highColor[2] - lowColor[2]) * percentage);
+                        const barColor = `rgb(${r}, ${g}, ${b})`;
+                        return `
+                        <div>
+                            <div class="flex justify-between items-center text-sm mb-1">
+                                <span class="font-semibold text-slate-600 flex items-center gap-2">
+                                    ${useColorDot ? `<span class="h-3 w-3 rounded-full" style="background-color: ${item.color || '#ccc'}"></span>` : ''}
+                                    ${item.name}
+                                </span>
+                                <span class="text-slate-500">${item.value} ${valueLabel}</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5"><div class="bar-chart-bar h-2.5" style="width: ${percentage * 100}%; background-color: ${barColor};"></div></div>
+                        </div>
+                    `}).join('') || '<p class="text-slate-500">No data to display.</p>'}
+                    </div>
+                </div>`;
+        }
+        function renderAllCourses() {
+            const coursesByDate = appState.courses.reduce((acc, course) => { (acc[course.date] = acc[course.date] || []).push(course); return acc; }, {});
+            document.querySelectorAll('.courses-container').forEach(container => {
+                const date = container.dataset.date;
+                const dailyCourses = coursesByDate[date] || [];
+                const addButtonWrapper = container.querySelector('.add-course-btn-wrapper');
+                container.innerHTML = '';
+                dailyCourses.sort((a, b) => a.time.localeCompare(b.time)).forEach(course => container.appendChild(createCourseElement(course)));
+                if (addButtonWrapper) {
+                    addButtonWrapper.style.display = appState.currentUser?.type === 'owner' ? 'block' : 'none';
+                    container.appendChild(addButtonWrapper);
+                }
+            });
+        }
+        function createCourseElement(course) {
+            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            const tutor = appState.tutors.find(t => t.id === course.tutorId);
+            const el = document.createElement('div');
+            el.id = course.id; 
+            const isOwner = appState.currentUser?.type === 'owner';
+            el.draggable = isOwner;
+            el.className = `course-block p-3 rounded-lg shadow-md text-white mb-3 flex flex-col justify-between ${isOwner ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`;
+            el.style.backgroundColor = sportType?.color || '#64748b';
+            el.innerHTML = `
+                <div class="flex-grow">
+                    <div class="flex justify-between items-start">
+                        <p class="font-bold text-lg leading-tight">${sportType?.name || 'Unknown Type'}</p>
+                        ${isOwner ? `<button class="edit-course-btn opacity-60 hover:opacity-100 p-1 -mr-1 -mt-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>` : ''}
+                    </div>
+                    <p class="text-sm opacity-90 mt-1">${tutor?.name || 'Unknown Tutor'}</p>
+                </div>
+                <div class="mt-3 space-y-2">
+                    <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>
+                    <div class="flex justify-between items-center text-white/95 text-xs">
+                        <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>${course.attendees}/${course.maxParticipants}</span>
+                        <span>${course.duration} mins</span>
+                        <span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>
+                    </div>
+                </div>`;
+            
+            if(isOwner) {
+                el.querySelector('.edit-course-btn').onclick = () => openCourseModal(course.date, course);
+                addDragListeners(el);
+            } else {
+                el.onclick = () => openBookingModal(course);
+            }
+            return el;
+        }
+        function generateDayColumns() {
+            let content = '';
+            for (let i = 0; i < DAYS_TO_SHOW; i++) {
+                const date = new Date(START_DATE); date.setDate(START_DATE.getDate() + i);
+                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col h-[70vh]"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short' })}</p></div><div data-date="${getIsoDate(date)}" class="courses-container flex-grow overflow-y-auto"><div class="add-course-btn-wrapper mt-auto pt-4"><button data-date="${getIsoDate(date)}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button></div></div></div></div>`;
+            }
+            DOMElements.emblaContainer.innerHTML = content;
+        }
+        function populateDropdown(selectEl, options) {
+             selectEl.innerHTML = options.map(opt => `<option value="${opt.id}">${opt.name}</option>`).join('');
+        }
+        function renderColorPicker(container, colorInput) {
+            container.innerHTML = COURSE_COLORS.map((color, index) => `<input type="radio" name="color" id="color-${index}" value="${color}" class="color-swatch-radio" ${color === colorInput.value ? 'checked' : ''}><label for="color-${index}" class="color-swatch-label" style="background-color: ${color};"></label>`).join('');
+            container.onchange = e => { if (e.target.name === 'color') colorInput.value = e.target.value; };
+        }
+        function addDragListeners(el) {
+            el.addEventListener('pointerdown', e => { if (!e.target.closest('.edit-course-btn')) e.stopPropagation(); });
+            el.addEventListener('dragstart', e => {
+                draggedCourseId = e.target.closest('.course-block').id;
+                setTimeout(() => e.target.closest('.course-block').classList.add('dragging'), 0);
+            });
+            el.addEventListener('dragend', e => e.target.closest('.course-block').classList.remove('dragging'));
+        }
+        function handleDrop(container) {
+            const draggedEl = document.getElementById(draggedCourseId); if (!draggedEl) return;
+            const draggedCourse = appState.courses.find(c => c.id === draggedCourseId); if (!draggedCourse) return;
+            const oldDate = draggedCourse.date, newDate = container.dataset.date;
+            draggedCourse.date = newDate;
+            recalculateTimesForDay(container);
+            if (oldDate !== newDate) {
+                const oldContainer = document.querySelector(`.courses-container[data-date="${oldDate}"]`);
+                if (oldContainer) recalculateTimesForDay(oldContainer);
+            }
+            saveData(); renderAllCourses();
+        }
+        function recalculateTimesForDay(container) {
+            let nextStartTime = new Date(`${container.dataset.date}T07:00:00Z`); 
+            [...container.querySelectorAll('.course-block')].forEach(el => {
+                const course = appState.courses.find(c => c.id === el.id);
+                if (course) {
+                    course.time = formatTime(nextStartTime);
+                    nextStartTime = new Date(nextStartTime.getTime() + course.duration * 60000 + 15 * 60000); 
+                }
+            });
+        }
+        init();
+    });
+    </script>
+</body>
+</html>
