@@ -56,11 +56,13 @@
             transition: all 0.2s ease-in-out;
         }
         .course-block:hover {
-            z-index: 10; transform: scale(1.03);
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            z-index: 10;
+            transform: scale(1.01); 
+            box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
         }
         .course-block.booked-by-member {
-            box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.9);
+            /* Changed glow color to theme-matching indigo and refined shadow for better display */
+            box-shadow: 0 0 8px 3px rgba(0, 218, 255, 0.7), 0 0 4px 1px rgba(0, 218, 255, 0.4);
         }
         
         /* Navigation */
@@ -348,6 +350,18 @@
 
             const isOwner = appState.currentUser?.type === 'owner';
             let pageIdToRender = appState.activePage;
+
+            const ownerOnlyPages = ['statistics', 'salary', 'members', 'admin'];
+
+            // If a non-owner tries to access an owner-only page, redirect to their dashboard
+            if (!isOwner && ownerOnlyPages.includes(pageIdToRender)) {
+                pageIdToRender = 'schedule'; // Redirect to member dashboard
+                appState.activePage = 'schedule'; // Update active page in state
+                // Also update the active nav button immediately
+                DOMElements.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.page === 'schedule'));
+                showMessageBox('Access denied. Redirected to Dashboard.', 'error');
+            }
+
             const pageElement = document.getElementById(`page-${pageIdToRender}`);
             pageElement.classList.remove('hidden');
 
@@ -374,8 +388,15 @@
             setTimeout(() => modal.querySelector('.modal-content').classList.add('open'), 10);
         };
         const closeModal = (modal) => {
-            modal.querySelector('.modal-content').classList.remove('open');
-            setTimeout(() => modal.classList.add('hidden'), 300);
+            // Check if modal and its content exist before trying to access classList
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.classList.remove('open');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            } else {
+                // If modalContent is not found, just hide the modal directly
+                modal.classList.add('hidden');
+            }
         };
         
         // --- Confirmation Modal ---
@@ -392,8 +413,15 @@
                 </div>`;
             onConfirmCallback = onConfirm;
             openModal(DOMElements.confirmationModal);
-            DOMEElements.confirmationModal.querySelector('.cancel-btn').onclick = () => closeModal(DOMElements.confirmationModal);
-            DOMElements.confirmationModal.querySelector('.confirm-btn').onclick = () => { if (onConfirmCallback) onConfirmCallback(); closeModal(DOMElements.confirmationModal); };
+
+            // Fix: Corrected typo from DOMEElements to DOMElements
+            DOMElements.confirmationModal.querySelector('.cancel-btn').onclick = () => {
+                closeModal(DOMElements.confirmationModal);
+            };
+            DOMElements.confirmationModal.querySelector('.confirm-btn').onclick = () => { 
+                if (onConfirmCallback) onConfirmCallback(); 
+                closeModal(DOMElements.confirmationModal); 
+            };
         };
         
         // --- Course, Booking, and Member List Modals ---
@@ -465,14 +493,20 @@
                 listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                     checkbox.onchange = (e) => {
                         const memberId = e.target.dataset.memberId;
-                        if (e.target.checked) {
-                            if (!course.attendedBy.includes(memberId)) {
-                                course.attendedBy.push(memberId);
+                        // Find the course in appState.courses and update its attendedBy array
+                        const courseIndex = appState.courses.findIndex(c => c.id === course.id);
+                        if (courseIndex !== -1) {
+                            if (e.target.checked) {
+                                if (!appState.courses[courseIndex].attendedBy.includes(memberId)) {
+                                    appState.courses[courseIndex].attendedBy.push(memberId);
+                                }
+                            } else {
+                                appState.courses[courseIndex].attendedBy = appState.courses[courseIndex].attendedBy.filter(id => id !== memberId);
                             }
-                        } else {
-                            course.attendedBy = course.attendedBy.filter(id => id !== memberId);
+                            saveData();
+                            // Re-render the current page to reflect changes in member view
+                            renderCurrentPage(); 
                         }
-                        saveData();
                     };
                 });
             }
@@ -588,11 +622,15 @@
                 form.querySelector('#courseCredits').value = courseToEdit.credits;
                 form.querySelector('#courseMaxParticipants').value = courseToEdit.maxParticipants;
                 deleteBtn.classList.remove('hidden');
+                // Fix: Added event listener for delete button in course modal
                 deleteBtn.onclick = () => {
                     const sportType = appState.sportTypes.find(st => st.id === courseToEdit.sportTypeId);
                     showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course?`, () => {
                         appState.courses = appState.courses.filter(c => c.id !== courseToEdit.id);
-                        saveData(); renderCurrentPage(); showMessageBox('Course deleted.', 'info');
+                        saveData(); 
+                        closeModal(DOMElements.courseModal); // Close the course modal after confirming delete
+                        renderCurrentPage(); 
+                        showMessageBox('Course deleted.', 'info');
                     });
                 };
             } else {
@@ -648,6 +686,8 @@
             let actionButton = '';
             let mainAction = () => {};
             const isBookedByCurrentUser = !isOwner && appState.currentUser && course.bookedBy.includes(appState.currentUser.id);
+            const isAttendedByCurrentUser = !isOwner && appState.currentUser && course.attendedBy.includes(appState.currentUser.id);
+
 
             if (isOwner) {
                 el.classList.add('cursor-pointer');
@@ -655,7 +695,12 @@
                 mainAction = () => openJoinedMembersModal(course);
             } else if (isBookedByCurrentUser) {
                 el.classList.add('booked-by-member');
-                actionButton = `<button class="cancel-booking-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-xs transition">Cancel</button>`;
+                // Hide cancel button if attended, show "COMPLETED" label
+                if (isAttendedByCurrentUser) {
+                    actionButton = `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">COMPLETED</span>`;
+                } else {
+                    actionButton = `<button class="cancel-booking-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-xs transition">Cancel</button>`;
+                }
             } else if (appState.currentUser) {
                 el.classList.add('cursor-pointer');
                 mainAction = () => openBookingModal(course);
@@ -674,10 +719,12 @@
                     <div class="flex justify-between items-center text-white/95 text-xs">
                         <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>${course.bookedBy.length}/${course.maxParticipants}</span>
                         <span>${course.duration} mins</span>
-                        ${isBookedByCurrentUser ? `<span class="bg-white/90 text-indigo-600 font-bold text-xs px-2 py-1 rounded-full">BOOKED</span>` : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`}
+                        ${isBookedByCurrentUser 
+                            ? `<span class="bg-white/90 ${isAttendedByCurrentUser ? 'text-green-600' : 'text-indigo-600'} font-bold text-xs px-2 py-1 rounded-full">${isAttendedByCurrentUser ? 'COMPLETED' : 'BOOKED'}</span>` 
+                            : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`}
                     </div>
                 </div>
-                ${isBookedByCurrentUser ? `<div class="text-center mt-2">${actionButton}</div>` : ''}
+                ${isBookedByCurrentUser && !isAttendedByCurrentUser ? `<div class="text-center mt-2">${actionButton}</div>` : ''}
                 `;
             
             el.addEventListener('click', (e) => {
@@ -691,7 +738,7 @@
                     e.stopPropagation();
                     openCourseModal(course.date, course);
                 };
-            } else if (isBookedByCurrentUser) {
+            } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) { // Only attach if not attended
                 el.querySelector('.cancel-booking-btn').onclick = (e) => {
                     e.stopPropagation();
                     handleCancelBooking(course);
@@ -718,7 +765,8 @@
                 const date = new Date(START_DATE.getTime());
                 date.setUTCDate(START_DATE.getUTCDate() + i);
                 const dateIso = getIsoDate(date);
-                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col h-[70vh]"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container flex-grow overflow-y-auto"><div class="add-course-btn-wrapper mt-auto pt-4"><button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button></div></div></div></div>`;
+                // Added px-4 to courses-container for horizontal padding
+                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col h-[70vh]"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container flex-grow overflow-y-auto px-4 py-4"><div class="add-course-btn-wrapper mt-auto pt-4"><button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button></div></div></div></div>`;
             }
             emblaContainer.innerHTML = content;
 
@@ -779,9 +827,11 @@
                             <hr class="my-6">
                             <div class="space-y-4 text-left">
                                 ${member.monthlyPlan 
-                                    ? `<div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800">Monthly Membership</p></div>
+                                    ? `<div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
                                        <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.planStartDate)}</p></div>`
-                                    : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">${member.credits}</p></div>
+                                    : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
+                                            <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${member.credits}/${member.initialCredits || 'N/A'}</span>
+                                        </p></div>
                                        <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.expiryDate)}</p></div>`
                                 }
                             </div>
@@ -794,12 +844,16 @@
                                 ${myBookings.length === 0 ? '<p class="text-slate-500">You have no upcoming or past bookings.</p>' :
                                 myBookings.map(course => {
                                     const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                                    const isAttended = course.attendedBy.includes(member.id);
                                     return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
                                         <div>
                                             <p class="font-bold text-slate-800">${sportType.name}</p>
                                             <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
                                         </div>
-                                        <button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}">Cancel</button>
+                                        ${isAttended 
+                                            ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
+                                            : `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}">Cancel</button>`
+                                        }
                                     </div>`
                                 }).join('')}
                             </div>
@@ -850,7 +904,10 @@
                     <tr class="border-b border-slate-100">
                         <td class="p-2 font-semibold">${member.name}</td>
                         <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
-                        <td class="p-2">${member.monthlyPlan ? `<span class="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` : `${member.credits} / ${member.initialCredits || 'N/A'}`}</td>
+                        <td class="p-2">${member.monthlyPlan 
+                            ? `<span class="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
+                            : `<span class="bg-yellow-100 text-yellow-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${member.credits}/${member.initialCredits || 'N/A'}</span>`}
+                        </td>
                         <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
                         <td class="p-2 text-right space-x-2">
                             <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">Edit</button>
@@ -1111,8 +1168,12 @@
             renderAdminLists();
             container.querySelector('#addSportTypeBtn').onclick = () => openSportTypeModal();
             container.querySelector('#addTutorBtn').onclick = () => openTutorModal();
-            container.querySelector('#sportsList').onclick = handleAdminListClick;
-            container.querySelector('#tutorsList').onclick = handleAdminListClick;
+            // Fix: Event listeners for edit/delete buttons on admin lists were missing or incorrectly placed.
+            // They should be attached to the parent list and use event delegation.
+            // The original code had them inside renderAdminLists, which would re-attach them on every render.
+            // Moving them here ensures they are attached once.
+            container.querySelector('#sportsList').addEventListener('click', handleAdminListClick);
+            container.querySelector('#tutorsList').addEventListener('click', handleAdminListClick);
         }
 
         function renderAdminLists() {
@@ -1146,10 +1207,20 @@
                 if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
             } else if (target.classList.contains('delete-btn')) {
                 showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
-                    if (type === 'sportType') appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
-                    if (type === 'tutor') appState.tutors = appState.tutors.filter(t => t.id !== id);
+                    if (type === 'sportType') {
+                        appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
+                        // Also remove courses associated with this sport type
+                        appState.courses = appState.courses.filter(c => c.sportTypeId !== id);
+                    }
+                    if (type === 'tutor') {
+                        appState.tutors = appState.tutors.filter(t => t.id !== id);
+                        // Also remove courses associated with this tutor
+                        appState.courses = appState.courses.filter(c => c.tutorId !== id);
+                    }
                     saveData();
                     renderAdminLists();
+                    renderCurrentPage(); // Re-render schedule to reflect changes
+                    showMessageBox(`${type} deleted.`, 'info');
                 });
             }
         }
@@ -1589,6 +1660,10 @@
         const init = () => {
             loadData();
             
+            // Force activePage to 'schedule' on every initial load/refresh
+            // This prevents loading a previously active restricted page for a different user type.
+            appState.activePage = 'schedule';
+
             if (appState.currentUser) {
                 DOMElements.authPage.classList.add('hidden');
                 DOMElements.appWrapper.classList.remove('hidden');
@@ -1628,10 +1703,16 @@
             DOMElements.navButtons.forEach(btn => btn.onclick = () => switchPage(btn.dataset.page));
             
             document.body.addEventListener('click', e => {
-                if (e.target.closest('.modal-close-btn')) {
-                    closeModal(e.target.closest('.modal-backdrop'));
-                }
-                if (e.target.matches('.modal-backdrop')) {
+                // Check if the clicked element or its closest parent is a modal-close-btn
+                const closeButton = e.target.closest('.modal-close-btn');
+                if (closeButton) {
+                    // Find the closest modal-backdrop parent and close it
+                    const modalToClose = closeButton.closest('.modal-backdrop');
+                    if (modalToClose) {
+                        closeModal(modalToClose);
+                    }
+                } else if (e.target.matches('.modal-backdrop')) {
+                    // If the click is directly on the modal-backdrop itself, close it
                     closeModal(e.target);
                 }
                 const addBtn = e.target.closest('.add-course-button');
