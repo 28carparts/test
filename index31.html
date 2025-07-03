@@ -38,7 +38,7 @@
         .color-swatch-radio:checked + .color-swatch-label {
             border-color: #4f46e5; /* indigo-600 */
             transform: scale(1.15);
-            box-shadow: 0 0 0 2px #4f46e5;
+            box-shadow: 0 0 0 2px #c7d2fe;
         }
         .color-swatch-label:hover { transform: scale(1.1); }
         .courses-container::-webkit-scrollbar, .admin-list::-webkit-scrollbar { display: none; }
@@ -60,9 +60,10 @@
             transform: scale(1.01); 
             box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
         }
+        /* MODIFIED: Booked by member glow effect */
         .course-block.booked-by-member {
-            /* Changed glow color to theme-matching indigo and refined shadow for better display */
-            box-shadow: 0 0 8px 3px rgba(0, 218, 255, 0.7), 0 0 4px 1px rgba(0, 218, 255, 0.4);
+            animation: glowing-yellow 1.5s infinite;
+            border: 1px solid #facc15;
         }
         
         /* Navigation */
@@ -106,6 +107,83 @@
             border-radius: 0.25rem;
             transition: width 0.5s ease-in-out;
         }
+
+        /* Slider for Schedule Page */
+        .date-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #cbd5e1; /* slate-300 */
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            border-radius: 4px;
+        }
+
+        .date-slider:hover {
+            opacity: 1;
+        }
+
+        .date-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4f46e5; /* indigo-600 */
+            cursor: grab;
+            box-shadow: 0 0 0 3px #c7d2fe;
+        }
+
+        .date-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4f46e5; /* indigo-600 */
+            cursor: grab;
+            box-shadow: 0 0 0 3px #c7d2fe;
+        }
+        
+        /* --- Copy/Paste & Delete Styles --- */
+        @keyframes glowing-yellow {
+            0% { box-shadow: 0 0 2px #fde047, 0 0 4px #fde047; } /* yellow-300 */
+            50% { box-shadow: 0 0 4px #facc15, 0 0 8px #facc15; } /* yellow-400 */
+            100% { box-shadow: 0 0 2px #fde047, 0 0 4px #fde047; }
+        }
+
+        .copy-mode-source {
+            animation: glowing-yellow 1.5s infinite;
+            border: 1px solid #facc15;
+            cursor: copy;
+        }
+        
+        .copy-mode-source-class {
+            animation: glowing-yellow 1.5s infinite;
+            border: 1px solid #facc15;
+            cursor: copy;
+            transform: scale(1.03);
+        }
+
+        .copy-mode-paste-zone {
+            background-color: #e0f2fe !important; /* sky-100 */
+            border: 2px solid #0ea5e9; /* sky-500 */
+            box-shadow: inset 0 0 10px rgba(14, 165, 233, 0.3);
+        }
+
+        #cancelCopyBtn {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+
+        .notified-member {
+            text-decoration: line-through;
+            color: #94a3b8; /* slate-400 */
+        }
+
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center py-8 px-4">
@@ -135,6 +213,7 @@
                     <button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Salary</button>
                     <button data-page="members" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Members</button>
                     <button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Admin</button>
+                    <button data-page="courses" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Courses</button>
                     <button id="logoutBtn" class="font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">Logout</button>
                 </nav>
             </div>
@@ -146,11 +225,15 @@
             <div id="page-schedule" class="page w-full">
                 <!-- Content will be rendered by JS based on user type -->
             </div>
+            <!-- Account Page (for Members) -->
+            <div id="page-account" class="page hidden w-full max-w-screen-xl mx-auto"></div>
             <!-- Other Pages (Statistics, Salary, Members, Admin) -->
             <div id="page-statistics" class="page hidden w-full max-w-screen-xl mx-auto"></div>
             <div id="page-salary" class="page hidden w-full max-w-screen-xl mx-auto"></div>
             <div id="page-members" class="page hidden w-full max-w-screen-xl mx-auto"></div>
             <div id="page-admin" class="page hidden w-full max-w-screen-lg mx-auto"></div>
+            <!-- Courses Page (New) -->
+            <div id="page-courses" class="page hidden w-full max-w-screen-xl mx-auto"></div>
         </main>
     </div>
 
@@ -177,16 +260,33 @@
 
     <!-- Member Modal -->
     <div id="memberModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
+
+    <!-- Edit Member Account Modal -->
+    <div id="editMemberAccountModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
     
     <!-- Confirmation Modal -->
     <div id="confirmationModal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4 modal-backdrop"></div>
 
+    <!-- Member Booking History Modal -->
+    <div id="memberBookingHistoryModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
+    
+    <!-- NEW: Delete Course Notification Modal -->
+    <div id="deleteCourseNotifyModal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4 modal-backdrop"></div>
+
+    <!-- NEW: Cancel Copy Button -->
+    <button id="cancelCopyBtn" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-transform hover:scale-105">Cancel Copy</button>
+
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- App State & Constants ---
-        const DAYS_TO_SHOW = 30;
+        const OWNER_SCHEDULE_DAYS = 60; // Total days for owner view (30 past, 30 future)
+        const MEMBER_PAST_DAYS = 7; // Days to show in the past for member view
         const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
-        const START_DATE = new Date('2025-06-27T00:00:00Z'); // Use UTC date
+        
         let appState = { 
             courses: [], 
             tutors: [], 
@@ -196,7 +296,16 @@
             currentUser: null,
             selectedFilters: {
                 salaryTutorId: null,
-                salaryPeriod: null // New: To retain selected month on Salary page
+                salaryPeriod: null, 
+                coursesPeriod: null,
+                coursesSportTypeId: 'all',
+                coursesTutorId: 'all'
+            },
+            ownerScheduleInitialScrollIndex: null,
+            copyMode: { // State for copy/paste
+                active: false,
+                type: null, // 'class' or 'day'
+                targetDate: null, // The day to paste TO
             }
         };
         let emblaApi = null;
@@ -220,7 +329,12 @@
             sportTypeModal: document.getElementById('sportTypeModal'),
             tutorModal: document.getElementById('tutorModal'),
             memberModal: document.getElementById('memberModal'),
+            editMemberAccountModal: document.getElementById('editMemberAccountModal'),
+            changePasswordModal: document.getElementById('changePasswordModal'),
             confirmationModal: document.getElementById('confirmationModal'),
+            memberBookingHistoryModal: document.getElementById('memberBookingHistoryModal'),
+            deleteCourseNotifyModal: document.getElementById('deleteCourseNotifyModal'), // NEW
+            cancelCopyBtn: document.getElementById('cancelCopyBtn')
         };
 
         // --- Utility & Helper Functions ---
@@ -236,6 +350,8 @@
             const data = localStorage.getItem('studioPulseData');
             if (data) { 
                 appState = JSON.parse(data); 
+                // Ensure copyMode is reset on load
+                appState.copyMode = { active: false, type: null, targetDate: null };
             } else {
                 // Default data if nothing in localStorage
                 appState.sportTypes = [
@@ -258,8 +374,8 @@
                 appState.members = [
                     // Test Accounts
                     { id: 'm_owner', name: 'Studio Owner', email: 'owner@gmail.com', password: '001234', phone: '+1 555000000', type: 'owner' },
-                    { id: 'm_member1', name: 'Perry Yuen', email: 'member1@gmail.com', password: '001234', phone: '+852 98001055', credits: 50, initialCredits: 50, creditCost: 80, purchaseAmount: 4000, monthlyPlan: false, type: 'member', lastBooking: null },
-                    { id: 'm_member2', name: 'Irene Kwok', email: 'member2@gmail.com', password: '001234', phone: '+852 94909142', monthlyPlan: true, monthlyPlanAmount: 980, planStartDate: '2025-06-01', monthlyCreditValue: 25, type: 'member', lastBooking: null }
+                    { id: 'm_member1', name: 'Perry Yuen', email: 'member1@gmail.com', password: '001234', phone: '+852 98001055', credits: 50, initialCredits: 50, creditCost: 80, purchaseAmount: 4000, monthlyPlan: false, type: 'member', lastBooking: null, expiryDate: '2026-06-30' },
+                    { id: 'm_member2', name: 'Irene Kwok', email: 'member2@gmail.com', password: '001234', phone: '+852 94909142', monthlyPlan: true, monthlyPlanAmount: 980, planStartDate: '2025-06-01', monthlyCreditValue: 25, type: 'member', lastBooking: null, expiryDate: null }
                 ];
                 saveData();
             }
@@ -277,17 +393,14 @@
         };
         const formatCurrency = (amount) => amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
         
-        // New: Function to format date as "30 Jun, 25"
         const formatShortDateWithYear = (isoString) => {
             if (!isoString) return 'N/A';
             const date = new Date(isoString);
             const options = { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' };
             const parts = date.toLocaleDateString('en-US', options).split(' ');
-            // Reorder to "day month, year"
             return `${parts[1].replace(',', '')} ${parts[0]}, ${parts[2]}`;
         };
 
-        // New: Function to format phone number with spaces
         const formatDisplayPhoneNumber = (fullPhoneNumber) => {
             if (!fullPhoneNumber) return '';
             const parts = fullPhoneNumber.split(' ');
@@ -296,7 +409,13 @@
                 const digitsOnly = parts.slice(1).join('').replace(/\D/g, '');
                 return `${countryCode} ${digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ')}`;
             }
-            return fullPhoneNumber; // Return as is if no space found
+            return fullPhoneNumber;
+        };
+
+        const formatDigitsWithSpaces = (digitsString) => {
+            if (!digitsString) return '';
+            const cleanedDigits = digitsString.replace(/\D/g, '');
+            return cleanedDigits.replace(/(\d{4})(?=\d)/g, '$1 ');
         };
 
         // --- Auth & UI Visibility ---
@@ -309,7 +428,7 @@
                 DOMElements.appWrapper.classList.remove('hidden');
                 closeModal(DOMElements.loginModal);
                 updateUIVisibility();
-                switchPage('schedule');
+                switchPage(user.type === 'member' ? 'schedule' : 'schedule');
                 showMessageBox(`Welcome, ${user.name}!`, 'success');
             } else {
                 showMessageBox('Invalid email or password.', 'error');
@@ -320,20 +439,39 @@
             sessionStorage.removeItem('studioPulseUser');
             DOMElements.appWrapper.classList.add('hidden');
             DOMElements.authPage.classList.remove('hidden');
+            appState.ownerScheduleInitialScrollIndex = null;
         };
         const updateUIVisibility = () => {
             const isOwner = appState.currentUser?.type === 'owner';
             DOMElements.mainNav.querySelectorAll('[data-page]').forEach(btn => {
                 const page = btn.dataset.page;
-                if (page !== 'schedule') {
+                if (['statistics', 'salary', 'members', 'admin', 'courses'].includes(page)) {
                     btn.style.display = isOwner ? 'block' : 'none';
+                } 
+                else if (page === 'account') {
+                    btn.style.display = isOwner ? 'none' : 'block';
+                } else if (page === 'schedule') {
+                    btn.style.display = 'block';
                 }
             });
-            // Owner sees the schedule, member sees their dashboard
-            if (!isOwner) {
-                DOMElements.mainNav.querySelector('[data-page="schedule"]').textContent = "Dashboard";
-            } else {
-                 DOMElements.mainNav.querySelector('[data-page="schedule"]').textContent = "Schedule";
+            DOMElements.mainNav.querySelector('[data-page="schedule"]').textContent = "Schedule";
+            
+            if (!isOwner && !DOMElements.mainNav.querySelector('[data-page="account"]')) {
+                const accountBtn = document.createElement('button');
+                accountBtn.dataset.page = 'account';
+                accountBtn.className = 'nav-btn font-semibold px-3 py-1 text-sm sm:text-base';
+                accountBtn.textContent = 'Account';
+                const scheduleBtn = DOMElements.mainNav.querySelector('[data-page="schedule"]');
+                if (scheduleBtn) {
+                    scheduleBtn.parentNode.insertBefore(accountBtn, scheduleBtn.nextSibling);
+                } else {
+                    DOMElements.mainNav.appendChild(accountBtn);
+                }
+                DOMElements.navButtons = document.querySelectorAll('.nav-btn');
+                accountBtn.onclick = () => switchPage(accountBtn.dataset.page);
+            } else if (isOwner && DOMElements.mainNav.querySelector('[data-page="account"]')) {
+                DOMElements.mainNav.querySelector('[data-page="account"]').remove();
+                DOMElements.navButtons = document.querySelectorAll('.nav-btn');
             }
             renderCurrentPage();
         };
@@ -351,15 +489,13 @@
             const isOwner = appState.currentUser?.type === 'owner';
             let pageIdToRender = appState.activePage;
 
-            const ownerOnlyPages = ['statistics', 'salary', 'members', 'admin'];
+            const ownerOnlyPages = ['statistics', 'salary', 'members', 'admin', 'courses'];
 
-            // If a non-owner tries to access an owner-only page, redirect to their dashboard
             if (!isOwner && ownerOnlyPages.includes(pageIdToRender)) {
-                pageIdToRender = 'schedule'; // Redirect to member dashboard
-                appState.activePage = 'schedule'; // Update active page in state
-                // Also update the active nav button immediately
+                pageIdToRender = 'schedule';
+                appState.activePage = 'schedule';
                 DOMElements.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.page === 'schedule'));
-                showMessageBox('Access denied. Redirected to Dashboard.', 'error');
+                showMessageBox('Access denied. Redirected to Schedule.', 'error');
             }
 
             const pageElement = document.getElementById(`page-${pageIdToRender}`);
@@ -367,10 +503,12 @@
 
             if (pageIdToRender === 'schedule') {
                 if (isOwner) {
-                    renderScheduleView(pageElement);
+                    renderOwnerSchedule(pageElement);
                 } else {
                     renderMemberSchedulePage(pageElement);
                 }
+            } else if (pageIdToRender === 'account') {
+                renderAccountPage(pageElement);
             } else if (pageIdToRender === 'admin') {
                 renderAdminPage(pageElement);
             } else if (pageIdToRender === 'members') {
@@ -379,6 +517,8 @@
                 renderSalaryPage(pageElement);
             } else if (pageIdToRender === 'statistics') {
                 renderStatisticsPage(pageElement);
+            } else if (pageIdToRender === 'courses') {
+                renderCoursesPage(pageElement);
             }
         };
 
@@ -388,18 +528,16 @@
             setTimeout(() => modal.querySelector('.modal-content').classList.add('open'), 10);
         };
         const closeModal = (modal) => {
-            // Check if modal and its content exist before trying to access classList
             const modalContent = modal.querySelector('.modal-content');
             if (modalContent) {
                 modalContent.classList.remove('open');
                 setTimeout(() => modal.classList.add('hidden'), 300);
             } else {
-                // If modalContent is not found, just hide the modal directly
                 modal.classList.add('hidden');
             }
         };
         
-        // --- Confirmation Modal ---
+        // --- Confirmation & Deletion Modals ---
         const showConfirmation = (title, message, onConfirm) => {
             DOMElements.confirmationModal.innerHTML = `
                 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all duration-300 scale-95 opacity-0 modal-content">
@@ -414,7 +552,6 @@
             onConfirmCallback = onConfirm;
             openModal(DOMElements.confirmationModal);
 
-            // Fix: Corrected typo from DOMEElements to DOMElements
             DOMElements.confirmationModal.querySelector('.cancel-btn').onclick = () => {
                 closeModal(DOMElements.confirmationModal);
             };
@@ -423,9 +560,148 @@
                 closeModal(DOMElements.confirmationModal); 
             };
         };
+
+        // NEW: Handles the logic for deleting a course, showing the correct modal.
+        function handleDeleteCourseRequest(course) {
+            // Refund credits for members who booked but did not attend
+            course.bookedBy.forEach(memberId => {
+                const member = appState.members.find(m => m.id === memberId);
+                // Only refund if member exists, is not on monthly plan, and has not attended
+                if (member && !member.monthlyPlan && !course.attendedBy.includes(memberId)) {
+                    member.credits = parseFloat(member.credits) + parseFloat(course.credits);
+                }
+            });
+
+            if (course.bookedBy && course.bookedBy.length > 0) {
+                openDeleteCourseNotifyModal(course);
+            } else {
+                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
+                    appState.courses = appState.courses.filter(c => c.id !== course.id);
+                    saveData();
+                    closeModal(DOMElements.courseModal); // Close the edit modal after deletion
+                    renderCurrentPage();
+                    showMessageBox('Course deleted.', 'info');
+                });
+            }
+        }
+
+        // NEW: Opens the modal for notifying members before deletion.
+        function openDeleteCourseNotifyModal(course) {
+            const bookedMembers = course.bookedBy.map(id => appState.members.find(m => m.id === id)).filter(Boolean);
+
+            DOMElements.deleteCourseNotifyModal.innerHTML = `
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                    <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold text-slate-800">Notify Booked Members</h2>
+                        <p class="text-slate-500 mt-2 mb-6">This course has ${bookedMembers.length} booking(s). Please copy the message for each member to notify them of the cancellation before deleting the course.</p>
+                    </div>
+                    <div id="notify-members-list" class="space-y-3 max-h-60 overflow-y-auto p-4 bg-slate-50 rounded-lg">
+                        ${bookedMembers.map(member => `
+                            <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm" data-member-id="${member.id}">
+                                <span class="font-semibold text-slate-700 member-name">${member.name}</span>
+                                <button class="copy-notify-msg-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-full transition">Copy WhatsApp Msg</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="flex justify-center mt-8">
+                        <button id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Course</button>
+                    </div>
+                </div>`;
+            
+            const modal = DOMElements.deleteCourseNotifyModal;
+            modal.querySelectorAll('.copy-notify-msg-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const memberItem = btn.closest('[data-member-id]');
+                    const memberId = memberItem.dataset.memberId;
+                    const member = appState.members.find(m => m.id === memberId);
+                    
+                    const message = createWhatsAppMessage(member, course);
+                    copyTextToClipboard(message);
+
+                    memberItem.querySelector('.member-name').classList.add('notified-member');
+                    btn.textContent = 'Copied!';
+                    btn.disabled = true;
+                    btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    btn.classList.add('bg-slate-300', 'cursor-default');
+
+                    // Check if all members are notified to enable the delete button
+                    const allNotified = modal.querySelectorAll('.copy-notify-msg-btn:not(:disabled)').length === 0;
+                    if (allNotified) {
+                        const finalDeleteBtn = modal.querySelector('#final-delete-btn');
+                        finalDeleteBtn.disabled = false;
+                        finalDeleteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                };
+            });
+
+            modal.querySelector('#final-delete-btn').onclick = () => {
+                appState.courses = appState.courses.filter(c => c.id !== course.id);
+                saveData();
+                closeModal(modal);
+                closeModal(DOMElements.courseModal); // Close the edit modal after deletion
+                renderCurrentPage();
+                showMessageBox('Course deleted and members notified.', 'success');
+            };
+
+            openModal(modal);
+        }
+
+        // NEW: Creates the formatted WhatsApp message.
+        function createWhatsAppMessage(member, course) {
+            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            const tutor = appState.tutors.find(t => t.id === course.tutorId);
+            const bookingLink = "https://www.studiopulse.app/schedule"; // Example link
+
+            const message = `
+👋 Hi *${member.name}*,
+
+This is a notification from StudioPulse. Unfortunately, we have to cancel the following class:
+
+*Course:* ${sportType.name}
+*Date:* ${formatShortDateWithYear(course.date)}
+*Time:* ${getTimeRange(course.time, course.duration)}
+*Tutor:* ${tutor.name}
+
+We apologize for any inconvenience. The credit for this class has been refunded to your account. 🙏
+
+Would you like to book another class? You can view the schedule here:
+${bookingLink}
+
+Thank you for your understanding.
+            `.trim();
+            return message;
+        }
+
+        // NEW: Helper to copy text to the clipboard.
+        function copyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showMessageBox('WhatsApp message copied to clipboard!', 'success');
+                } else {
+                    showMessageBox('Could not copy message.', 'error');
+                }
+            } catch (err) {
+                showMessageBox('Could not copy message.', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
         
-        // --- Course, Booking, and Member List Modals ---
+        // --- Course, Booking, and Member List Modals (Existing) ---
         function openJoinedMembersModal(course) {
+            // FIX: Prevent modal from opening during copy mode
+            if (appState.copyMode.active) return;
+            
             DOMElements.joinedMembersModal.innerHTML = `
                 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                     <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -438,7 +714,6 @@
             const listEl = DOMElements.joinedMembersModal.querySelector('#joinedMembersList');
             const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
 
-            // Revenue Calculation
             const tutor = appState.tutors.find(t => t.id === course.tutorId);
             const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
             let tutorSalary = 0;
@@ -493,7 +768,6 @@
                 listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                     checkbox.onchange = (e) => {
                         const memberId = e.target.dataset.memberId;
-                        // Find the course in appState.courses and update its attendedBy array
                         const courseIndex = appState.courses.findIndex(c => c.id === course.id);
                         if (courseIndex !== -1) {
                             if (e.target.checked) {
@@ -504,7 +778,6 @@
                                 appState.courses[courseIndex].attendedBy = appState.courses[courseIndex].attendedBy.filter(id => id !== memberId);
                             }
                             saveData();
-                            // Re-render the current page to reflect changes in member view
                             renderCurrentPage(); 
                         }
                     };
@@ -569,18 +842,27 @@
             openModal(DOMElements.bookingModal);
         }
 
-        function handleCancelBooking(course) {
+        function handleCancelBooking(course, memberIdToUpdate = null) {
             showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
                 const courseToCancel = appState.courses.find(c => c.id === course.id);
-                const memberIndex = appState.members.findIndex(m => m.id === appState.currentUser.id);
+                const memberToUpdate = appState.members.find(m => m.id === (memberIdToUpdate || appState.currentUser.id));
+
+                if (!memberToUpdate) {
+                    showMessageBox('Member not found.', 'error');
+                    return;
+                }
                 
-                courseToCancel.bookedBy = courseToCancel.bookedBy.filter(id => id !== appState.members[memberIndex].id);
-                if (!appState.members[memberIndex].monthlyPlan) {
-                    appState.members[memberIndex].credits = parseFloat(appState.members[memberIndex].credits) + parseFloat(courseToCancel.credits);
+                courseToCancel.bookedBy = courseToCancel.bookedBy.filter(id => id !== memberToUpdate.id);
+                if (!memberToUpdate.monthlyPlan) {
+                    memberToUpdate.credits = parseFloat(memberToUpdate.credits) + parseFloat(courseToCancel.credits);
                 }
                 
                 saveData();
-                renderCurrentPage();
+                if (memberIdToUpdate) {
+                    openMemberBookingHistoryModal(memberToUpdate);
+                } else {
+                    renderCurrentPage();
+                }
                 showMessageBox('Booking cancelled.', 'info');
             });
         }
@@ -590,7 +872,47 @@
                 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                     <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                     <h2 id="courseModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
-                    <form id="courseForm"><input type="hidden" id="courseModalId"><input type="hidden" id="courseModalDate"><div class="space-y-4"><div><label for="courseSportType" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type</label><select id="courseSportType" name="sportTypeId" required class="form-select"></select></div><div><label for="courseTutor" class="block text-slate-600 text-sm font-semibold mb-2">Tutor</label><select id="courseTutor" name="tutorId" required class="form-select"></select></div><div class="grid grid-cols-2 gap-4"><div><label for="courseDuration" class="block text-slate-600 text-sm font-semibold mb-2">Duration (min)</label><input type="number" id="courseDuration" name="duration" required min="15" max="240" step="5" value="60" class="form-input"></div><div><label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time</label><input type="time" id="courseTime" name="time" required value="09:00" class="form-input"></div></div><div class="grid grid-cols-2 gap-4"><div><label for="courseCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label><input type="number" id="courseCredits" name="credits" required min="0" max="10" step="0.5" value="1" class="form-input"></div><div><label for="courseMaxParticipants" class="block text-slate-600 text-sm font-semibold mb-2">Max Participants</label><input type="number" id="courseMaxParticipants" name="maxParticipants" required min="1" max="100" value="15" class="form-input"></div></div></div><div class="flex justify-center items-center gap-4 mt-8"><button type="button" class="delete-btn bg-red-200 hover:bg-red-300 text-red-800 font-bold py-2 px-5 rounded-lg transition hidden">Delete</button><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg flex-grow"></button></div></form>
+                    <form id="courseForm">
+                        <input type="hidden" id="courseModalId">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="courseSportType" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type</label>
+                                <select id="courseSportType" name="sportTypeId" required class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="courseTutor" class="block text-slate-600 text-sm font-semibold mb-2">Tutor</label>
+                                <select id="courseTutor" name="tutorId" required class="form-select"></select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="courseDate" class="block text-slate-600 text-sm font-semibold mb-2">Date</label>
+                                    <input type="date" id="courseDate" name="date" required class="form-input">
+                                </div>
+                                <div>
+                                    <label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time</label>
+                                    <input type="time" id="courseTime" name="time" required value="09:00" class="form-input">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="courseDuration" class="block text-slate-600 text-sm font-semibold mb-2">Duration (min)</label>
+                                    <input type="number" id="courseDuration" name="duration" required min="15" max="240" step="5" value="60" class="form-input">
+                                </div>
+                                <div>
+                                    <label for="courseCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label>
+                                    <input type="number" id="courseCredits" name="credits" required min="0" max="10" step="0.5" value="1" class="form-input">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="courseMaxParticipants" class="block text-slate-600 text-sm font-semibold mb-2">Max Participants</label>
+                                <input type="number" id="courseMaxParticipants" name="maxParticipants" required min="1" max="100" value="15" class="form-input">
+                            </div>
+                        </div>
+                        <div class="flex justify-center items-center gap-4 mt-8">
+                            <button type="button" class="delete-btn bg-red-200 hover:bg-red-300 text-red-800 font-bold py-2 px-5 rounded-lg transition hidden">Delete</button>
+                            <button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg flex-grow"></button>
+                        </div>
+                    </form>
                 </div>`;
 
             const modal = DOMElements.courseModal;
@@ -598,7 +920,6 @@
             form.reset();
             populateDropdown(form.querySelector('#courseSportType'), appState.sportTypes);
             
-            form.querySelector('#courseModalDate').value = dateIso;
             const deleteBtn = form.querySelector('.delete-btn');
             deleteBtn.classList.add('hidden');
             
@@ -621,23 +942,16 @@
                 form.querySelector('#courseTime').value = courseToEdit.time;
                 form.querySelector('#courseCredits').value = courseToEdit.credits;
                 form.querySelector('#courseMaxParticipants').value = courseToEdit.maxParticipants;
+                form.querySelector('#courseDate').value = courseToEdit.date;
                 deleteBtn.classList.remove('hidden');
-                // Fix: Added event listener for delete button in course modal
-                deleteBtn.onclick = () => {
-                    const sportType = appState.sportTypes.find(st => st.id === courseToEdit.sportTypeId);
-                    showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course?`, () => {
-                        appState.courses = appState.courses.filter(c => c.id !== courseToEdit.id);
-                        saveData(); 
-                        closeModal(DOMElements.courseModal); // Close the course modal after confirming delete
-                        renderCurrentPage(); 
-                        showMessageBox('Course deleted.', 'info');
-                    });
-                };
+                deleteBtn.onclick = () => handleDeleteCourseRequest(courseToEdit); // MODIFIED
             } else {
                 modal.querySelector('#courseModalTitle').textContent = 'Add New Course';
                 modal.querySelector('.submit-btn').textContent = 'Add Course';
                 form.querySelector('#courseModalId').value = '';
                 updateTutorDropdown();
+                const defaultDate = dateIso || new Date().toISOString().split('T')[0];
+                form.querySelector('#courseDate').value = defaultDate;
             }
             form.onsubmit = handleCourseFormSubmit;
             openModal(modal);
@@ -654,7 +968,7 @@
                 time: form.querySelector('#courseTime').value,
                 credits: parseFloat(form.querySelector('#courseCredits').value),
                 maxParticipants: parseInt(form.querySelector('#courseMaxParticipants').value),
-                date: form.querySelector('#courseModalDate').value,
+                date: form.querySelector('#courseDate').value,
             };
 
             if (courseId) {
@@ -692,15 +1006,10 @@
             if (isOwner) {
                 el.classList.add('cursor-pointer');
                 actionButton = `<button class="edit-course-btn opacity-60 hover:opacity-100 p-1 -mr-1 -mt-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
-                mainAction = () => openJoinedMembersModal(course);
+                mainAction = () => { if (!appState.copyMode.active) openJoinedMembersModal(course); };
             } else if (isBookedByCurrentUser) {
                 el.classList.add('booked-by-member');
-                // Hide cancel button if attended, show "COMPLETED" label
-                if (isAttendedByCurrentUser) {
-                    actionButton = `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">COMPLETED</span>`;
-                } else {
-                    actionButton = `<button class="cancel-booking-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-xs transition">Cancel</button>`;
-                }
+                // The cancel button is now handled by the interactive "BOOKED" button at the bottom.
             } else if (appState.currentUser) {
                 el.classList.add('cursor-pointer');
                 mainAction = () => openBookingModal(course);
@@ -720,13 +1029,15 @@
                         <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>${course.bookedBy.length}/${course.maxParticipants}</span>
                         <span>${course.duration} mins</span>
                         ${isBookedByCurrentUser 
-                            ? `<span class="bg-white/90 ${isAttendedByCurrentUser ? 'text-green-600' : 'text-indigo-600'} font-bold text-xs px-2 py-1 rounded-full">${isAttendedByCurrentUser ? 'COMPLETED' : 'BOOKED'}</span>` 
+                            ? (isAttendedByCurrentUser
+                                ? `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">COMPLETED</span>`
+                                : `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="BOOKED" data-cancel-text="CANCEL?">BOOKED</button>`
+                              )
                             : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`}
                     </div>
                 </div>
-                ${isBookedByCurrentUser && !isAttendedByCurrentUser ? `<div class="text-center mt-2">${actionButton}</div>` : ''}
                 `;
-            
+
             el.addEventListener('click', (e) => {
                 if (!e.target.closest('button')) {
                     mainAction();
@@ -738,35 +1049,65 @@
                     e.stopPropagation();
                     openCourseModal(course.date, course);
                 };
-            } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) { // Only attach if not attended
-                el.querySelector('.cancel-booking-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    handleCancelBooking(course);
-                };
+            } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
+                const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
+                if (cancelButton) {
+                    cancelButton.onclick = (e) => {
+                        e.stopPropagation();
+                        handleCancelBooking(course);
+                    };
+                    cancelButton.onmouseenter = () => {
+                        cancelButton.textContent = cancelButton.dataset.cancelText;
+                    };
+                    cancelButton.onmouseleave = () => {
+                        cancelButton.textContent = cancelButton.dataset.bookedText;
+                    };
+                }
             }
             
             return el;
         }
 
-        function renderScheduleView(container) {
+        function _renderScheduleCarousel(container, startDate, endDate, initialScrollIndex, showAddButton) {
+            const today = new Date();
+            today.setUTCHours(0, 0, 0, 0);
+
+            const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
             container.innerHTML = `
                 <div class="relative">
                     <div class="embla overflow-hidden card p-4 md:p-6">
                         <div class="embla__viewport"><div class="embla__container flex -mx-2"></div></div>
+                    </div>
+                    <div class="flex items-center justify-center mt-6 gap-4">
+                        <span id="sliderDateStart" class="text-sm font-semibold text-slate-600"></span>
+                        <input type="range" id="dateSlider" class="date-slider flex-grow" min="0" max="${totalDays - 1}" value="${initialScrollIndex}">
+                        <span id="sliderDateEnd" class="text-sm font-semibold text-slate-600"></span>
                     </div>
                     <button class="embla__button embla__button--prev absolute left-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
                     <button class="embla__button embla__button--next absolute right-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
                 </div>`;
             
             const emblaContainer = container.querySelector('.embla__container');
-            emblaContainer.innerHTML = ''; // Clear first
+            emblaContainer.innerHTML = '';
             let content = '';
-            for (let i = 0; i < DAYS_TO_SHOW; i++) {
-                const date = new Date(START_DATE.getTime());
-                date.setUTCDate(START_DATE.getUTCDate() + i);
+            const datesArray = [];
+
+            for (let i = 0; i < totalDays; i++) {
+                const date = new Date(startDate.getTime());
+                date.setUTCDate(startDate.getUTCDate() + i);
                 const dateIso = getIsoDate(date);
-                // Added px-4 to courses-container for horizontal padding
-                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col h-[70vh]"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container flex-grow overflow-y-auto px-4 py-4"><div class="add-course-btn-wrapper mt-auto pt-4"><button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button></div></div></div></div>`;
+                datesArray.push(dateIso);
+
+                const copyButtonsHTML = showAddButton ? `
+                    <div class="mt-2 grid grid-cols-2 gap-2">
+                        <button data-date="${dateIso}" class="copy-class-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Class</button>
+                        <button data-date="${dateIso}" class="copy-day-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Day</button>
+                    </div>
+                ` : '';
+                
+                // MODIFIED: Removed h-[75vh] from day-column and flex-grow/overflow-y-auto from courses-container
+                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container px-1 py-1"></div><div class="add-controls-wrapper mt-auto pt-4">${showAddButton ? `<button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}</div></div></div>`;
             }
             emblaContainer.innerHTML = content;
 
@@ -774,16 +1115,10 @@
             container.querySelectorAll('.courses-container').forEach(cont => {
                 const date = cont.dataset.date;
                 const dailyCourses = coursesByDate[date] || [];
-                const addButtonWrapper = cont.querySelector('.add-course-btn-wrapper');
-                cont.innerHTML = '';
-                dailyCourses.sort((a, b) => a.time.localeCompare(b.time)).forEach(course => cont.appendChild(createCourseElement(course)));
                 
-                if (addButtonWrapper && appState.currentUser?.type === 'owner') {
-                    addButtonWrapper.style.display = 'block';
-                    cont.appendChild(addButtonWrapper);
-                } else if (addButtonWrapper) {
-                    addButtonWrapper.remove();
-                }
+                cont.innerHTML = '';
+                
+                dailyCourses.sort((a, b) => a.time.localeCompare(b.time)).forEach(course => cont.appendChild(createCourseElement(course)));
             });
 
             emblaApi = EmblaCarousel(container.querySelector('.embla__viewport'), { loop: false, align: "start", dragFree: true });
@@ -791,34 +1126,180 @@
             const updateButtons = () => { if(emblaApi) { prevBtn.disabled = !emblaApi.canScrollPrev(); nextBtn.disabled = !emblaApi.canScrollNext(); } };
             prevBtn.onclick = () => emblaApi.scrollPrev(); nextBtn.onclick = () => emblaApi.scrollNext();
             emblaApi.on('select', updateButtons).on('reInit', updateButtons); updateButtons();
+
+            const dateSlider = container.querySelector('#dateSlider');
+            const sliderDateStart = container.querySelector('#sliderDateStart');
+            const sliderDateEnd = container.querySelector('#sliderDateEnd');
+
+            const updateSliderLabels = () => {
+                sliderDateStart.textContent = formatShortDateWithYear(getIsoDate(startDate));
+                sliderDateEnd.textContent = formatShortDateWithYear(getIsoDate(endDate));
+            };
+            
+            dateSlider.value = initialScrollIndex;
+            emblaApi.scrollTo(initialScrollIndex);
+            updateSliderLabels();
+
+            dateSlider.oninput = (e) => {
+                const index = parseInt(e.target.value);
+                emblaApi.scrollTo(index);
+                if (appState.currentUser?.type === 'owner') {
+                    appState.ownerScheduleInitialScrollIndex = index;
+                }
+            };
+
+            emblaApi.on('scroll', () => {
+                if (emblaApi) {
+                    const newIndex = emblaApi.selectedScrollSnap();
+                    dateSlider.value = newIndex;
+                    if (appState.currentUser?.type === 'owner') {
+                        appState.ownerScheduleInitialScrollIndex = newIndex;
+                    }
+                }
+            });
+            
+            container.querySelectorAll('.copy-class-btn').forEach(btn => {
+                btn.onclick = (e) => startCopy('class', e.currentTarget.dataset.date);
+            });
+            container.querySelectorAll('.copy-day-btn').forEach(btn => {
+                btn.onclick = (e) => startCopy('day', e.currentTarget.dataset.date);
+            });
         }
 
         function renderOwnerSchedule(container) {
-            renderScheduleView(container);
+            const today = new Date();
+            today.setUTCHours(0, 0, 0, 0); 
+            const ownerStartDate = new Date(today.getTime());
+            ownerStartDate.setUTCDate(today.getUTCDate() - OWNER_SCHEDULE_DAYS / 2);
+
+            const ownerEndDate = new Date(today.getTime());
+            ownerEndDate.setUTCDate(today.getUTCDate() + OWNER_SCHEDULE_DAYS / 2 - 1);
+
+            let initialScrollIndex = 0;
+            const diffDays = Math.round((today.getTime() - ownerStartDate.getTime()) / (24 * 60 * 60 * 1000));
+            initialScrollIndex = Math.max(0, Math.min(diffDays, OWNER_SCHEDULE_DAYS - 1));
+
+            const finalScrollIndex = appState.ownerScheduleInitialScrollIndex !== null ? appState.ownerScheduleInitialScrollIndex : initialScrollIndex;
+
+            _renderScheduleCarousel(container, ownerStartDate, ownerEndDate, finalScrollIndex, true);
         }
 
         function renderMemberSchedulePage(container) {
-            const memberDashboardHTML = renderMemberDashboard();
-            container.innerHTML = `
-                ${memberDashboardHTML}
-                <div id="member-schedule-container" class="mt-8"></div>
-            `;
+            const today = new Date();
+            today.setUTCHours(0, 0, 0, 0);
+
+            const memberStartDate = new Date(today.getTime());
+            memberStartDate.setUTCDate(today.getUTCDate() - MEMBER_PAST_DAYS);
+
+            let memberEndDate = new Date(today.getTime());
+
+            const futureCourses = appState.courses.filter(c => new Date(c.date) >= memberStartDate);
+            if (futureCourses.length > 0) {
+                const latestCourseDate = new Date(Math.max(...futureCourses.map(c => new Date(c.date).getTime())));
+                if (latestCourseDate > memberEndDate) {
+                    memberEndDate = latestCourseDate;
+                }
+            }
             
-            container.querySelectorAll('.cancel-booking-btn-dash').forEach(btn => {
-                btn.onclick = () => {
-                    const course = appState.courses.find(c => c.id === btn.dataset.courseId);
-                    handleCancelBooking(course);
-                };
-            });
-            
-            renderScheduleView(container.querySelector('#member-schedule-container'));
+            let initialScrollIndex = 0;
+            const diffDays = Math.round((today.getTime() - memberStartDate.getTime()) / (24 * 60 * 60 * 1000));
+            initialScrollIndex = Math.max(0, diffDays);
+
+            _renderScheduleCarousel(container, memberStartDate, memberEndDate, initialScrollIndex, false);
+        }
+        
+        // --- Copy/Paste Logic (Corrected "Copy From" Logic) ---
+        function startCopy(type, targetDate) {
+            if (appState.copyMode.active) {
+                cancelCopy();
+            }
+            appState.copyMode.active = true;
+            appState.copyMode.type = type;
+            appState.copyMode.targetDate = targetDate;
+            DOMElements.cancelCopyBtn.classList.remove('hidden');
+            updateCopyUI();
         }
 
-        function renderMemberDashboard() {
+        function cancelCopy() {
+            appState.copyMode.active = false;
+            appState.copyMode.type = null;
+            appState.copyMode.targetDate = null;
+            DOMElements.cancelCopyBtn.classList.add('hidden');
+            updateCopyUI(); // This will clear all highlights
+        }
+
+        function performCopy(type, sourceData, targetDate) {
+            if (type === 'day') {
+                const sourceDate = sourceData;
+                const coursesToCopy = appState.courses.filter(c => c.date === sourceDate);
+                if (coursesToCopy.length === 0) {
+                    showMessageBox('Source day has no classes to copy.', 'error');
+                } else {
+                    coursesToCopy.forEach(course => {
+                        const newCourse = { ...course, id: `c_${Date.now()}_${Math.random()}`, date: targetDate, bookedBy: [], attendedBy: [] };
+                        appState.courses.push(newCourse);
+                    });
+                    showMessageBox(`Copied ${coursesToCopy.length} class(es) from ${formatShortDateWithYear(sourceDate)} to ${formatShortDateWithYear(targetDate)}.`, 'success');
+                }
+            } else if (type === 'class') {
+                const courseToCopy = sourceData;
+                const newCourse = { ...courseToCopy, id: `c_${Date.now()}_${Math.random()}`, date: targetDate, bookedBy: [], attendedBy: [] };
+                appState.courses.push(newCourse);
+                const sportTypeName = appState.sportTypes.find(st => st.id === courseToCopy.sportTypeId).name;
+                showMessageBox(`Copied "${sportTypeName}" to ${formatShortDateWithYear(targetDate)}.`, 'success');
+            }
+
+            saveData();
+            cancelCopy();
+            renderCurrentPage();
+        }
+
+        function updateCopyUI() {
+            const schedulePage = document.getElementById('page-schedule');
+            if (!schedulePage) return;
+
+            // Clear all previous copy-related classes
+            schedulePage.querySelectorAll('.copy-mode-source, .copy-mode-source-class, .copy-mode-paste-zone').forEach(el => {
+                el.classList.remove('copy-mode-source', 'copy-mode-source-class', 'copy-mode-paste-zone');
+            });
+
+            if (!appState.copyMode.active) return;
+
+            const { type, targetDate } = appState.copyMode;
+
+            // Highlight the destination day as the "paste zone"
+            const targetDayEl = schedulePage.querySelector(`.day-column .courses-container[data-date="${targetDate}"]`)?.closest('.day-column');
+            if (targetDayEl) {
+                targetDayEl.classList.add('copy-mode-paste-zone');
+            }
+
+            if (type === 'day') {
+                showMessageBox('Copy Day: Select a day to copy FROM.', 'info');
+                // Highlight all other days as potential sources
+                schedulePage.querySelectorAll('.day-column').forEach(dayEl => {
+                    const date = dayEl.querySelector('.courses-container').dataset.date;
+                    if (date !== targetDate) {
+                        dayEl.classList.add('copy-mode-source'); // Glowing effect
+                    }
+                });
+            } else if (type === 'class') {
+                showMessageBox('Copy Class: Select a class to copy FROM.', 'info');
+                // Highlight all classes on other days as potential sources
+                schedulePage.querySelectorAll('.course-block').forEach(courseEl => {
+                    const course = appState.courses.find(c => c.id === courseEl.id);
+                    if (course && course.date !== targetDate) {
+                        courseEl.classList.add('copy-mode-source-class'); // Glowing effect
+                    }
+                });
+            }
+        }
+
+
+        function renderAccountPage(container) {
             const member = appState.members.find(m => m.id === appState.currentUser.id);
             const myBookings = appState.courses.filter(c => c.bookedBy.includes(member.id)).sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            return `
+            container.innerHTML = `
                 <div class="w-full max-w-screen-lg mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div class="md:col-span-1">
                         <div class="card p-6 text-center">
@@ -832,8 +1313,12 @@
                                     : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
                                             <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${member.credits}/${member.initialCredits || 'N/A'}</span>
                                         </p></div>
-                                       <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.expiryDate)}</p></div>`
+                                       <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</p></div>`
                                 }
+                            </div>
+                            <div class="mt-8 space-y-4">
+                                <button id="editProfileBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Edit Profile</button>
+                                <button id="changePasswordBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-lg transition">Change Password</button>
                             </div>
                         </div>
                     </div>
@@ -849,6 +1334,7 @@
                                         <div>
                                             <p class="font-bold text-slate-800">${sportType.name}</p>
                                             <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
+                                            <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
                                         </div>
                                         ${isAttended 
                                             ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
@@ -860,6 +1346,142 @@
                         </div>
                     </div>
                 </div>`;
+
+            container.querySelectorAll('.cancel-booking-btn-dash').forEach(btn => {
+                btn.onclick = () => {
+                    const course = appState.courses.find(c => c.id === btn.dataset.courseId);
+                    handleCancelBooking(course);
+                };
+            });
+
+            container.querySelector('#editProfileBtn').onclick = () => openEditMemberAccountModal(member);
+            container.querySelector('#changePasswordBtn').onclick = () => openChangePasswordModal();
+        }
+
+        function openEditMemberAccountModal(member) {
+            DOMElements.editMemberAccountModal.innerHTML = `
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                    <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">Edit Profile</h2>
+                    <form id="editMemberAccountForm" class="space-y-4">
+                        <div>
+                            <label for="editMemberName" class="block text-slate-600 text-sm font-semibold mb-2">Name</label>
+                            <input type="text" id="editMemberName" required class="form-input" value="${member.name}">
+                        </div>
+                        <div>
+                            <label for="editMemberEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email</label>
+                            <input type="email" id="editMemberEmail" required class="form-input" value="${member.email}">
+                        </div>
+                        <div>
+                            <label for="editMemberPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="editMemberCountryCode" class="form-input w-24" placeholder="e.g., 852" value="${member.phone.split(' ')[0].replace('+', '') || ''}">
+                                <input type="tel" id="editMemberPhone" required class="form-input flex-grow" value="${formatDigitsWithSpaces(member.phone.split(' ').slice(1).join(''))}">
+                            </div>
+                        </div>
+                        <div class="flex justify-center mt-8">
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            const form = DOMElements.editMemberAccountModal.querySelector('#editMemberAccountForm');
+            const editMemberPhoneInput = form.querySelector('#editMemberPhone');
+
+            editMemberPhoneInput.oninput = (e) => {
+                const digitsOnly = e.target.value.replace(/\D/g, '');
+                e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
+            };
+
+            form.onsubmit = handleEditMemberAccountSubmit;
+            openModal(DOMElements.editMemberAccountModal);
+        }
+
+        function handleEditMemberAccountSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.querySelector('#editMemberName').value;
+            const email = form.querySelector('#editMemberEmail').value;
+            const countryCode = form.querySelector('#editMemberCountryCode').value.trim();
+            const phoneNumberDigits = form.querySelector('#editMemberPhone').value.replace(/\D/g, '');
+            const phone = countryCode ? `+${countryCode} ${phoneNumberDigits}` : phoneNumberDigits;
+
+            const memberIndex = appState.members.findIndex(m => m.id === appState.currentUser.id);
+            if (memberIndex !== -1) {
+                appState.members[memberIndex].name = name;
+                appState.members[memberIndex].email = email;
+                appState.members[memberIndex].phone = phone;
+                appState.currentUser = { ...appState.currentUser, name, email, phone };
+                sessionStorage.setItem('studioPulseUser', JSON.stringify(appState.currentUser));
+                saveData();
+                showMessageBox('Profile updated successfully!', 'success');
+                closeModal(DOMElements.editMemberAccountModal);
+                renderCurrentPage();
+            } else {
+                showMessageBox('Error updating profile.', 'error');
+            }
+        }
+
+        function openChangePasswordModal() {
+            DOMElements.changePasswordModal.innerHTML = `
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                    <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">Change Password</h2>
+                    <form id="changePasswordForm" class="space-y-4">
+                        <div>
+                            <label for="currentPassword" class="block text-slate-600 text-sm font-semibold mb-2">Current Password</label>
+                            <input type="password" id="currentPassword" required class="form-input">
+                        </div>
+                        <div>
+                            <label for="newPassword" class="block text-slate-600 text-sm font-semibold mb-2">New Password</label>
+                            <input type="password" id="newPassword" required class="form-input">
+                        </div>
+                        <div>
+                            <label for="confirmNewPassword" class="block text-slate-600 text-sm font-semibold mb-2">Confirm New Password</label>
+                            <input type="password" id="confirmNewPassword" required class="form-input">
+                        </div>
+                        <div class="flex justify-center mt-8">
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg">Change Password</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            const form = DOMElements.changePasswordModal.querySelector('#changePasswordForm');
+            form.onsubmit = handleChangePasswordSubmit;
+            openModal(DOMElements.changePasswordModal);
+        }
+
+        function handleChangePasswordSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const currentPassword = form.querySelector('#currentPassword').value;
+            const newPassword = form.querySelector('#newPassword').value;
+            const confirmNewPassword = form.querySelector('#confirmNewPassword').value;
+
+            if (currentPassword !== appState.currentUser.password) {
+                showMessageBox('Current password is incorrect.', 'error');
+                return;
+            }
+            if (newPassword === '') {
+                showMessageBox('New password cannot be empty.', 'error');
+                return;
+            }
+            if (newPassword !== confirmNewPassword) {
+                showMessageBox('New passwords do not match.', 'error');
+                return;
+            }
+
+            const memberIndex = appState.members.findIndex(m => m.id === appState.currentUser.id);
+            if (memberIndex !== -1) {
+                appState.members[memberIndex].password = newPassword;
+                appState.currentUser.password = newPassword;
+                sessionStorage.setItem('studioPulseUser', JSON.stringify(appState.currentUser));
+                saveData();
+                showMessageBox('Password changed successfully!', 'success');
+                closeModal(DOMElements.changePasswordModal);
+            } else {
+                showMessageBox('Error changing password.', 'error');
+            }
         }
 
 
@@ -881,7 +1503,14 @@
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
                             <thead>
-                                <tr class="border-b"><th class="p-2">Name</th><th class="p-2">Contact</th><th class="p-2">Credits/Plan</th><th class="p-2">Last Active</th><th class="p-2"></th></tr>
+                                <tr class="border-b">
+                                    <th class="p-2">Name</th>
+                                    <th class="p-2">Contact</th>
+                                    <th class="p-2">Credits/Plan</th>
+                                    <th class="p-2">Credit Expiry</th>
+                                    <th class="p-2">Last Active</th>
+                                    <th class="p-2"></th>
+                                </tr>
                             </thead>
                             <tbody id="membersTableBody"></tbody>
                         </table>
@@ -902,13 +1531,14 @@
                 );
                 tableBody.innerHTML = filteredMembers.map(member => `
                     <tr class="border-b border-slate-100">
-                        <td class="p-2 font-semibold">${member.name}</td>
+                        <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
                         <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
                         <td class="p-2">${member.monthlyPlan 
                             ? `<span class="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
                             : `<span class="bg-yellow-100 text-yellow-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${member.credits}/${member.initialCredits || 'N/A'}</span>`}
                         </td>
-                        <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
+                        <td class="p-2 text-sm">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</td>
+                        <td class="p-2 text-sm">${member.lastBooking ? formatShortDateWithYear(member.lastBooking) : 'N/A'}</td>
                         <td class="p-2 text-right space-x-2">
                             <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">Edit</button>
                             <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">Delete</button>
@@ -922,17 +1552,21 @@
                     btn.onclick = () => {
                         showConfirmation('Delete Member', `Are you sure you want to delete <strong>${btn.dataset.name}</strong>? This action cannot be undone.`, () => {
                             const memberId = btn.dataset.id;
-                            // Remove member from main list
                             appState.members = appState.members.filter(m => m.id !== memberId);
-                            // Remove member from any courses they booked
                             appState.courses.forEach(course => {
                                 course.bookedBy = course.bookedBy.filter(id => id !== memberId);
                             });
                             saveData();
-                            updateTable(searchInput.value); // Re-render table
-                            renderCurrentPage(); // Re-render schedule to update counts
+                            updateTable(searchInput.value);
+                            renderCurrentPage();
                             showMessageBox('Member deleted.', 'info');
                         });
+                    };
+                });
+                tableBody.querySelectorAll('.member-name-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const member = appState.members.find(m => m.id === btn.dataset.id);
+                        openMemberBookingHistoryModal(member);
                     };
                 });
             };
@@ -951,7 +1585,7 @@
             };
 
             container.querySelector('#addMemberBtn').onclick = () => openMemberModal();
-            updateTable(); // Initial render
+            updateTable();
         }
         
         function openMemberModal(memberToEdit = null) {
@@ -975,13 +1609,11 @@
                                     <div><label for="purchaseAmount" class="block text-slate-600 text-sm font-semibold mb-2">Purchase Amount ($)</label><input type="number" id="purchaseAmount" class="form-input" min="0"></div>
                                     <div><label for="initialCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits Purchased</label><input type="number" id="initialCredits" class="form-input" min="0"></div>
                                 </div>
-                                <!-- Moved Cost/Credit below Purchase Amount and Credits Purchased -->
                                 <div class="flex justify-end">
                                     <div id="costPerCredit" class="text-right"><span class="text-sm text-slate-500">Cost/Credit:</span> <span class="font-bold text-lg text-slate-700"></span></div>
                                 </div>
                                 <div>
                                     <label for="expiryDate" class="block text-slate-600 text-sm font-semibold mb-2">Credit Expiry</label>
-                                    <!-- Expiry Date quick-select buttons -->
                                     <div class="flex gap-2 mb-2">
                                         <button type="button" data-years="1" class="expiry-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">1 Year</button>
                                         <button type="button" data-years="2" class="expiry-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">2 Years</button>
@@ -1028,13 +1660,11 @@
             purchaseAmountInput.oninput = calculateCost;
             creditsInput.oninput = calculateCost;
             
-            // New: Format phone number on input
             memberPhoneInput.oninput = (e) => {
                 const digitsOnly = e.target.value.replace(/\D/g, '');
                 e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
             };
 
-            // Add event listeners for expiry quick-select buttons
             form.querySelectorAll('.expiry-quick-select-btn').forEach(button => {
                 button.onclick = (e) => {
                     const years = parseInt(e.target.dataset.years);
@@ -1052,15 +1682,14 @@
                 form.querySelector('#memberEmail').value = memberToEdit.email;
                 form.querySelector('#memberPassword').placeholder = "Leave blank to keep current password";
 
-                // New: Parse and set country code and phone number
                 const fullPhone = memberToEdit.phone;
                 const phoneParts = fullPhone.split(' ');
                 if (phoneParts.length > 1 && phoneParts[0].startsWith('+')) {
-                    memberCountryCodeInput.value = phoneParts[0].substring(1); // Remove '+'
-                    memberPhoneInput.value = formatDisplayPhoneNumber(phoneParts.slice(1).join('')); // Format the rest
+                    memberCountryCodeInput.value = phoneParts[0].substring(1);
+                    memberPhoneInput.value = formatDigitsWithSpaces(phoneParts.slice(1).join(''));
                 } else {
                     memberCountryCodeInput.value = '';
-                    memberPhoneInput.value = formatDisplayPhoneNumber(fullPhone);
+                    memberPhoneInput.value = formatDigitsWithSpaces(fullPhone);
                 }
                 
                 form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
@@ -1068,14 +1697,13 @@
                 form.querySelector('#purchaseAmount').value = memberToEdit.purchaseAmount;
                 form.querySelector('#expiryDate').value = memberToEdit.expiryDate;
                 form.querySelector('#monthlyPlanAmount').value = memberToEdit.monthlyPlanAmount;
-                planStartDateInput.value = memberToEdit.planStartDate; // Set existing plan start date
+                planStartDateInput.value = memberToEdit.planStartDate;
                 form.querySelector('#monthlyCreditValue').value = memberToEdit.monthlyCreditValue;
                 
             } else {
                 title.textContent = "Add New Member";
                 submitBtn.textContent = "Add Member";
                 form.querySelector('#memberModalId').value = '';
-                // Set default plan start date to today for new members
                 const today = new Date();
                 planStartDateInput.value = today.toISOString().split('T')[0];
             }
@@ -1093,7 +1721,7 @@
             calculateCost();
 
             form.onsubmit = handleMemberFormSubmit;
-            openModal(modal);
+            openModal(DOMElements.memberModal);
         }
 
         function handleMemberFormSubmit(e) {
@@ -1105,16 +1733,15 @@
             const purchaseAmount = parseFloat(form.querySelector('#purchaseAmount').value) || 0;
             const initialCredits = parseFloat(form.querySelector('#initialCredits').value) || 0;
             
-            // New: Construct phone number
             const countryCode = form.querySelector('#memberCountryCode').value.trim();
-            const phoneNumberDigits = form.querySelector('#memberPhone').value.replace(/\D/g, ''); // Remove spaces for storage
+            const phoneNumberDigits = form.querySelector('#memberPhone').value.replace(/\D/g, '');
             const fullPhoneNumber = countryCode ? `+${countryCode} ${phoneNumberDigits}` : phoneNumberDigits;
 
 
             let memberData = {
                 name: form.querySelector('#memberName').value,
                 email: form.querySelector('#memberEmail').value,
-                phone: fullPhoneNumber, // New: Use formatted phone number
+                phone: fullPhoneNumber,
                 monthlyPlan: isMonthly,
                 type: 'member',
                 initialCredits: isMonthly ? 0 : initialCredits,
@@ -1130,7 +1757,6 @@
                 const index = appState.members.findIndex(m => m.id === id);
                 if (index > -1) {
                     if (password) memberData.password = password;
-                    // Keep existing credits unless initial credits are changed
                     memberData.credits = appState.members[index].initialCredits === initialCredits ? appState.members[index].credits : initialCredits;
                     appState.members[index] = { ...appState.members[index], ...memberData };
                     showMessageBox('Member updated successfully.', 'success');
@@ -1139,7 +1765,7 @@
                 memberData.id = `m_${Date.now()}`;
                 memberData.password = password;
                 memberData.lastBooking = null;
-                memberData.credits = initialCredits; // Set starting credits
+                memberData.credits = initialCredits;
                 appState.members.push(memberData);
                 showMessageBox('Member added successfully.', 'success');
             }
@@ -1149,7 +1775,6 @@
             renderMembersPage(document.getElementById('page-members'));
         }
         
-        // --- RESTORED & NEW FUNCTIONS ---
         function renderAdminPage(container) {
             container.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1168,10 +1793,6 @@
             renderAdminLists();
             container.querySelector('#addSportTypeBtn').onclick = () => openSportTypeModal();
             container.querySelector('#addTutorBtn').onclick = () => openTutorModal();
-            // Fix: Event listeners for edit/delete buttons on admin lists were missing or incorrectly placed.
-            // They should be attached to the parent list and use event delegation.
-            // The original code had them inside renderAdminLists, which would re-attach them on every render.
-            // Moving them here ensures they are attached once.
             container.querySelector('#sportsList').addEventListener('click', handleAdminListClick);
             container.querySelector('#tutorsList').addEventListener('click', handleAdminListClick);
         }
@@ -1209,17 +1830,15 @@
                 showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
                     if (type === 'sportType') {
                         appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
-                        // Also remove courses associated with this sport type
                         appState.courses = appState.courses.filter(c => c.sportTypeId !== id);
                     }
                     if (type === 'tutor') {
                         appState.tutors = appState.tutors.filter(t => t.id !== id);
-                        // Also remove courses associated with this tutor
                         appState.courses = appState.courses.filter(c => c.tutorId !== id);
                     }
                     saveData();
                     renderAdminLists();
-                    renderCurrentPage(); // Re-render schedule to reflect changes
+                    renderCurrentPage();
                     showMessageBox(`${type} deleted.`, 'info');
                 });
             }
@@ -1290,7 +1909,6 @@
             const tutorCountryCodeInput = form.querySelector('#tutorCountryCode');
             const tutorPhoneInput = form.querySelector('#tutorPhone');
 
-            // New: Format phone number on input
             tutorPhoneInput.oninput = (e) => {
                 const digitsOnly = e.target.value.replace(/\D/g, '');
                 e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
@@ -1303,15 +1921,14 @@
                 form.querySelector('#tutorName').value = tutorToEdit.name;
                 form.querySelector('#tutorEmail').value = tutorToEdit.email;
                 
-                // New: Parse and set country code and phone number
                 const fullPhone = tutorToEdit.phone;
                 const phoneParts = fullPhone.split(' ');
                 if (phoneParts.length > 1 && phoneParts[0].startsWith('+')) {
-                    tutorCountryCodeInput.value = phoneParts[0].substring(1); // Remove '+'
-                    tutorPhoneInput.value = formatDisplayPhoneNumber(phoneParts.slice(1).join('')); // Format the rest
+                    tutorCountryCodeInput.value = phoneParts[0].substring(1);
+                    tutorPhoneInput.value = formatDigitsWithSpaces(phoneParts.slice(1).join(''));
                 } else {
                     tutorCountryCodeInput.value = '';
-                    tutorPhoneInput.value = formatDisplayPhoneNumber(fullPhone);
+                    tutorPhoneInput.value = formatDigitsWithSpaces(fullPhone);
                 }
 
                 tutorToEdit.skills.forEach(skill => addSkillRow(skillsList, skill));
@@ -1372,15 +1989,14 @@
                 });
             });
 
-            // New: Construct phone number for tutor
             const countryCode = form.querySelector('#tutorCountryCode').value.trim();
-            const phoneNumberDigits = form.querySelector('#tutorPhone').value.replace(/\D/g, ''); // Remove spaces for storage
+            const phoneNumberDigits = form.querySelector('#tutorPhone').value.replace(/\D/g, '');
             const fullPhoneNumber = countryCode ? `+${countryCode} ${phoneNumberDigits}` : phoneNumberDigits;
 
             const tutorData = { 
                 name: form.querySelector('#tutorName').value, 
                 email: form.querySelector('#tutorEmail').value,
-                phone: fullPhoneNumber, // New: Use formatted phone number
+                phone: fullPhoneNumber,
                 skills 
             };
 
@@ -1415,17 +2031,15 @@
             }
             populateSalaryPeriods(periodSelect);
             
-            // New: Retain selected period
             if (appState.selectedFilters.salaryPeriod) {
                 periodSelect.value = appState.selectedFilters.salaryPeriod;
             } else {
-                // Set default to current month if no period is selected
                 const currentMonth = new Date().toISOString().substring(0, 7);
                 if ([...periodSelect.options].some(option => option.value === currentMonth)) {
                     periodSelect.value = currentMonth;
                     appState.selectedFilters.salaryPeriod = currentMonth;
                 } else if (periodSelect.options.length > 0) {
-                    periodSelect.value = periodSelect.options[0].value; // Fallback to first available
+                    periodSelect.value = periodSelect.options[0].value;
                     appState.selectedFilters.salaryPeriod = periodSelect.options[0].value;
                 }
             }
@@ -1435,7 +2049,7 @@
                 appState.selectedFilters.salaryTutorId = tutorSelect.value;
                 renderSalaryDetails();
             };
-            periodSelect.onchange = () => { // New: Update state on change
+            periodSelect.onchange = () => {
                 appState.selectedFilters.salaryPeriod = periodSelect.value;
                 renderSalaryDetails();
             };
@@ -1656,13 +2270,230 @@
             container.onchange = e => { if (e.target.name === 'color') colorInput.value = e.target.value; };
         }
 
+        function populateCoursesPeriods(selectEl) {
+            const periods = [...new Set(appState.courses.map(c => c.date.substring(0, 7)))].sort().reverse();
+            // Add a default blank option if no periods exist
+            if (periods.length === 0) {
+                selectEl.innerHTML = '<option value="">No Months Available</option>';
+            } else {
+                selectEl.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
+            }
+        }
+
+        function populateSportTypeFilter(selectEl) {
+            let optionsHtml = '<option value="all">All Sport Types</option>';
+            optionsHtml += appState.sportTypes.map(st => `<option value="${st.id}">${st.name}</option>`).join('');
+            selectEl.innerHTML = optionsHtml;
+        }
+
+        // Modified to filter tutors based on selected sport type
+        function populateTutorFilter(selectEl, selectedSportTypeId = 'all') {
+            let filteredTutors = appState.tutors;
+            if (selectedSportTypeId !== 'all') {
+                filteredTutors = appState.tutors.filter(tutor => 
+                    tutor.skills.some(skill => skill.sportTypeId === selectedSportTypeId)
+                );
+            }
+            
+            let optionsHtml = '<option value="all">All Tutors</option>';
+            optionsHtml += filteredTutors.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            selectEl.innerHTML = optionsHtml;
+        }
+
+        function renderCoursesPage(container) {
+            container.innerHTML = `
+                <div class="card p-6 md:p-8">
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-slate-800">All Courses</h2>
+                        <div class="flex flex-wrap gap-4">
+                            <select id="coursesMonthFilter" class="form-select w-48"></select>
+                            <select id="coursesSportTypeFilter" class="form-select w-48"></select>
+                            <select id="coursesTutorFilter" class="form-select w-48"></select>
+                            <button id="addCourseBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="p-2">Date/Time</th>
+                                    <th class="p-2">Course</th>
+                                    <th class="p-2">Tutor</th>
+                                    <th class="p-2">Credits</th>
+                                    <th class="p-2">Attendees</th>
+                                    <th class="p-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="coursesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>`;
+            
+            const monthFilter = container.querySelector('#coursesMonthFilter');
+            const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
+            const tutorFilter = container.querySelector('#coursesTutorFilter');
+            const coursesTableBody = container.querySelector('#coursesTableBody');
+            const addCourseBtn = container.querySelector('#addCourseBtn');
+
+            populateCoursesPeriods(monthFilter);
+            populateSportTypeFilter(sportTypeFilter);
+            
+            // Bug Fix: Handle blank row in month filter if no courses exist for selected month
+            if (appState.selectedFilters.coursesPeriod && !Array.from(monthFilter.options).some(opt => opt.value === appState.selectedFilters.coursesPeriod)) {
+                appState.selectedFilters.coursesPeriod = monthFilter.options.length > 0 ? monthFilter.options[0].value : '';
+            }
+            if (appState.selectedFilters.coursesPeriod) {
+                monthFilter.value = appState.selectedFilters.coursesPeriod;
+            } else if (monthFilter.options.length > 0) {
+                // If no specific period is selected, default to the first available
+                monthFilter.value = monthFilter.options[0].value;
+                appState.selectedFilters.coursesPeriod = monthFilter.options[0].value;
+            }
+
+
+            if (appState.selectedFilters.coursesSportTypeId) {
+                sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId;
+            }
+
+            // Populate tutor filter based on initial sport type selection
+            populateTutorFilter(tutorFilter, sportTypeFilter.value);
+
+            // Ensure the selected tutor is still valid for the current sport type
+            if (appState.selectedFilters.coursesTutorId && !Array.from(tutorFilter.options).some(opt => opt.value === appState.selectedFilters.coursesTutorId)) {
+                appState.selectedFilters.coursesTutorId = 'all'; // Reset to 'all' if previously selected tutor is no longer valid
+            }
+            if (appState.selectedFilters.coursesTutorId) {
+                tutorFilter.value = appState.selectedFilters.coursesTutorId;
+            }
+
+
+            const updateCoursesTable = () => {
+                const selectedMonth = monthFilter.value;
+                const selectedSportType = sportTypeFilter.value;
+                const selectedTutor = tutorFilter.value;
+
+                let filteredCourses = appState.courses.filter(c => c.date.startsWith(selectedMonth));
+                
+                if (selectedSportType !== 'all') {
+                    filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
+                }
+                if (selectedTutor !== 'all') {
+                    filteredCourses = filteredCourses.filter(c => c.tutorId === selectedTutor);
+                }
+
+                filteredCourses.sort((a, b) => {
+                    const dateA = new Date(`${a.date}T${a.time}`);
+                    const dateB = new Date(`${b.date}T${b.time}`);
+                    return dateA - dateB;
+                });
+
+                coursesTableBody.innerHTML = filteredCourses.map(course => {
+                    const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                    const tutor = appState.tutors.find(t => t.id === course.tutorId);
+                    return `
+                        <tr class="border-b border-slate-100">
+                            <td class="p-2">${formatShortDateWithYear(course.date)}<br><span class="text-sm text-slate-500">${getTimeRange(course.time, course.duration)}</span></td>
+                            <td class="p-2 font-semibold">${sportType?.name || 'Unknown'}</td>
+                            <td class="p-2">${tutor?.name || 'Unknown'}</td>
+                            <td class="p-2">${course.credits}</td>
+                            <td class="p-2">${course.bookedBy.length}/${course.maxParticipants}</td>
+                            <td class="p-2 text-right space-x-2">
+                                <button class="edit-course-btn font-semibold text-indigo-600" data-id="${course.id}">Edit</button>
+                                <button class="delete-course-btn font-semibold text-red-600" data-id="${course.id}">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('') || `<tr><td colspan="6" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
+            
+                coursesTableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const courseToEdit = appState.courses.find(c => c.id === btn.dataset.id);
+                        openCourseModal(courseToEdit.date, courseToEdit);
+                    };
+                });
+
+                coursesTableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const courseId = btn.dataset.id;
+                        const course = appState.courses.find(c => c.id === courseId);
+                        handleDeleteCourseRequest(course); // MODIFIED
+                    };
+                });
+            };
+
+            monthFilter.onchange = () => {
+                appState.selectedFilters.coursesPeriod = monthFilter.value;
+                updateCoursesTable();
+            };
+            sportTypeFilter.onchange = () => {
+                appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
+                // Update tutor filter based on new sport type selection
+                populateTutorFilter(tutorFilter, sportTypeFilter.value);
+                appState.selectedFilters.coursesTutorId = 'all'; // Reset tutor selection
+                tutorFilter.value = 'all';
+                updateCoursesTable();
+            };
+            tutorFilter.onchange = () => {
+                appState.selectedFilters.coursesTutorId = tutorFilter.value;
+                updateCoursesTable();
+            };
+
+            addCourseBtn.onclick = () => {
+                const defaultDateForNewCourse = monthFilter.value ? `${monthFilter.value}-01` : new Date().toISOString().split('T')[0];
+                openCourseModal(defaultDateForNewCourse);
+            };
+
+            updateCoursesTable();
+        }
+
+        function openMemberBookingHistoryModal(member) {
+            const memberBookings = appState.courses.filter(c => c.bookedBy.includes(member.id)).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            DOMElements.memberBookingHistoryModal.innerHTML = `
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                    <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">${member.name}'s Booking History</h2>
+                    <p class="text-center text-slate-500 mb-6">${member.email} | ${formatDisplayPhoneNumber(member.phone)}</p>
+                    <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                        ${memberBookings.length === 0 ? '<p class="text-slate-500 text-center">This member has no booking history.</p>' :
+                        memberBookings.map(course => {
+                            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                            const isAttended = course.attendedBy.includes(member.id);
+                            return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-slate-800">${sportType.name}</p>
+                                    <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
+                                    <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
+                                </div>
+                                ${isAttended 
+                                    ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
+                                    : `<button class="cancel-booking-btn-member-history text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}" data-member-id="${member.id}">Cancel</button>`
+                                }
+                            </div>`
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+            DOMElements.memberBookingHistoryModal.querySelectorAll('.cancel-booking-btn-member-history').forEach(btn => {
+                btn.onclick = () => {
+                    const course = appState.courses.find(c => c.id === btn.dataset.courseId);
+                    const memberId = btn.dataset.memberId;
+                    handleCancelBooking(course, memberId);
+                };
+            });
+
+            openModal(DOMElements.memberBookingHistoryModal);
+        }
+
         // --- Initialization ---
         const init = () => {
             loadData();
             
-            // Force activePage to 'schedule' on every initial load/refresh
-            // This prevents loading a previously active restricted page for a different user type.
-            appState.activePage = 'schedule';
+            if (appState.currentUser?.type === 'member') {
+                appState.activePage = 'schedule';
+            } else {
+                appState.activePage = 'schedule';
+            }
 
             if (appState.currentUser) {
                 DOMElements.authPage.classList.add('hidden');
@@ -1702,19 +2533,48 @@
             DOMElements.logoutBtn.onclick = handleLogout;
             DOMElements.navButtons.forEach(btn => btn.onclick = () => switchPage(btn.dataset.page));
             
+            DOMElements.cancelCopyBtn.onclick = cancelCopy;
+
             document.body.addEventListener('click', e => {
-                // Check if the clicked element or its closest parent is a modal-close-btn
+                // Modal closing logic
                 const closeButton = e.target.closest('.modal-close-btn');
                 if (closeButton) {
-                    // Find the closest modal-backdrop parent and close it
                     const modalToClose = closeButton.closest('.modal-backdrop');
-                    if (modalToClose) {
-                        closeModal(modalToClose);
-                    }
-                } else if (e.target.matches('.modal-backdrop')) {
-                    // If the click is directly on the modal-backdrop itself, close it
+                    if (modalToClose) closeModal(modalToClose);
+                    return;
+                } 
+                if (e.target.matches('.modal-backdrop')) {
                     closeModal(e.target);
+                    return;
                 }
+
+                // Handle clicks during copy mode
+                if (appState.copyMode.active) {
+                    const { type, targetDate } = appState.copyMode;
+
+                    if (type === 'day') {
+                        const sourceDayColumn = e.target.closest('.copy-mode-source');
+                        if (sourceDayColumn) {
+                            const sourceDate = sourceDayColumn.querySelector('.courses-container').dataset.date;
+                            if (sourceDate !== targetDate) {
+                                performCopy('day', sourceDate, targetDate);
+                            }
+                        }
+                    } else if (type === 'class') {
+                        const sourceClassEl = e.target.closest('.copy-mode-source-class');
+                        if (sourceClassEl) {
+                            const courseId = sourceClassEl.id;
+                            const courseToCopy = appState.courses.find(c => c.id === courseId);
+                            if (courseToCopy && courseToCopy.date !== targetDate) {
+                                performCopy('class', courseToCopy, targetDate);
+                            }
+                        }
+                    }
+                    e.stopPropagation();
+                    return; 
+                }
+
+                // Regular click handlers
                 const addBtn = e.target.closest('.add-course-button');
                 if (addBtn && appState.currentUser?.type === 'owner') {
                     openCourseModal(addBtn.dataset.date);
