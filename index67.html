@@ -60,7 +60,6 @@
             transform: scale(1.01); 
             box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
         }
-        /* MODIFIED: Booked by member glow effect */
         .course-block.booked-by-member {
             animation: glowing-yellow 1.5s infinite;
             border: 1px solid #facc15;
@@ -107,43 +106,6 @@
             border-radius: 0.25rem;
             transition: width 0.5s ease-in-out;
         }
-
-        /* Slider for Schedule Page */
-        .date-slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 8px;
-            background: #cbd5e1; /* slate-300 */
-            outline: none;
-            opacity: 0.7;
-            -webkit-transition: .2s;
-            transition: opacity .2s;
-            border-radius: 4px;
-        }
-
-        .date-slider:hover {
-            opacity: 1;
-        }
-
-        .date-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #4f46e5; /* indigo-600 */
-            cursor: grab;
-            box-shadow: 0 0 0 3px #c7d2fe;
-        }
-
-        .date-slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #4f46e5; /* indigo-600 */
-            cursor: grab;
-            box-shadow: 0 0 0 3px #c7d2fe;
-        }
         
         /* --- Copy/Paste & Delete Styles --- */
         @keyframes glowing-yellow {
@@ -182,6 +144,10 @@
         .notified-member {
             text-decoration: line-through;
             color: #94a3b8; /* slate-400 */
+        }
+        
+        .time-slot-editable {
+            cursor: ns-resize;
         }
 
     </style>
@@ -283,9 +249,8 @@
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- App State & Constants ---
-        const OWNER_SCHEDULE_DAYS = 60; // Total days for owner view (30 past, 30 future)
-        const MEMBER_PAST_DAYS = 7; // Days to show in the past for member view
-        const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+        const MEMBER_PAST_DAYS = 0; 
+        const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#FF007F', '#00BFFF', '#32CD32', '#FFD700', '#8A2BE2', '#FF4500', '#20B2AA', '#DAA520', '#4682B4', '#FF69B4', '#7CFC00', '#ADFF2F', '#DC143C', '#BA55D3'];
         
         let appState = { 
             courses: [], 
@@ -301,11 +266,13 @@
                 coursesSportTypeId: 'all',
                 coursesTutorId: 'all'
             },
-            ownerScheduleInitialScrollIndex: null,
-            copyMode: { // State for copy/paste
+            ownerPastDaysVisible: 0,
+            lastViewedDate: null, 
+            copyMode: { 
                 active: false,
-                type: null, // 'class' or 'day'
-                targetDate: null, // The day to paste TO
+                type: null, 
+                sourceId: null, 
+                targetDate: null,
             }
         };
         let emblaApi = null;
@@ -333,7 +300,7 @@
             changePasswordModal: document.getElementById('changePasswordModal'),
             confirmationModal: document.getElementById('confirmationModal'),
             memberBookingHistoryModal: document.getElementById('memberBookingHistoryModal'),
-            deleteCourseNotifyModal: document.getElementById('deleteCourseNotifyModal'), // NEW
+            deleteCourseNotifyModal: document.getElementById('deleteCourseNotifyModal'),
             cancelCopyBtn: document.getElementById('cancelCopyBtn')
         };
 
@@ -349,9 +316,11 @@
         const loadData = () => {
             const data = localStorage.getItem('studioPulseData');
             if (data) { 
-                appState = JSON.parse(data); 
-                // Ensure copyMode is reset on load
-                appState.copyMode = { active: false, type: null, targetDate: null };
+                const loadedState = JSON.parse(data);
+                appState = { ...appState, ...loadedState }; 
+                appState.copyMode = { active: false, type: null, sourceId: null, targetDate: null };
+                appState.ownerPastDaysVisible = 0;
+                appState.lastViewedDate = null;
             } else {
                 // Default data if nothing in localStorage
                 appState.sportTypes = [
@@ -372,7 +341,6 @@
                     { id: 'c5', sportTypeId: 'st1', tutorId: 't1', duration: 60, date: '2025-06-27', time: '07:00', credits: 1, maxParticipants: 15, bookedBy: [], attendedBy: [] },
                 ];
                 appState.members = [
-                    // Test Accounts
                     { id: 'm_owner', name: 'Studio Owner', email: 'owner@gmail.com', password: '001234', phone: '+1 555000000', type: 'owner' },
                     { id: 'm_member1', name: 'Perry Yuen', email: 'member1@gmail.com', password: '001234', phone: '+852 98001055', credits: 50, initialCredits: 50, creditCost: 80, purchaseAmount: 4000, monthlyPlan: false, type: 'member', lastBooking: null, expiryDate: '2026-06-30' },
                     { id: 'm_member2', name: 'Irene Kwok', email: 'member2@gmail.com', password: '001234', phone: '+852 94909142', monthlyPlan: true, monthlyPlanAmount: 980, planStartDate: '2025-06-01', monthlyCreditValue: 25, type: 'member', lastBooking: null, expiryDate: null }
@@ -395,10 +363,8 @@
         
         const formatShortDateWithYear = (isoString) => {
             if (!isoString) return 'N/A';
-            const date = new Date(isoString);
-            const options = { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' };
-            const parts = date.toLocaleDateString('en-US', options).split(' ');
-            return `${parts[1].replace(',', '')} ${parts[0]}, ${parts[2]}`;
+            const date = new Date(isoString + 'T00:00:00Z'); // Ensure date is parsed as UTC
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(/ /g, ' ');
         };
 
         const formatDisplayPhoneNumber = (fullPhoneNumber) => {
@@ -417,7 +383,7 @@
             const cleanedDigits = digitsString.replace(/\D/g, '');
             return cleanedDigits.replace(/(\d{4})(?=\d)/g, '$1 ');
         };
-
+        
         // --- Auth & UI Visibility ---
         const handleLogin = (email, password) => {
             const user = appState.members.find(m => m.email === email && m.password === password);
@@ -439,7 +405,8 @@
             sessionStorage.removeItem('studioPulseUser');
             DOMElements.appWrapper.classList.add('hidden');
             DOMElements.authPage.classList.remove('hidden');
-            appState.ownerScheduleInitialScrollIndex = null;
+            appState.lastViewedDate = null; 
+            appState.ownerPastDaysVisible = 0;
         };
         const updateUIVisibility = () => {
             const isOwner = appState.currentUser?.type === 'owner';
@@ -561,12 +528,9 @@
             };
         };
 
-        // NEW: Handles the logic for deleting a course, showing the correct modal.
         function handleDeleteCourseRequest(course) {
-            // Refund credits for members who booked but did not attend
             course.bookedBy.forEach(memberId => {
                 const member = appState.members.find(m => m.id === memberId);
-                // Only refund if member exists, is not on monthly plan, and has not attended
                 if (member && !member.monthlyPlan && !course.attendedBy.includes(memberId)) {
                     member.credits = parseFloat(member.credits) + parseFloat(course.credits);
                 }
@@ -577,16 +541,16 @@
             } else {
                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                 showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
+                    appState.lastViewedDate = course.date;
                     appState.courses = appState.courses.filter(c => c.id !== course.id);
                     saveData();
-                    closeModal(DOMElements.courseModal); // Close the edit modal after deletion
+                    closeModal(DOMElements.courseModal);
                     renderCurrentPage();
                     showMessageBox('Course deleted.', 'info');
                 });
             }
         }
 
-        // NEW: Opens the modal for notifying members before deletion.
         function openDeleteCourseNotifyModal(course) {
             const bookedMembers = course.bookedBy.map(id => appState.members.find(m => m.id === id)).filter(Boolean);
 
@@ -598,12 +562,22 @@
                         <p class="text-slate-500 mt-2 mb-6">This course has ${bookedMembers.length} booking(s). Please copy the message for each member to notify them of the cancellation before deleting the course.</p>
                     </div>
                     <div id="notify-members-list" class="space-y-3 max-h-60 overflow-y-auto p-4 bg-slate-50 rounded-lg">
-                        ${bookedMembers.map(member => `
+                        ${bookedMembers.map(member => {
+                            const phoneDigits = member.phone ? member.phone.replace(/\D/g, '').slice(-8) : '';
+                            return `
                             <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm" data-member-id="${member.id}">
-                                <span class="font-semibold text-slate-700 member-name">${member.name}</span>
+                                <div class="flex-grow">
+                                    <span class="font-semibold text-slate-700 member-name">${member.name}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm text-slate-500">${formatDisplayPhoneNumber(member.phone)}</span>
+                                        <button class="copy-phone-btn text-slate-400 hover:text-indigo-600" data-phone-digits="${phoneDigits}" title="Copy Phone Number">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2H6zM8 7a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
                                 <button class="copy-notify-msg-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-full transition">Copy WhatsApp Msg</button>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                     <div class="flex justify-center mt-8">
                         <button id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Course</button>
@@ -618,7 +592,7 @@
                     const member = appState.members.find(m => m.id === memberId);
                     
                     const message = createWhatsAppMessage(member, course);
-                    copyTextToClipboard(message);
+                    copyTextToClipboard(message, 'WhatsApp message copied to clipboard!');
 
                     memberItem.querySelector('.member-name').classList.add('notified-member');
                     btn.textContent = 'Copied!';
@@ -626,7 +600,6 @@
                     btn.classList.remove('bg-green-500', 'hover:bg-green-600');
                     btn.classList.add('bg-slate-300', 'cursor-default');
 
-                    // Check if all members are notified to enable the delete button
                     const allNotified = modal.querySelectorAll('.copy-notify-msg-btn:not(:disabled)').length === 0;
                     if (allNotified) {
                         const finalDeleteBtn = modal.querySelector('#final-delete-btn');
@@ -635,12 +608,21 @@
                     }
                 };
             });
+            
+            modal.querySelectorAll('.copy-phone-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const phoneNumber = btn.dataset.phoneDigits;
+                    copyTextToClipboard(phoneNumber, `Copied ${phoneNumber} to clipboard!`);
+                };
+            });
 
             modal.querySelector('#final-delete-btn').onclick = () => {
+                appState.lastViewedDate = course.date;
                 appState.courses = appState.courses.filter(c => c.id !== course.id);
                 saveData();
                 closeModal(modal);
-                closeModal(DOMElements.courseModal); // Close the edit modal after deletion
+                closeModal(DOMElements.courseModal);
                 renderCurrentPage();
                 showMessageBox('Course deleted and members notified.', 'success');
             };
@@ -648,11 +630,10 @@
             openModal(modal);
         }
 
-        // NEW: Creates the formatted WhatsApp message.
         function createWhatsAppMessage(member, course) {
             const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
             const tutor = appState.tutors.find(t => t.id === course.tutorId);
-            const bookingLink = "https://www.studiopulse.app/schedule"; // Example link
+            const bookingLink = "https://www.studiopulse.app/schedule";
 
             const message = `
 👋 Hi *${member.name}*,
@@ -674,8 +655,7 @@ Thank you for your understanding.
             return message;
         }
 
-        // NEW: Helper to copy text to the clipboard.
-        function copyTextToClipboard(text) {
+        function copyTextToClipboard(text, successMessage) {
             const textArea = document.createElement("textarea");
             textArea.value = text;
             textArea.style.top = "0";
@@ -687,19 +667,18 @@ Thank you for your understanding.
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
-                    showMessageBox('WhatsApp message copied to clipboard!', 'success');
+                    showMessageBox(successMessage, 'success');
                 } else {
-                    showMessageBox('Could not copy message.', 'error');
+                    showMessageBox('Could not copy text.', 'error');
                 }
             } catch (err) {
-                showMessageBox('Could not copy message.', 'error');
+                showMessageBox('Could not copy text.', 'error');
             }
             document.body.removeChild(textArea);
         }
         
         // --- Course, Booking, and Member List Modals (Existing) ---
         function openJoinedMembersModal(course) {
-            // FIX: Prevent modal from opening during copy mode
             if (appState.copyMode.active) return;
             
             DOMElements.joinedMembersModal.innerHTML = `
@@ -710,6 +689,14 @@ Thank you for your understanding.
                     <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"></div>
                     <h3 class="text-xl font-bold text-slate-700 mb-4">Booked Members</h3>
                     <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto"></div>
+                    
+                    <div class="mt-8 border-t pt-6">
+                        <h3 class="text-xl font-bold text-slate-700 mb-4">Add Walk-in Member</h3>
+                        <div class="relative">
+                            <input type="text" id="addMemberSearchInput" placeholder="Search members to add..." class="form-input w-full">
+                            <div id="addMemberSearchResults" class="absolute w-full bg-white border border-slate-300 rounded-lg mt-1 z-20 max-h-48 overflow-y-auto shadow-lg hidden"></div>
+                        </div>
+                    </div>
                 </div>`;
             const listEl = DOMElements.joinedMembersModal.querySelector('#joinedMembersList');
             const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
@@ -739,12 +726,13 @@ Thank you for your understanding.
             }
             
             const netRevenue = grossRevenue - tutorSalary;
+            const netRevenueColor = netRevenue >= 0 ? 'text-slate-800' : 'text-red-600';
 
             revenueEl.innerHTML = `
                 <div class="flex justify-center gap-4">
                     <div><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-green-600">${formatCurrency(grossRevenue)}</p></div>
                     <div><p class="text-sm text-slate-500">Tutor Payout</p><p class="text-2xl font-bold text-red-600">(${formatCurrency(tutorSalary)})</p></div>
-                    <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(netRevenue)}</p></div>
+                    <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
                 </div>`;
 
             if (course.bookedBy.length === 0) {
@@ -767,6 +755,7 @@ Thank you for your understanding.
 
                 listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                     checkbox.onchange = (e) => {
+                        appState.lastViewedDate = course.date;
                         const memberId = e.target.dataset.memberId;
                         const courseIndex = appState.courses.findIndex(c => c.id === course.id);
                         if (courseIndex !== -1) {
@@ -783,6 +772,75 @@ Thank you for your understanding.
                     };
                 });
             }
+            
+            const addMemberSearchInput = DOMElements.joinedMembersModal.querySelector('#addMemberSearchInput');
+            const addMemberSearchResults = DOMElements.joinedMembersModal.querySelector('#addMemberSearchResults');
+
+            addMemberSearchInput.oninput = () => {
+                const searchTerm = addMemberSearchInput.value.toLowerCase().trim();
+                if (searchTerm.length < 1) {
+                    addMemberSearchResults.innerHTML = '';
+                    addMemberSearchResults.classList.add('hidden');
+                    return;
+                }
+
+                const unbookedMembers = appState.members.filter(m => 
+                    m.type !== 'owner' &&
+                    !course.bookedBy.includes(m.id) && (
+                        m.name.toLowerCase().includes(searchTerm) ||
+                        m.email.toLowerCase().includes(searchTerm) ||
+                        (m.phone && m.phone.includes(searchTerm)))
+                );
+
+                if (unbookedMembers.length > 0) {
+                    addMemberSearchResults.innerHTML = unbookedMembers.map(member => `
+                        <div class="p-3 hover:bg-slate-100 cursor-pointer flex justify-between items-center add-member-result-item" data-member-id="${member.id}">
+                            <div>
+                                <p class="font-semibold text-slate-800">${member.name}</p>
+                                <p class="text-sm text-slate-500">${member.email}</p>
+                            </div>
+                            <button class="bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold py-1 px-3 rounded-full pointer-events-none">Add</button>
+                        </div>
+                    `).join('');
+                    addMemberSearchResults.classList.remove('hidden');
+                } else {
+                    addMemberSearchResults.innerHTML = '<p class="p-3 text-slate-500 text-center">No members found.</p>';
+                    addMemberSearchResults.classList.remove('hidden');
+                }
+            };
+
+            addMemberSearchResults.onclick = (e) => {
+                const target = e.target.closest('.add-member-result-item');
+                if (target) {
+                    const memberId = target.dataset.memberId;
+                    const courseToUpdate = appState.courses.find(c => c.id === course.id);
+                    const memberIndex = appState.members.findIndex(m => m.id === memberId);
+
+                    if (courseToUpdate.bookedBy.length >= courseToUpdate.maxParticipants) {
+                        showMessageBox('Cannot add member, class is full.', 'error');
+                        return;
+                    }
+                    
+                    if (memberIndex !== -1 && !appState.members[memberIndex].monthlyPlan) {
+                        if (parseFloat(appState.members[memberIndex].credits) < parseFloat(courseToUpdate.credits)) {
+                            showMessageBox('Member has insufficient credits.', 'error');
+                            return;
+                        }
+                        appState.members[memberIndex].credits -= parseFloat(courseToUpdate.credits);
+                    }
+
+                    if (!courseToUpdate.bookedBy.includes(memberId)) {
+                        courseToUpdate.bookedBy.push(memberId);
+                        appState.lastViewedDate = course.date;
+                        saveData();
+                        showMessageBox('Member added to course.', 'success');
+                        // MODIFIED: Re-render the main page and then re-open the modal
+                        renderCurrentPage();
+                        openJoinedMembersModal(courseToUpdate); 
+                    }
+                }
+            };
+
             openModal(DOMElements.joinedMembersModal);
         }
 
@@ -818,6 +876,7 @@ Thank you for your understanding.
             
             const confirmBtn = DOMElements.bookingModal.querySelector('#confirmBookingBtn');
             confirmBtn.onclick = () => {
+                appState.lastViewedDate = course.date;
                 const courseToBook = appState.courses.find(c => c.id === course.id);
                 const memberIndex = appState.members.findIndex(m => m.id === appState.currentUser.id);
 
@@ -844,6 +903,7 @@ Thank you for your understanding.
 
         function handleCancelBooking(course, memberIdToUpdate = null) {
             showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
+                appState.lastViewedDate = course.date;
                 const courseToCancel = appState.courses.find(c => c.id === course.id);
                 const memberToUpdate = appState.members.find(m => m.id === (memberIdToUpdate || appState.currentUser.id));
 
@@ -944,7 +1004,7 @@ Thank you for your understanding.
                 form.querySelector('#courseMaxParticipants').value = courseToEdit.maxParticipants;
                 form.querySelector('#courseDate').value = courseToEdit.date;
                 deleteBtn.classList.remove('hidden');
-                deleteBtn.onclick = () => handleDeleteCourseRequest(courseToEdit); // MODIFIED
+                deleteBtn.onclick = () => handleDeleteCourseRequest(courseToEdit);
             } else {
                 modal.querySelector('#courseModalTitle').textContent = 'Add New Course';
                 modal.querySelector('.submit-btn').textContent = 'Add Course';
@@ -952,6 +1012,25 @@ Thank you for your understanding.
                 updateTutorDropdown();
                 const defaultDate = dateIso || new Date().toISOString().split('T')[0];
                 form.querySelector('#courseDate').value = defaultDate;
+                
+                // MODIFIED: Dynamic default start time based on last class of the day
+                const coursesOnDay = appState.courses
+                    .filter(c => c.date === defaultDate)
+                    .sort((a, b) => a.time.localeCompare(b.time));
+
+                if (coursesOnDay.length > 0) {
+                    const lastCourse = coursesOnDay[coursesOnDay.length - 1];
+                    const [hours, minutes] = lastCourse.time.split(':').map(Number);
+                    const lastCourseStartTime = new Date();
+                    lastCourseStartTime.setHours(hours, minutes, 0, 0);
+                    const nextAvailableTime = new Date(lastCourseStartTime.getTime() + lastCourse.duration * 60000);
+                    
+                    const defaultHours = String(nextAvailableTime.getHours()).padStart(2, '0');
+                    const defaultMinutes = String(nextAvailableTime.getMinutes()).padStart(2, '0');
+                    form.querySelector('#courseTime').value = `${defaultHours}:${defaultMinutes}`;
+                } else {
+                    form.querySelector('#courseTime').value = '09:00';
+                }
             }
             form.onsubmit = handleCourseFormSubmit;
             openModal(modal);
@@ -960,6 +1039,7 @@ Thank you for your understanding.
         function handleCourseFormSubmit(e) {
             e.preventDefault();
             const form = e.target;
+            appState.lastViewedDate = form.querySelector('#courseDate').value;
             const courseId = form.querySelector('#courseModalId').value;
             const courseData = {
                 sportTypeId: form.querySelector('#courseSportType').value,
@@ -1009,7 +1089,6 @@ Thank you for your understanding.
                 mainAction = () => { if (!appState.copyMode.active) openJoinedMembersModal(course); };
             } else if (isBookedByCurrentUser) {
                 el.classList.add('booked-by-member');
-                // The cancel button is now handled by the interactive "BOOKED" button at the bottom.
             } else if (appState.currentUser) {
                 el.classList.add('cursor-pointer');
                 mainAction = () => openBookingModal(course);
@@ -1024,7 +1103,7 @@ Thank you for your understanding.
                     <p class="text-sm opacity-90 mt-1">${tutor?.name || 'Unknown Tutor'}</p>
                 </div>
                 <div class="mt-3 space-y-2">
-                    <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>
+                    <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot ${isOwner ? 'time-slot-editable' : ''}">${getTimeRange(course.time, course.duration)}</p>
                     <div class="flex justify-between items-center text-white/95 text-xs">
                         <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>${course.bookedBy.length}/${course.maxParticipants}</span>
                         <span>${course.duration} mins</span>
@@ -1039,7 +1118,7 @@ Thank you for your understanding.
                 `;
 
             el.addEventListener('click', (e) => {
-                if (!e.target.closest('button')) {
+                if (!e.target.closest('button') && !e.target.classList.contains('time-slot-editable')) {
                     mainAction();
                 }
             });
@@ -1049,6 +1128,37 @@ Thank you for your understanding.
                     e.stopPropagation();
                     openCourseModal(course.date, course);
                 };
+                
+                const timeSlotEl = el.querySelector('.time-slot-editable');
+                if (timeSlotEl) {
+                    timeSlotEl.addEventListener('wheel', (e) => {
+                        e.preventDefault();
+                        const courseToUpdate = appState.courses.find(c => c.id === course.id);
+                        if (!courseToUpdate) return;
+                        
+                        const [hours, minutes] = courseToUpdate.time.split(':').map(Number);
+                        let totalMinutes = hours * 60 + minutes;
+                        
+                        if (e.deltaY < 0) {
+                            totalMinutes -= 15;
+                        } else {
+                            totalMinutes += 15;
+                        }
+
+                        if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
+                        if (totalMinutes >= 24 * 60) totalMinutes = 0;
+
+                        const newHours = Math.floor(totalMinutes / 60);
+                        const newMinutes = totalMinutes % 60;
+                        
+                        courseToUpdate.time = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                        
+                        appState.lastViewedDate = course.date;
+                        saveData();
+                        renderCurrentPage();
+                    });
+                }
+
             } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
                 const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
                 if (cancelButton) {
@@ -1068,21 +1178,11 @@ Thank you for your understanding.
             return el;
         }
 
-        function _renderScheduleCarousel(container, startDate, endDate, initialScrollIndex, showAddButton) {
-            const today = new Date();
-            today.setUTCHours(0, 0, 0, 0);
-
-            const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-
+        function _renderScheduleCarousel(container, startDate, endDate, datesArray, initialScrollIndex, showAddButton) {
             container.innerHTML = `
                 <div class="relative">
                     <div class="embla overflow-hidden card p-4 md:p-6">
                         <div class="embla__viewport"><div class="embla__container flex -mx-2"></div></div>
-                    </div>
-                    <div class="flex items-center justify-center mt-6 gap-4">
-                        <span id="sliderDateStart" class="text-sm font-semibold text-slate-600"></span>
-                        <input type="range" id="dateSlider" class="date-slider flex-grow" min="0" max="${totalDays - 1}" value="${initialScrollIndex}">
-                        <span id="sliderDateEnd" class="text-sm font-semibold text-slate-600"></span>
                     </div>
                     <button class="embla__button embla__button--prev absolute left-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
                     <button class="embla__button embla__button--next absolute right-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
@@ -1091,24 +1191,18 @@ Thank you for your understanding.
             const emblaContainer = container.querySelector('.embla__container');
             emblaContainer.innerHTML = '';
             let content = '';
-            const datesArray = [];
 
-            for (let i = 0; i < totalDays; i++) {
-                const date = new Date(startDate.getTime());
-                date.setUTCDate(startDate.getUTCDate() + i);
-                const dateIso = getIsoDate(date);
-                datesArray.push(dateIso);
-
-                const copyButtonsHTML = showAddButton ? `
+            datesArray.forEach(dateIso => {
+                const date = new Date(dateIso + 'T12:00:00Z'); 
+                 const copyButtonsHTML = showAddButton ? `
                     <div class="mt-2 grid grid-cols-2 gap-2">
                         <button data-date="${dateIso}" class="copy-class-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Class</button>
                         <button data-date="${dateIso}" class="copy-day-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Day</button>
                     </div>
                 ` : '';
                 
-                // MODIFIED: Removed h-[75vh] from day-column and flex-grow/overflow-y-auto from courses-container
                 content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container px-1 py-1"></div><div class="add-controls-wrapper mt-auto pt-4">${showAddButton ? `<button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}</div></div></div>`;
-            }
+            });
             emblaContainer.innerHTML = content;
 
             const coursesByDate = appState.courses.reduce((acc, course) => { (acc[course.date] = acc[course.date] || []).push(course); return acc; }, {});
@@ -1121,42 +1215,49 @@ Thank you for your understanding.
                 dailyCourses.sort((a, b) => a.time.localeCompare(b.time)).forEach(course => cont.appendChild(createCourseElement(course)));
             });
 
-            emblaApi = EmblaCarousel(container.querySelector('.embla__viewport'), { loop: false, align: "start", dragFree: true });
-            const prevBtn = container.querySelector(".embla__button--prev"), nextBtn = container.querySelector(".embla__button--next");
-            const updateButtons = () => { if(emblaApi) { prevBtn.disabled = !emblaApi.canScrollPrev(); nextBtn.disabled = !emblaApi.canScrollNext(); } };
-            prevBtn.onclick = () => emblaApi.scrollPrev(); nextBtn.onclick = () => emblaApi.scrollNext();
-            emblaApi.on('select', updateButtons).on('reInit', updateButtons); updateButtons();
+            const emblaNode = container.querySelector('.embla__viewport');
+            emblaApi = EmblaCarousel(emblaNode, { loop: false, align: "start", dragFree: true, startIndex: initialScrollIndex });
+            
+            const prevBtn = container.querySelector(".embla__button--prev");
+            const nextBtn = container.querySelector(".embla__button--next");
+            
+            const isOwner = appState.currentUser?.type === 'owner';
+            
+            const scrollPrev = () => {
+                if (isOwner && !appState.copyMode.active && !emblaApi.canScrollPrev()) {
+                    if (appState.ownerPastDaysVisible < 30) {
+                        // MODIFIED: Set last viewed date to the first visible date before re-rendering
+                        appState.lastViewedDate = datesArray[0];
+                        appState.ownerPastDaysVisible += 7;
+                        renderOwnerSchedule(document.getElementById('page-schedule'));
+                    }
+                } else {
+                    emblaApi.scrollPrev();
+                }
+            };
 
-            const dateSlider = container.querySelector('#dateSlider');
-            const sliderDateStart = container.querySelector('#sliderDateStart');
-            const sliderDateEnd = container.querySelector('#sliderDateEnd');
-
-            const updateSliderLabels = () => {
-                sliderDateStart.textContent = formatShortDateWithYear(getIsoDate(startDate));
-                sliderDateEnd.textContent = formatShortDateWithYear(getIsoDate(endDate));
+            const updateButtons = () => { 
+                if(!emblaApi) return;
+                const canScrollPrev = emblaApi.canScrollPrev();
+                const canScrollNext = emblaApi.canScrollNext();
+                
+                prevBtn.disabled = !canScrollPrev && !(isOwner && appState.ownerPastDaysVisible < 30 && !appState.copyMode.active);
+                nextBtn.disabled = !canScrollNext;
             };
             
-            dateSlider.value = initialScrollIndex;
-            emblaApi.scrollTo(initialScrollIndex);
-            updateSliderLabels();
-
-            dateSlider.oninput = (e) => {
-                const index = parseInt(e.target.value);
-                emblaApi.scrollTo(index);
-                if (appState.currentUser?.type === 'owner') {
-                    appState.ownerScheduleInitialScrollIndex = index;
-                }
-            };
-
-            emblaApi.on('scroll', () => {
-                if (emblaApi) {
-                    const newIndex = emblaApi.selectedScrollSnap();
-                    dateSlider.value = newIndex;
-                    if (appState.currentUser?.type === 'owner') {
-                        appState.ownerScheduleInitialScrollIndex = newIndex;
-                    }
+            emblaApi.on('select', () => {
+                updateButtons();
+                const currentSlideNode = emblaApi.slideNodes()[emblaApi.selectedScrollSnap()];
+                if (currentSlideNode) {
+                    appState.lastViewedDate = currentSlideNode.querySelector('.courses-container').dataset.date;
                 }
             });
+            emblaApi.on('reInit', updateButtons);
+            
+            prevBtn.onclick = scrollPrev;
+            nextBtn.onclick = () => emblaApi.scrollNext();
+            
+            updateButtons();
             
             container.querySelectorAll('.copy-class-btn').forEach(btn => {
                 btn.onclick = (e) => startCopy('class', e.currentTarget.dataset.date);
@@ -1169,19 +1270,27 @@ Thank you for your understanding.
         function renderOwnerSchedule(container) {
             const today = new Date();
             today.setUTCHours(0, 0, 0, 0); 
-            const ownerStartDate = new Date(today.getTime());
-            ownerStartDate.setUTCDate(today.getUTCDate() - OWNER_SCHEDULE_DAYS / 2);
+            
+            const daysToLookBack = appState.copyMode.active ? 30 : appState.ownerPastDaysVisible;
 
-            const ownerEndDate = new Date(today.getTime());
-            ownerEndDate.setUTCDate(today.getUTCDate() + OWNER_SCHEDULE_DAYS / 2 - 1);
+            const ownerStartDate = new Date();
+            ownerStartDate.setUTCDate(today.getUTCDate() - daysToLookBack);
 
-            let initialScrollIndex = 0;
-            const diffDays = Math.round((today.getTime() - ownerStartDate.getTime()) / (24 * 60 * 60 * 1000));
-            initialScrollIndex = Math.max(0, Math.min(diffDays, OWNER_SCHEDULE_DAYS - 1));
+            const ownerEndDate = new Date();
+            ownerEndDate.setUTCDate(today.getUTCDate() + 30);
 
-            const finalScrollIndex = appState.ownerScheduleInitialScrollIndex !== null ? appState.ownerScheduleInitialScrollIndex : initialScrollIndex;
+            const datesArray = [];
+            for (let d = new Date(ownerStartDate); d <= ownerEndDate; d.setUTCDate(d.getUTCDate() + 1)) {
+                datesArray.push(getIsoDate(d));
+            }
 
-            _renderScheduleCarousel(container, ownerStartDate, ownerEndDate, finalScrollIndex, true);
+            const targetDate = appState.lastViewedDate || getIsoDate(today);
+            let initialScrollIndex = datesArray.indexOf(targetDate);
+            if (initialScrollIndex === -1) {
+                initialScrollIndex = daysToLookBack;
+            }
+
+            _renderScheduleCarousel(container, ownerStartDate, ownerEndDate, datesArray, initialScrollIndex, true);
         }
 
         function renderMemberSchedulePage(container) {
@@ -1201,31 +1310,48 @@ Thank you for your understanding.
                 }
             }
             
-            let initialScrollIndex = 0;
-            const diffDays = Math.round((today.getTime() - memberStartDate.getTime()) / (24 * 60 * 60 * 1000));
-            initialScrollIndex = Math.max(0, diffDays);
+            const datesArray = [];
+            for (let d = new Date(memberStartDate); d <= memberEndDate; d.setUTCDate(d.getUTCDate() + 1)) {
+                datesArray.push(getIsoDate(d));
+            }
 
-            _renderScheduleCarousel(container, memberStartDate, memberEndDate, initialScrollIndex, false);
+            const targetDate = appState.lastViewedDate || getIsoDate(today);
+            let initialScrollIndex = datesArray.indexOf(targetDate);
+            if (initialScrollIndex === -1) {
+                initialScrollIndex = MEMBER_PAST_DAYS;
+            }
+
+            _renderScheduleCarousel(container, memberStartDate, memberEndDate, datesArray, initialScrollIndex, false);
         }
         
-        // --- Copy/Paste Logic (Corrected "Copy From" Logic) ---
         function startCopy(type, targetDate) {
             if (appState.copyMode.active) {
                 cancelCopy();
+                return;
             }
+            appState.lastViewedDate = targetDate;
             appState.copyMode.active = true;
             appState.copyMode.type = type;
             appState.copyMode.targetDate = targetDate;
             DOMElements.cancelCopyBtn.classList.remove('hidden');
+            
+            if (appState.currentUser?.type === 'owner') {
+                renderCurrentPage();
+            }
             updateCopyUI();
         }
 
         function cancelCopy() {
+            appState.lastViewedDate = appState.copyMode.targetDate; // Retain view on the target date
             appState.copyMode.active = false;
             appState.copyMode.type = null;
             appState.copyMode.targetDate = null;
             DOMElements.cancelCopyBtn.classList.add('hidden');
-            updateCopyUI(); // This will clear all highlights
+            
+            if (appState.currentUser?.type === 'owner') {
+                renderCurrentPage();
+            }
+            updateCopyUI();
         }
 
         function performCopy(type, sourceData, targetDate) {
@@ -1248,17 +1374,16 @@ Thank you for your understanding.
                 const sportTypeName = appState.sportTypes.find(st => st.id === courseToCopy.sportTypeId).name;
                 showMessageBox(`Copied "${sportTypeName}" to ${formatShortDateWithYear(targetDate)}.`, 'success');
             }
-
+            
+            appState.lastViewedDate = targetDate;
             saveData();
             cancelCopy();
-            renderCurrentPage();
         }
 
         function updateCopyUI() {
             const schedulePage = document.getElementById('page-schedule');
             if (!schedulePage) return;
 
-            // Clear all previous copy-related classes
             schedulePage.querySelectorAll('.copy-mode-source, .copy-mode-source-class, .copy-mode-paste-zone').forEach(el => {
                 el.classList.remove('copy-mode-source', 'copy-mode-source-class', 'copy-mode-paste-zone');
             });
@@ -1267,7 +1392,6 @@ Thank you for your understanding.
 
             const { type, targetDate } = appState.copyMode;
 
-            // Highlight the destination day as the "paste zone"
             const targetDayEl = schedulePage.querySelector(`.day-column .courses-container[data-date="${targetDate}"]`)?.closest('.day-column');
             if (targetDayEl) {
                 targetDayEl.classList.add('copy-mode-paste-zone');
@@ -1275,20 +1399,18 @@ Thank you for your understanding.
 
             if (type === 'day') {
                 showMessageBox('Copy Day: Select a day to copy FROM.', 'info');
-                // Highlight all other days as potential sources
                 schedulePage.querySelectorAll('.day-column').forEach(dayEl => {
                     const date = dayEl.querySelector('.courses-container').dataset.date;
                     if (date !== targetDate) {
-                        dayEl.classList.add('copy-mode-source'); // Glowing effect
+                        dayEl.classList.add('copy-mode-source');
                     }
                 });
             } else if (type === 'class') {
                 showMessageBox('Copy Class: Select a class to copy FROM.', 'info');
-                // Highlight all classes on other days as potential sources
                 schedulePage.querySelectorAll('.course-block').forEach(courseEl => {
                     const course = appState.courses.find(c => c.id === courseEl.id);
                     if (course && course.date !== targetDate) {
-                        courseEl.classList.add('copy-mode-source-class'); // Glowing effect
+                        courseEl.classList.add('copy-mode-source-class');
                     }
                 });
             }
@@ -1781,12 +1903,12 @@ Thank you for your understanding.
                     <div class="card p-6">
                         <h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Sport Types</h3>
                         <button id="addSportTypeBtn" class="w-full mb-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Sport Type</button>
-                        <ul id="sportsList" class="admin-list h-96 overflow-y-auto space-y-2"></ul>
+                        <ul id="sportsList" class="admin-list space-y-2"></ul>
                     </div>
                     <div class="card p-6">
                         <h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Tutors</h3>
                         <button id="addTutorBtn" class="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Tutor</button>
-                        <ul id="tutorsList" class="admin-list h-96 overflow-y-auto space-y-2"></ul>
+                        <ul id="tutorsList" class="admin-list space-y-2"></ul>
                     </div>
                 </div>`;
             
@@ -1828,6 +1950,7 @@ Thank you for your understanding.
                 if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
             } else if (target.classList.contains('delete-btn')) {
                 showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
+                    appState.lastViewedDate = getIsoDate(new Date());
                     if (type === 'sportType') {
                         appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
                         appState.courses = appState.courses.filter(c => c.sportTypeId !== id);
@@ -1883,7 +2006,10 @@ Thank you for your understanding.
             } else {
                 appState.sportTypes.push({ id: `st_${Date.now()}`, ...sportTypeData });
             }
-            saveData(); closeModal(DOMElements.sportTypeModal); renderAdminLists(); renderCurrentPage();
+            saveData(); 
+            closeModal(DOMElements.sportTypeModal); 
+            renderAdminLists(); 
+            renderCurrentPage();
         }
 
         function openTutorModal(tutorToEdit = null) {
@@ -2006,7 +2132,9 @@ Thank you for your understanding.
             } else {
                 appState.tutors.push({ id: `t_${Date.now()}`, ...tutorData });
             }
-            saveData(); closeModal(DOMElements.tutorModal); renderAdminLists();
+            saveData(); 
+            closeModal(DOMElements.tutorModal); 
+            renderAdminLists();
         }
 
         function renderSalaryPage(container) {
@@ -2117,7 +2245,7 @@ Thank you for your understanding.
                         <tbody>
                             ${courseDetails.map(c => `
                                 <tr class="border-b border-slate-100">
-                                    <td class="p-2">${formatShortDateWithYear(c.date + 'T12:00:00Z')}</td>
+                                    <td class="p-2">${formatShortDateWithYear(c.date)}</td>
                                     <td class="p-2">${c.sportTypeName}</td>
                                     <td class="p-2">${c.attendeesCount} / ${c.maxParticipants}</td>
                                     <td class="p-2 text-sm text-slate-500">${c.calculation}</td>
@@ -2203,11 +2331,13 @@ Thank you for your understanding.
                     timeSlots[slot] = (timeSlots[slot] || 0) + c.bookedBy.length;
                 });
                 const peakTimes = Object.entries(timeSlots).sort((a,b) => b[1] - a[1]).slice(0,5);
+                
+                const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
                 statsContainer.innerHTML = `
                     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                         <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(totalGrossRevenue)}</p></div>
-                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold text-green-600">${formatCurrency(totalNetRevenue)}</p></div>
+                        <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p></div>
                         <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Enrollments</p><p class="text-2xl font-bold text-slate-800">${totalBookings}</p></div>
                         <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Attendance Rate</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
                         <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
@@ -2272,7 +2402,6 @@ Thank you for your understanding.
 
         function populateCoursesPeriods(selectEl) {
             const periods = [...new Set(appState.courses.map(c => c.date.substring(0, 7)))].sort().reverse();
-            // Add a default blank option if no periods exist
             if (periods.length === 0) {
                 selectEl.innerHTML = '<option value="">No Months Available</option>';
             } else {
@@ -2286,7 +2415,6 @@ Thank you for your understanding.
             selectEl.innerHTML = optionsHtml;
         }
 
-        // Modified to filter tutors based on selected sport type
         function populateTutorFilter(selectEl, selectedSportTypeId = 'all') {
             let filteredTutors = appState.tutors;
             if (selectedSportTypeId !== 'all') {
@@ -2338,14 +2466,12 @@ Thank you for your understanding.
             populateCoursesPeriods(monthFilter);
             populateSportTypeFilter(sportTypeFilter);
             
-            // Bug Fix: Handle blank row in month filter if no courses exist for selected month
             if (appState.selectedFilters.coursesPeriod && !Array.from(monthFilter.options).some(opt => opt.value === appState.selectedFilters.coursesPeriod)) {
                 appState.selectedFilters.coursesPeriod = monthFilter.options.length > 0 ? monthFilter.options[0].value : '';
             }
             if (appState.selectedFilters.coursesPeriod) {
                 monthFilter.value = appState.selectedFilters.coursesPeriod;
             } else if (monthFilter.options.length > 0) {
-                // If no specific period is selected, default to the first available
                 monthFilter.value = monthFilter.options[0].value;
                 appState.selectedFilters.coursesPeriod = monthFilter.options[0].value;
             }
@@ -2355,12 +2481,10 @@ Thank you for your understanding.
                 sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId;
             }
 
-            // Populate tutor filter based on initial sport type selection
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
 
-            // Ensure the selected tutor is still valid for the current sport type
             if (appState.selectedFilters.coursesTutorId && !Array.from(tutorFilter.options).some(opt => opt.value === appState.selectedFilters.coursesTutorId)) {
-                appState.selectedFilters.coursesTutorId = 'all'; // Reset to 'all' if previously selected tutor is no longer valid
+                appState.selectedFilters.coursesTutorId = 'all';
             }
             if (appState.selectedFilters.coursesTutorId) {
                 tutorFilter.value = appState.selectedFilters.coursesTutorId;
@@ -2416,7 +2540,7 @@ Thank you for your understanding.
                     btn.onclick = () => {
                         const courseId = btn.dataset.id;
                         const course = appState.courses.find(c => c.id === courseId);
-                        handleDeleteCourseRequest(course); // MODIFIED
+                        handleDeleteCourseRequest(course);
                     };
                 });
             };
@@ -2427,9 +2551,8 @@ Thank you for your understanding.
             };
             sportTypeFilter.onchange = () => {
                 appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
-                // Update tutor filter based on new sport type selection
                 populateTutorFilter(tutorFilter, sportTypeFilter.value);
-                appState.selectedFilters.coursesTutorId = 'all'; // Reset tutor selection
+                appState.selectedFilters.coursesTutorId = 'all';
                 tutorFilter.value = 'all';
                 updateCoursesTable();
             };
@@ -2536,19 +2659,17 @@ Thank you for your understanding.
             DOMElements.cancelCopyBtn.onclick = cancelCopy;
 
             document.body.addEventListener('click', e => {
-                // Modal closing logic
                 const closeButton = e.target.closest('.modal-close-btn');
                 if (closeButton) {
                     const modalToClose = closeButton.closest('.modal-backdrop');
                     if (modalToClose) closeModal(modalToClose);
                     return;
                 } 
-                if (e.target.matches('.modal-backdrop')) {
+                if (e.target.matches('.modal-backdrop') && !e.target.closest('.modal-content')) {
                     closeModal(e.target);
                     return;
                 }
 
-                // Handle clicks during copy mode
                 if (appState.copyMode.active) {
                     const { type, targetDate } = appState.copyMode;
 
@@ -2574,12 +2695,11 @@ Thank you for your understanding.
                     return; 
                 }
 
-                // Regular click handlers
                 const addBtn = e.target.closest('.add-course-button');
                 if (addBtn && appState.currentUser?.type === 'owner') {
                     openCourseModal(addBtn.dataset.date);
                 }
-            });
+            }, true); // Use capture to handle clicks properly
         };
 
         // --- Run Application ---
