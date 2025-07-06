@@ -44,7 +44,13 @@
         .courses-container::-webkit-scrollbar, .admin-list::-webkit-scrollbar { display: none; }
         .courses-container, .admin-list { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Carousel */
+        /* Carousel & Swipe Behavior */
+        .embla__viewport {
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+/Edge */
+            user-select: none; /* Standard */
+        }
         .embla__slide { flex: 0 0 100%; min-width: 0; }
         @media (min-width: 640px) { .embla__slide { flex: 0 0 50%; } }
         @media (min-width: 1024px) { .embla__slide { flex: 0 0 33.3333%; } }
@@ -63,6 +69,11 @@
         .course-block.booked-by-member {
             animation: glowing-yellow 1.5s infinite;
             border: 1px solid #facc15;
+        }
+        .course-block.filtered-out {
+            opacity: 0.15;
+            filter: blur(1px);
+            pointer-events: none;
         }
         
         /* Navigation */
@@ -147,7 +158,46 @@
         }
         
         .time-slot-editable {
+            cursor: pointer;
+        }
+        .time-slot-editable.editing {
             cursor: ns-resize;
+            outline: 2px solid #4f46e5;
+            outline-offset: 2px;
+        }
+        /* Pagination Styles */
+        .pagination-btn {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+        .pagination-btn.active {
+            background-color: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+        .pagination-btn:not(.active):not(:disabled) {
+            background-color: white;
+            color: #475569;
+        }
+        .pagination-btn:hover:not(.active):not(:disabled) {
+            background-color: #f1f5f9;
+        }
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .table-swipe-container {
+            overflow-x: auto;
+            cursor: grab;
+            -webkit-overflow-scrolling: touch; /*momentum scrolling*/
+        }
+        .table-swipe-container.swiping {
+            cursor: grabbing;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
     </style>
@@ -264,16 +314,28 @@
                 salaryPeriod: null, 
                 coursesPeriod: null,
                 coursesSportTypeId: 'all',
-                coursesTutorId: 'all'
+                coursesTutorId: 'all',
+                memberSportType: 'all', // New filter for members
+                memberTutor: 'all' // New filter for members
             },
             ownerPastDaysVisible: 0,
-            lastViewedDate: null, 
+            scheduleScrollIndex: null,
             copyMode: { 
                 active: false,
                 type: null, 
                 sourceId: null, 
                 targetDate: null,
-            }
+            },
+            pagination: {
+                courses: { page: 1 },
+                sports: { page: 1 },
+                tutors: { page: 1 }
+            },
+            searchTerms: {
+                sports: '',
+                tutors: ''
+            },
+            itemsPerPage: 10
         };
         let emblaApi = null;
         let onConfirmCallback = null;
@@ -317,10 +379,17 @@
             const data = localStorage.getItem('studioPulseData');
             if (data) { 
                 const loadedState = JSON.parse(data);
-                appState = { ...appState, ...loadedState }; 
-                appState.copyMode = { active: false, type: null, sourceId: null, targetDate: null };
-                appState.ownerPastDaysVisible = 0;
-                appState.lastViewedDate = null;
+                const transientState = {
+                    copyMode: { active: false, type: null, sourceId: null, targetDate: null },
+                    ownerPastDaysVisible: 0,
+                    scheduleScrollIndex: null,
+                    pagination: { courses: { page: 1 }, sports: { page: 1 }, tutors: { page: 1 } },
+                    searchTerms: { sports: '', tutors: '' }
+                };
+                appState = { ...appState, ...loadedState, ...transientState };
+                 // Ensure new filters have default values
+                appState.selectedFilters.memberSportType = appState.selectedFilters.memberSportType || 'all';
+                appState.selectedFilters.memberTutor = appState.selectedFilters.memberTutor || 'all';
             } else {
                 // Default data if nothing in localStorage
                 appState.sportTypes = [
@@ -364,7 +433,19 @@
         const formatShortDateWithYear = (isoString) => {
             if (!isoString) return 'N/A';
             const date = new Date(isoString + 'T00:00:00Z'); // Ensure date is parsed as UTC
-            return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(/ /g, ' ');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+            const year = String(date.getUTCFullYear()).slice(-2);
+            return `${day} ${month}, ${year}`;
+        };
+        
+        const formatDateWithWeekday = (isoString) => {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString + 'T12:00:00Z'); // Use noon to avoid timezone shifts
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+            const weekday = date.toLocaleString('en-US', { weekday: 'short', timeZone: 'UTC' });
+            return `${day} ${month} (${weekday})`;
         };
 
         const formatDisplayPhoneNumber = (fullPhoneNumber) => {
@@ -382,6 +463,12 @@
             if (!digitsString) return '';
             const cleanedDigits = digitsString.replace(/\D/g, '');
             return cleanedDigits.replace(/(\d{4})(?=\d)/g, '$1 ');
+        };
+
+        const saveSchedulePosition = () => {
+            if (emblaApi) {
+                appState.scheduleScrollIndex = emblaApi.selectedScrollSnap();
+            }
         };
         
         // --- Auth & UI Visibility ---
@@ -405,7 +492,7 @@
             sessionStorage.removeItem('studioPulseUser');
             DOMElements.appWrapper.classList.add('hidden');
             DOMElements.authPage.classList.remove('hidden');
-            appState.lastViewedDate = null; 
+            appState.scheduleScrollIndex = null; 
             appState.ownerPastDaysVisible = 0;
         };
         const updateUIVisibility = () => {
@@ -541,7 +628,7 @@
             } else {
                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                 showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
-                    appState.lastViewedDate = course.date;
+                    saveSchedulePosition();
                     appState.courses = appState.courses.filter(c => c.id !== course.id);
                     saveData();
                     closeModal(DOMElements.courseModal);
@@ -618,7 +705,7 @@
             });
 
             modal.querySelector('#final-delete-btn').onclick = () => {
-                appState.lastViewedDate = course.date;
+                saveSchedulePosition();
                 appState.courses = appState.courses.filter(c => c.id !== course.id);
                 saveData();
                 closeModal(modal);
@@ -755,7 +842,7 @@ Thank you for your understanding.
 
                 listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                     checkbox.onchange = (e) => {
-                        appState.lastViewedDate = course.date;
+                        saveSchedulePosition();
                         const memberId = e.target.dataset.memberId;
                         const courseIndex = appState.courses.findIndex(c => c.id === course.id);
                         if (courseIndex !== -1) {
@@ -831,11 +918,11 @@ Thank you for your understanding.
 
                     if (!courseToUpdate.bookedBy.includes(memberId)) {
                         courseToUpdate.bookedBy.push(memberId);
-                        appState.lastViewedDate = course.date;
+                        saveSchedulePosition();
                         saveData();
                         showMessageBox('Member added to course.', 'success');
-                        // MODIFIED: Re-render the main page and then re-open the modal
                         renderCurrentPage();
+                        // Re-open the modal to show the updated list
                         openJoinedMembersModal(courseToUpdate); 
                     }
                 }
@@ -864,7 +951,7 @@ Thank you for your understanding.
                     <div class="p-8 space-y-4">
                         <div class="flex justify-between items-center"><span class="text-slate-500">Course:</span><strong class="text-slate-800">${sportType.name}</strong></div>
                         <div class="flex justify-between items-center"><span class="text-slate-500">Tutor:</span><strong class="text-slate-800">${tutor.name}</strong></div>
-                        <div class="flex justify-between items-center"><span class="text-slate-500">Time:</span><strong class="text-slate-800">${getTimeRange(course.time, course.duration)}</strong></div>
+                        <div class="flex justify-between items-center"><span class="text-slate-500">Time:</span><strong class="text-slate-800">${formatDateWithWeekday(course.date)}, ${getTimeRange(course.time, course.duration)}</strong></div>
                         <hr class="my-4">
                         <div class="flex justify-between items-center"><span class="text-slate-500">Credits Required:</span><strong class="text-indigo-600 text-lg">${course.credits}</strong></div>
                         <div class="flex justify-between items-center"><span class="text-slate-500">Your Balance:</span><strong class="text-slate-800 text-lg">${currentUser.monthlyPlan ? 'Monthly Plan' : `${currentUser.credits} Credits`}</strong></div>
@@ -876,7 +963,7 @@ Thank you for your understanding.
             
             const confirmBtn = DOMElements.bookingModal.querySelector('#confirmBookingBtn');
             confirmBtn.onclick = () => {
-                appState.lastViewedDate = course.date;
+                saveSchedulePosition();
                 const courseToBook = appState.courses.find(c => c.id === course.id);
                 const memberIndex = appState.members.findIndex(m => m.id === appState.currentUser.id);
 
@@ -903,7 +990,7 @@ Thank you for your understanding.
 
         function handleCancelBooking(course, memberIdToUpdate = null) {
             showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
-                appState.lastViewedDate = course.date;
+                saveSchedulePosition();
                 const courseToCancel = appState.courses.find(c => c.id === course.id);
                 const memberToUpdate = appState.members.find(m => m.id === (memberIdToUpdate || appState.currentUser.id));
 
@@ -949,8 +1036,8 @@ Thank you for your understanding.
                                     <input type="date" id="courseDate" name="date" required class="form-input">
                                 </div>
                                 <div>
-                                    <label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time</label>
-                                    <input type="time" id="courseTime" name="time" required value="09:00" class="form-input">
+                                    <label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time (24h)</label>
+                                    <input type="text" id="courseTime" name="time" required class="form-input" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:MM" title="Enter time in 24-hour HH:MM format">
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
@@ -1013,7 +1100,6 @@ Thank you for your understanding.
                 const defaultDate = dateIso || new Date().toISOString().split('T')[0];
                 form.querySelector('#courseDate').value = defaultDate;
                 
-                // MODIFIED: Dynamic default start time based on last class of the day
                 const coursesOnDay = appState.courses
                     .filter(c => c.date === defaultDate)
                     .sort((a, b) => a.time.localeCompare(b.time));
@@ -1038,8 +1124,8 @@ Thank you for your understanding.
 
         function handleCourseFormSubmit(e) {
             e.preventDefault();
+            saveSchedulePosition();
             const form = e.target;
-            appState.lastViewedDate = form.querySelector('#courseDate').value;
             const courseId = form.querySelector('#courseModalId').value;
             const courseData = {
                 sportTypeId: form.querySelector('#courseSportType').value,
@@ -1074,8 +1160,18 @@ Thank you for your understanding.
             el.id = course.id; 
             const isOwner = appState.currentUser?.type === 'owner';
             
-            el.className = `course-block p-3 rounded-lg shadow-md text-white mb-3 flex flex-col justify-between`;
+            el.className = `course-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between`;
             el.style.backgroundColor = sportType?.color || '#64748b';
+
+            // Member filter logic
+            if (!isOwner) {
+                const { memberSportType, memberTutor } = appState.selectedFilters;
+                const sportMatch = memberSportType === 'all' || course.sportTypeId === memberSportType;
+                const tutorMatch = memberTutor === 'all' || course.tutorId === memberTutor;
+                if (!sportMatch || !tutorMatch) {
+                    el.classList.add('filtered-out');
+                }
+            }
             
             let actionButton = '';
             let mainAction = () => {};
@@ -1085,7 +1181,7 @@ Thank you for your understanding.
 
             if (isOwner) {
                 el.classList.add('cursor-pointer');
-                actionButton = `<button class="edit-course-btn opacity-60 hover:opacity-100 p-1 -mr-1 -mt-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
+                actionButton = `<button class="edit-course-btn absolute top-2 right-2 opacity-60 hover:opacity-100 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
                 mainAction = () => { if (!appState.copyMode.active) openJoinedMembersModal(course); };
             } else if (isBookedByCurrentUser) {
                 el.classList.add('booked-by-member');
@@ -1095,27 +1191,29 @@ Thank you for your understanding.
             }
 
             el.innerHTML = `
-                <div class="flex-grow">
-                    <div class="flex justify-between items-start">
-                        <p class="font-bold text-lg leading-tight">${sportType?.name || 'Unknown Type'}</p>
-                        ${isOwner ? actionButton : ''}
-                    </div>
-                    <p class="text-sm opacity-90 mt-1">${tutor?.name || 'Unknown Tutor'}</p>
+                <div>
+                    <p class="font-bold text-lg leading-tight pr-6">${sportType?.name || 'Unknown Type'}</p>
+                    ${actionButton}
                 </div>
-                <div class="mt-3 space-y-2">
+                <div class="text-sm mt-1.5 flex justify-between items-center">
+                    <span class="flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
+                        ${tutor?.name || 'Unknown'}
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>
+                        ${course.bookedBy.length}/${course.maxParticipants}
+                    </span>
+                </div>
+                <div class="mt-2 flex justify-between items-center">
                     <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot ${isOwner ? 'time-slot-editable' : ''}">${getTimeRange(course.time, course.duration)}</p>
-                    <div class="flex justify-between items-center text-white/95 text-xs">
-                        <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>${course.bookedBy.length}/${course.maxParticipants}</span>
-                        <span>${course.duration} mins</span>
-                        ${isBookedByCurrentUser 
-                            ? (isAttendedByCurrentUser
-                                ? `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">COMPLETED</span>`
-                                : `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="BOOKED" data-cancel-text="CANCEL?">BOOKED</button>`
-                              )
-                            : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`}
-                    </div>
-                </div>
-                `;
+                    ${isBookedByCurrentUser 
+                        ? (isAttendedByCurrentUser
+                            ? `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">COMPLETED</span>`
+                            : `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="BOOKED" data-cancel-text="CANCEL?">BOOKED</button>`
+                          )
+                        : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`}
+                </div>`;
 
             el.addEventListener('click', (e) => {
                 if (!e.target.closest('button') && !e.target.classList.contains('time-slot-editable')) {
@@ -1131,7 +1229,18 @@ Thank you for your understanding.
                 
                 const timeSlotEl = el.querySelector('.time-slot-editable');
                 if (timeSlotEl) {
+                    timeSlotEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
+                            if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
+                        });
+                        timeSlotEl.classList.toggle('editing');
+                    });
+
+                    let timeChangeDebounce;
                     timeSlotEl.addEventListener('wheel', (e) => {
+                        if (!timeSlotEl.classList.contains('editing')) return;
+                        
                         e.preventDefault();
                         const courseToUpdate = appState.courses.find(c => c.id === course.id);
                         if (!courseToUpdate) return;
@@ -1139,11 +1248,8 @@ Thank you for your understanding.
                         const [hours, minutes] = courseToUpdate.time.split(':').map(Number);
                         let totalMinutes = hours * 60 + minutes;
                         
-                        if (e.deltaY < 0) {
-                            totalMinutes -= 15;
-                        } else {
-                            totalMinutes += 15;
-                        }
+                        if (e.deltaY < 0) totalMinutes -= 15;
+                        else totalMinutes += 15;
 
                         if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
                         if (totalMinutes >= 24 * 60) totalMinutes = 0;
@@ -1153,9 +1259,14 @@ Thank you for your understanding.
                         
                         courseToUpdate.time = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
                         
-                        appState.lastViewedDate = course.date;
-                        saveData();
-                        renderCurrentPage();
+                        timeSlotEl.textContent = getTimeRange(courseToUpdate.time, courseToUpdate.duration);
+
+                        clearTimeout(timeChangeDebounce);
+                        timeChangeDebounce = setTimeout(() => {
+                            saveSchedulePosition();
+                            saveData();
+                            renderCurrentPage();
+                        }, 1500);
                     });
                 }
 
@@ -1166,12 +1277,8 @@ Thank you for your understanding.
                         e.stopPropagation();
                         handleCancelBooking(course);
                     };
-                    cancelButton.onmouseenter = () => {
-                        cancelButton.textContent = cancelButton.dataset.cancelText;
-                    };
-                    cancelButton.onmouseleave = () => {
-                        cancelButton.textContent = cancelButton.dataset.bookedText;
-                    };
+                    cancelButton.onmouseenter = () => cancelButton.textContent = cancelButton.dataset.cancelText;
+                    cancelButton.onmouseleave = () => cancelButton.textContent = cancelButton.dataset.bookedText;
                 }
             }
             
@@ -1224,10 +1331,9 @@ Thank you for your understanding.
             const isOwner = appState.currentUser?.type === 'owner';
             
             const scrollPrev = () => {
-                if (isOwner && !appState.copyMode.active && !emblaApi.canScrollPrev()) {
+                if (isOwner && !emblaApi.canScrollPrev()) {
                     if (appState.ownerPastDaysVisible < 30) {
-                        // MODIFIED: Set last viewed date to the first visible date before re-rendering
-                        appState.lastViewedDate = datesArray[0];
+                        saveSchedulePosition();
                         appState.ownerPastDaysVisible += 7;
                         renderOwnerSchedule(document.getElementById('page-schedule'));
                     }
@@ -1241,17 +1347,11 @@ Thank you for your understanding.
                 const canScrollPrev = emblaApi.canScrollPrev();
                 const canScrollNext = emblaApi.canScrollNext();
                 
-                prevBtn.disabled = !canScrollPrev && !(isOwner && appState.ownerPastDaysVisible < 30 && !appState.copyMode.active);
+                prevBtn.disabled = !canScrollPrev && !(isOwner && appState.ownerPastDaysVisible < 30);
                 nextBtn.disabled = !canScrollNext;
             };
             
-            emblaApi.on('select', () => {
-                updateButtons();
-                const currentSlideNode = emblaApi.slideNodes()[emblaApi.selectedScrollSnap()];
-                if (currentSlideNode) {
-                    appState.lastViewedDate = currentSlideNode.querySelector('.courses-container').dataset.date;
-                }
-            });
+            emblaApi.on('select', updateButtons);
             emblaApi.on('reInit', updateButtons);
             
             prevBtn.onclick = scrollPrev;
@@ -1271,12 +1371,14 @@ Thank you for your understanding.
             const today = new Date();
             today.setUTCHours(0, 0, 0, 0); 
             
-            const daysToLookBack = appState.copyMode.active ? 30 : appState.ownerPastDaysVisible;
+            const daysToLookBack = appState.ownerPastDaysVisible;
 
             const ownerStartDate = new Date();
+            ownerStartDate.setUTCHours(0,0,0,0);
             ownerStartDate.setUTCDate(today.getUTCDate() - daysToLookBack);
 
             const ownerEndDate = new Date();
+            ownerEndDate.setUTCHours(0,0,0,0);
             ownerEndDate.setUTCDate(today.getUTCDate() + 30);
 
             const datesArray = [];
@@ -1284,16 +1386,61 @@ Thank you for your understanding.
                 datesArray.push(getIsoDate(d));
             }
 
-            const targetDate = appState.lastViewedDate || getIsoDate(today);
-            let initialScrollIndex = datesArray.indexOf(targetDate);
-            if (initialScrollIndex === -1) {
+            let initialScrollIndex;
+            if (appState.scheduleScrollIndex !== null) {
+                initialScrollIndex = appState.scheduleScrollIndex;
+            } else {
                 initialScrollIndex = daysToLookBack;
             }
+            appState.scheduleScrollIndex = null; // Consume the index
 
             _renderScheduleCarousel(container, ownerStartDate, ownerEndDate, datesArray, initialScrollIndex, true);
+            updateCopyUI();
         }
 
         function renderMemberSchedulePage(container) {
+            const { memberSportType, memberTutor } = appState.selectedFilters;
+            const isFilterActive = memberSportType !== 'all' || memberTutor !== 'all';
+
+            container.innerHTML = `
+                <div class="flex flex-wrap gap-4 justify-center items-center mb-4">
+                    <select id="memberSportTypeFilter" class="form-select w-48"></select>
+                    <select id="memberTutorFilter" class="form-select w-48"></select>
+                    <button id="clearMemberFiltersBtn" class="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg transition ${!isFilterActive ? 'hidden' : ''}" title="Clear Filters">
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div id="member-schedule-carousel"></div>
+            `;
+
+            const sportTypeFilter = container.querySelector('#memberSportTypeFilter');
+            const tutorFilter = container.querySelector('#memberTutorFilter');
+            const clearFiltersBtn = container.querySelector('#clearMemberFiltersBtn');
+            const carouselContainer = container.querySelector('#member-schedule-carousel');
+
+            populateSportTypeFilter(sportTypeFilter);
+            sportTypeFilter.value = memberSportType;
+            
+            populateTutorFilter(tutorFilter, sportTypeFilter.value);
+            tutorFilter.value = memberTutor;
+
+            const handleFilterChange = () => {
+                appState.selectedFilters.memberSportType = sportTypeFilter.value;
+                appState.selectedFilters.memberTutor = tutorFilter.value;
+                saveData();
+                renderMemberSchedulePage(document.getElementById('page-schedule'));
+            };
+            
+            sportTypeFilter.onchange = handleFilterChange;
+            tutorFilter.onchange = handleFilterChange;
+            
+            clearFiltersBtn.onclick = () => {
+                appState.selectedFilters.memberSportType = 'all';
+                appState.selectedFilters.memberTutor = 'all';
+                saveData();
+                renderMemberSchedulePage(document.getElementById('page-schedule'));
+            };
+
             const today = new Date();
             today.setUTCHours(0, 0, 0, 0);
 
@@ -1315,13 +1462,15 @@ Thank you for your understanding.
                 datesArray.push(getIsoDate(d));
             }
 
-            const targetDate = appState.lastViewedDate || getIsoDate(today);
-            let initialScrollIndex = datesArray.indexOf(targetDate);
-            if (initialScrollIndex === -1) {
-                initialScrollIndex = MEMBER_PAST_DAYS;
+            let initialScrollIndex;
+            if (appState.scheduleScrollIndex !== null) {
+                initialScrollIndex = appState.scheduleScrollIndex;
+            } else {
+                 initialScrollIndex = MEMBER_PAST_DAYS;
             }
+            appState.scheduleScrollIndex = null; // Consume the index
 
-            _renderScheduleCarousel(container, memberStartDate, memberEndDate, datesArray, initialScrollIndex, false);
+            _renderScheduleCarousel(carouselContainer, memberStartDate, memberEndDate, datesArray, initialScrollIndex, false);
         }
         
         function startCopy(type, targetDate) {
@@ -1329,32 +1478,23 @@ Thank you for your understanding.
                 cancelCopy();
                 return;
             }
-            appState.lastViewedDate = targetDate;
             appState.copyMode.active = true;
             appState.copyMode.type = type;
             appState.copyMode.targetDate = targetDate;
             DOMElements.cancelCopyBtn.classList.remove('hidden');
-            
-            if (appState.currentUser?.type === 'owner') {
-                renderCurrentPage();
-            }
             updateCopyUI();
         }
 
         function cancelCopy() {
-            appState.lastViewedDate = appState.copyMode.targetDate; // Retain view on the target date
             appState.copyMode.active = false;
             appState.copyMode.type = null;
             appState.copyMode.targetDate = null;
             DOMElements.cancelCopyBtn.classList.add('hidden');
-            
-            if (appState.currentUser?.type === 'owner') {
-                renderCurrentPage();
-            }
             updateCopyUI();
         }
 
         function performCopy(type, sourceData, targetDate) {
+            saveSchedulePosition();
             if (type === 'day') {
                 const sourceDate = sourceData;
                 const coursesToCopy = appState.courses.filter(c => c.date === sourceDate);
@@ -1375,9 +1515,9 @@ Thank you for your understanding.
                 showMessageBox(`Copied "${sportTypeName}" to ${formatShortDateWithYear(targetDate)}.`, 'success');
             }
             
-            appState.lastViewedDate = targetDate;
             saveData();
             cancelCopy();
+            renderCurrentPage();
         }
 
         function updateCopyUI() {
@@ -1900,44 +2040,112 @@ Thank you for your understanding.
         function renderAdminPage(container) {
             container.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div class="card p-6">
-                        <h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Sport Types</h3>
+                    <!-- Sport Types Card -->
+                    <div class="card p-6 flex flex-col">
+                        <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
+                            <h3 class="text-2xl font-bold text-slate-800">Sport Types (${appState.sportTypes.length})</h3>
+                            <div class="relative">
+                                <input type="text" id="sportSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.sports}">
+                            </div>
+                        </div>
                         <button id="addSportTypeBtn" class="w-full mb-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Sport Type</button>
-                        <ul id="sportsList" class="admin-list space-y-2"></ul>
+                        <div class="flex-grow">
+                            <ul id="sportsList" class="admin-list space-y-2"></ul>
+                        </div>
+                        <div id="sportsPagination" class="flex justify-between items-center mt-4"></div>
                     </div>
-                    <div class="card p-6">
-                        <h3 class="text-2xl font-bold text-slate-800 mb-4">Manage Tutors</h3>
+                    <!-- Tutors Card -->
+                    <div class="card p-6 flex flex-col">
+                        <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
+                            <h3 class="text-2xl font-bold text-slate-800">Tutors (${appState.tutors.length})</h3>
+                            <div class="relative">
+                                <input type="text" id="tutorSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.tutors}">
+                            </div>
+                        </div>
                         <button id="addTutorBtn" class="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Tutor</button>
-                        <ul id="tutorsList" class="admin-list space-y-2"></ul>
+                        <div class="flex-grow">
+                             <ul id="tutorsList" class="admin-list space-y-2"></ul>
+                        </div>
+                        <div id="tutorsPagination" class="flex justify-between items-center mt-4"></div>
                     </div>
                 </div>`;
             
             renderAdminLists();
+            
             container.querySelector('#addSportTypeBtn').onclick = () => openSportTypeModal();
             container.querySelector('#addTutorBtn').onclick = () => openTutorModal();
             container.querySelector('#sportsList').addEventListener('click', handleAdminListClick);
             container.querySelector('#tutorsList').addEventListener('click', handleAdminListClick);
+            
+            // Search listeners
+            container.querySelector('#sportSearchInput').oninput = (e) => {
+                appState.searchTerms.sports = e.target.value;
+                appState.pagination.sports.page = 1;
+                renderAdminLists();
+            };
+            container.querySelector('#tutorSearchInput').oninput = (e) => {
+                appState.searchTerms.tutors = e.target.value;
+                appState.pagination.tutors.page = 1;
+                renderAdminLists();
+            };
         }
 
         function renderAdminLists() {
-            const sportsList = document.getElementById('sportsList');
-            const tutorsList = document.getElementById('tutorsList');
-            if (!sportsList || !tutorsList) return;
+            const { itemsPerPage } = appState;
 
-            sportsList.innerHTML = appState.sportTypes.map(st => `
-                <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
-                    <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700">${st.name}</span></div>
-                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
-                </li>`).join('');
-            tutorsList.innerHTML = appState.tutors.map(t => `
-                 <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
-                    <div>
-                        <p class="text-slate-700 font-semibold">${t.name}</p>
-                        <p class="text-xs text-slate-500">${t.email || ''}</p>
-                        <p class="text-xs text-slate-500">${formatDisplayPhoneNumber(t.phone) || ''}</p>
-                    </div>
-                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
-                </li>`).join('');
+            // --- Render Sports List ---
+            const sportsList = document.getElementById('sportsList');
+            const sportsPaginationContainer = document.getElementById('sportsPagination');
+            if (sportsList && sportsPaginationContainer) {
+                const sportSearchTerm = appState.searchTerms.sports.toLowerCase();
+                const filteredSports = appState.sportTypes.filter(st => st.name.toLowerCase().includes(sportSearchTerm));
+                
+                const sportsTotalPages = Math.ceil(filteredSports.length / itemsPerPage) || 1;
+                let sportPage = appState.pagination.sports.page;
+                if (sportPage > sportsTotalPages) sportPage = sportsTotalPages;
+                
+                const paginatedSports = filteredSports.slice((sportPage - 1) * itemsPerPage, sportPage * itemsPerPage);
+
+                sportsList.innerHTML = paginatedSports.map(st => `
+                    <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
+                        <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700">${st.name}</span></div>
+                        <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
+                    </li>`).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
+                
+                renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, (newPage) => {
+                    appState.pagination.sports.page = newPage;
+                    renderAdminLists();
+                });
+            }
+
+            // --- Render Tutors List ---
+            const tutorsList = document.getElementById('tutorsList');
+            const tutorsPaginationContainer = document.getElementById('tutorsPagination');
+            if (tutorsList && tutorsPaginationContainer) {
+                const tutorSearchTerm = appState.searchTerms.tutors.toLowerCase();
+                const filteredTutors = appState.tutors.filter(t => t.name.toLowerCase().includes(tutorSearchTerm) || (t.email && t.email.toLowerCase().includes(tutorSearchTerm)));
+
+                const tutorsTotalPages = Math.ceil(filteredTutors.length / itemsPerPage) || 1;
+                let tutorPage = appState.pagination.tutors.page;
+                if (tutorPage > tutorsTotalPages) tutorPage = tutorsTotalPages;
+
+                const paginatedTutors = filteredTutors.slice((tutorPage - 1) * itemsPerPage, tutorPage * itemsPerPage);
+
+                tutorsList.innerHTML = paginatedTutors.map(t => `
+                     <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
+                        <div>
+                            <p class="text-slate-700 font-semibold">${t.name}</p>
+                            <p class="text-xs text-slate-500">${t.email || ''}</p>
+                            <p class="text-xs text-slate-500">${formatDisplayPhoneNumber(t.phone) || ''}</p>
+                        </div>
+                        <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
+                    </li>`).join('') || `<li class="text-center text-slate-500 p-4">No tutors found.</li>`;
+                
+                renderPaginationControls(tutorsPaginationContainer, tutorPage, tutorsTotalPages, filteredTutors.length, (newPage) => {
+                    appState.pagination.tutors.page = newPage;
+                    renderAdminLists();
+                });
+            }
         }
 
         function handleAdminListClick(e) {
@@ -1950,7 +2158,7 @@ Thank you for your understanding.
                 if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
             } else if (target.classList.contains('delete-btn')) {
                 showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
-                    appState.lastViewedDate = getIsoDate(new Date());
+                    saveSchedulePosition();
                     if (type === 'sportType') {
                         appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
                         appState.courses = appState.courses.filter(c => c.sportTypeId !== id);
@@ -1996,6 +2204,7 @@ Thank you for your understanding.
 
         function handleSportTypeFormSubmit(e) {
             e.preventDefault();
+            saveSchedulePosition();
             const form = e.target;
             const id = form.querySelector('#sportTypeModalId').value;
             const sportTypeData = { name: form.querySelector('#sportTypeName').value, color: form.querySelector('#sportTypeColor').value };
@@ -2008,7 +2217,7 @@ Thank you for your understanding.
             }
             saveData(); 
             closeModal(DOMElements.sportTypeModal); 
-            renderAdminLists(); 
+            renderAdminPage(document.getElementById('page-admin')); 
             renderCurrentPage();
         }
 
@@ -2134,7 +2343,7 @@ Thank you for your understanding.
             }
             saveData(); 
             closeModal(DOMElements.tutorModal); 
-            renderAdminLists();
+            renderAdminPage(document.getElementById('page-admin'));
         }
 
         function renderSalaryPage(container) {
@@ -2428,11 +2637,48 @@ Thank you for your understanding.
             selectEl.innerHTML = optionsHtml;
         }
 
+        function renderPaginationControls(container, currentPage, totalPages, totalItems, onPageChange) {
+            container.innerHTML = '';
+            if (totalItems === 0) {
+                container.innerHTML = `<span class="text-sm text-slate-500">No items to display</span>`;
+                return;
+            }
+
+            const { itemsPerPage } = appState;
+            const startItem = (currentPage - 1) * itemsPerPage + 1;
+            const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+            const infoEl = document.createElement('span');
+            infoEl.className = 'text-sm text-slate-500';
+            infoEl.textContent = `Showing ${startItem}-${endItem} of ${totalItems}`;
+
+            const buttonsEl = document.createElement('div');
+            buttonsEl.className = 'flex items-center gap-2';
+
+            const prevBtn = document.createElement('button');
+            prevBtn.innerHTML = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>`;
+            prevBtn.className = 'pagination-btn';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => onPageChange(currentPage - 1);
+
+            const nextBtn = document.createElement('button');
+            nextBtn.innerHTML = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>`;
+            nextBtn.className = 'pagination-btn';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.onclick = () => onPageChange(currentPage + 1);
+            
+            buttonsEl.appendChild(prevBtn);
+            buttonsEl.appendChild(nextBtn);
+            
+            container.appendChild(infoEl);
+            container.appendChild(buttonsEl);
+        }
+
         function renderCoursesPage(container) {
             container.innerHTML = `
                 <div class="card p-6 md:p-8">
                     <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                        <h2 class="text-3xl font-bold text-slate-800">All Courses</h2>
+                        <h2 class="text-3xl font-bold text-slate-800">All Courses <span id="coursesCount" class="text-xl font-semibold text-slate-500"></span></h2>
                         <div class="flex flex-wrap gap-4">
                             <select id="coursesMonthFilter" class="form-select w-48"></select>
                             <select id="coursesSportTypeFilter" class="form-select w-48"></select>
@@ -2440,10 +2686,11 @@ Thank you for your understanding.
                             <button id="addCourseBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
+                    <div class="overflow-x-auto table-swipe-container">
+                        <table class="w-full text-left min-w-[600px]">
                             <thead>
                                 <tr class="border-b">
+                                    <th class="p-2 w-12">#</th>
                                     <th class="p-2">Date/Time</th>
                                     <th class="p-2">Course</th>
                                     <th class="p-2">Tutor</th>
@@ -2455,12 +2702,12 @@ Thank you for your understanding.
                             <tbody id="coursesTableBody"></tbody>
                         </table>
                     </div>
+                    <div id="coursesPagination" class="flex justify-between items-center mt-4"></div>
                 </div>`;
             
             const monthFilter = container.querySelector('#coursesMonthFilter');
             const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
             const tutorFilter = container.querySelector('#coursesTutorFilter');
-            const coursesTableBody = container.querySelector('#coursesTableBody');
             const addCourseBtn = container.querySelector('#addCourseBtn');
 
             populateCoursesPeriods(monthFilter);
@@ -2492,6 +2739,10 @@ Thank you for your understanding.
 
 
             const updateCoursesTable = () => {
+                const coursesTableBody = container.querySelector('#coursesTableBody');
+                const coursesPaginationContainer = container.querySelector('#coursesPagination');
+                const coursesCountEl = container.querySelector('#coursesCount');
+
                 const selectedMonth = monthFilter.value;
                 const selectedSportType = sportTypeFilter.value;
                 const selectedTutor = tutorFilter.value;
@@ -2505,17 +2756,28 @@ Thank you for your understanding.
                     filteredCourses = filteredCourses.filter(c => c.tutorId === selectedTutor);
                 }
 
+                coursesCountEl.textContent = `(${filteredCourses.length} added)`;
+
                 filteredCourses.sort((a, b) => {
                     const dateA = new Date(`${a.date}T${a.time}`);
                     const dateB = new Date(`${b.date}T${b.time}`);
                     return dateA - dateB;
                 });
+                
+                const { itemsPerPage } = appState;
+                const totalPages = Math.ceil(filteredCourses.length / itemsPerPage) || 1;
+                let page = appState.pagination.courses.page;
+                if (page > totalPages) page = totalPages;
 
-                coursesTableBody.innerHTML = filteredCourses.map(course => {
+                const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+                coursesTableBody.innerHTML = paginatedCourses.map((course, index) => {
                     const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                     const tutor = appState.tutors.find(t => t.id === course.tutorId);
+                    const entryNumber = (page - 1) * itemsPerPage + index + 1;
                     return `
                         <tr class="border-b border-slate-100">
+                            <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
                             <td class="p-2">${formatShortDateWithYear(course.date)}<br><span class="text-sm text-slate-500">${getTimeRange(course.time, course.duration)}</span></td>
                             <td class="p-2 font-semibold">${sportType?.name || 'Unknown'}</td>
                             <td class="p-2">${tutor?.name || 'Unknown'}</td>
@@ -2527,8 +2789,13 @@ Thank you for your understanding.
                             </td>
                         </tr>
                     `;
-                }).join('') || `<tr><td colspan="6" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
+                }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
             
+                renderPaginationControls(coursesPaginationContainer, page, totalPages, filteredCourses.length, (newPage) => {
+                    appState.pagination.courses.page = newPage;
+                    updateCoursesTable();
+                });
+
                 coursesTableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
                     btn.onclick = () => {
                         const courseToEdit = appState.courses.find(c => c.id === btn.dataset.id);
@@ -2545,17 +2812,18 @@ Thank you for your understanding.
                 });
             };
 
-            monthFilter.onchange = () => {
+            const handleFilterChange = () => {
+                appState.pagination.courses.page = 1;
                 appState.selectedFilters.coursesPeriod = monthFilter.value;
-                updateCoursesTable();
-            };
-            sportTypeFilter.onchange = () => {
                 appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
                 populateTutorFilter(tutorFilter, sportTypeFilter.value);
                 appState.selectedFilters.coursesTutorId = 'all';
                 tutorFilter.value = 'all';
                 updateCoursesTable();
             };
+
+            monthFilter.onchange = handleFilterChange;
+            sportTypeFilter.onchange = handleFilterChange;
             tutorFilter.onchange = () => {
                 appState.selectedFilters.coursesTutorId = tutorFilter.value;
                 updateCoursesTable();
@@ -2565,6 +2833,34 @@ Thank you for your understanding.
                 const defaultDateForNewCourse = monthFilter.value ? `${monthFilter.value}-01` : new Date().toISOString().split('T')[0];
                 openCourseModal(defaultDateForNewCourse);
             };
+            
+            // Swipe functionality for table
+            const tableContainer = container.querySelector('.table-swipe-container');
+            let isDown = false;
+            let startX;
+            let scrollLeft;
+
+            tableContainer.addEventListener('mousedown', (e) => {
+                isDown = true;
+                tableContainer.classList.add('swiping');
+                startX = e.pageX - tableContainer.offsetLeft;
+                scrollLeft = tableContainer.scrollLeft;
+            });
+            tableContainer.addEventListener('mouseleave', () => {
+                isDown = false;
+                tableContainer.classList.remove('swiping');
+            });
+            tableContainer.addEventListener('mouseup', () => {
+                isDown = false;
+                tableContainer.classList.remove('swiping');
+            });
+            tableContainer.addEventListener('mousemove', (e) => {
+                if(!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - tableContainer.offsetLeft;
+                const walk = (x - startX) * 2; //scroll-fast
+                tableContainer.scrollLeft = scrollLeft - walk;
+            });
 
             updateCoursesTable();
         }
@@ -2659,6 +2955,18 @@ Thank you for your understanding.
             DOMElements.cancelCopyBtn.onclick = cancelCopy;
 
             document.body.addEventListener('click', e => {
+                // MODIFIED: Deactivate time editing if clicking outside
+                if (!e.target.closest('.time-slot-editable.editing')) {
+                    document.querySelectorAll('.time-slot-editable.editing').forEach(el => {
+                        el.classList.remove('editing');
+                    });
+                }
+
+                if (e.target.closest('#cancelCopyBtn')) {
+                    cancelCopy();
+                    return;
+                }
+
                 const closeButton = e.target.closest('.modal-close-btn');
                 if (closeButton) {
                     const modalToClose = closeButton.closest('.modal-backdrop');
@@ -2699,7 +3007,7 @@ Thank you for your understanding.
                 if (addBtn && appState.currentUser?.type === 'owner') {
                     openCourseModal(addBtn.dataset.date);
                 }
-            }, true); // Use capture to handle clicks properly
+            }, true); 
         };
 
         // --- Run Application ---
