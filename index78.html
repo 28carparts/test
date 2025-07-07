@@ -128,7 +128,6 @@
         .copy-mode-source {
             animation: glowing-yellow 1.5s infinite;
             border: 1px solid #facc15;
-            cursor: copy;
         }
         
         .copy-mode-source-class {
@@ -198,6 +197,57 @@
             cursor: grabbing;
             user-select: none;
             -webkit-user-select: none;
+        }
+        
+        /* FIX #1: Sticky Schedule Header Refinement */
+        .day-column {
+            display: flex;
+            flex-direction: column;
+            /* REMOVED max-height to allow full content expansion */
+        }
+        .day-header {
+            position: -webkit-sticky; /* For Safari */
+            position: sticky;
+            top: -1px; /* Prevents 1px gap on some browsers */
+            background-color: rgba(248, 250, 252, 0.85); /* slate-50 with opacity */
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 20;
+        }
+        .courses-container {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        /* Member Sorting Icons */
+        .sort-icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            margin-left: 0.5em;
+            vertical-align: middle;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+        }
+        th.sortable:hover .sort-icon {
+            opacity: 1;
+        }
+        .sort-icon.asc {
+            opacity: 1;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23475569'%3E%3Cpath fill-rule='evenodd' d='M10 3a.75.75 0 01.75.75v12.5a.75.75 0 01-1.5 0V3.75A.75.75 0 0110 3zM5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z' clip-rule='evenodd' /%3E%3C/svg%3E");
+            transform: rotate(180deg);
+        }
+        .sort-icon.desc {
+            opacity: 1;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23475569'%3E%3Cpath fill-rule='evenodd' d='M10 3a.75.75 0 01.75.75v12.5a.75.75 0 01-1.5 0V3.75A.75.75 0 0110 3zM5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z' clip-rule='evenodd' /%3E%3C/svg%3E");
+        }
+
+        /* FIX #4: Courses Page Day Divider Styling */
+        .day-divider {
+             border-top: 2px solid #3b82f6; /* A brighter blue-500 */
+        }
+        .day-divider td {
+            padding-top: 1rem !important;
         }
 
     </style>
@@ -315,8 +365,8 @@
                 coursesPeriod: null,
                 coursesSportTypeId: 'all',
                 coursesTutorId: 'all',
-                memberSportType: 'all', // New filter for members
-                memberTutor: 'all' // New filter for members
+                memberSportType: 'all', 
+                memberTutor: 'all' 
             },
             ownerPastDaysVisible: 0,
             scheduleScrollIndex: null,
@@ -335,7 +385,15 @@
                 sports: '',
                 tutors: ''
             },
-            itemsPerPage: 10
+            itemsPerPage: {
+                courses: 10,
+                sports: 10,
+                tutors: 6 
+            },
+            membersSort: { 
+                key: 'name', 
+                direction: 'asc' 
+            }
         };
         let emblaApi = null;
         let onConfirmCallback = null;
@@ -383,11 +441,15 @@
                     copyMode: { active: false, type: null, sourceId: null, targetDate: null },
                     ownerPastDaysVisible: 0,
                     scheduleScrollIndex: null,
-                    pagination: { courses: { page: 1 }, sports: { page: 1 }, tutors: { page: 1 } },
-                    searchTerms: { sports: '', tutors: '' }
+                    pagination: loadedState.pagination || { courses: { page: 1 }, sports: { page: 1 }, tutors: { page: 1 } },
+                    searchTerms: loadedState.searchTerms || { sports: '', tutors: '' },
+                    membersSort: loadedState.membersSort || { key: 'name', direction: 'asc' }
                 };
+                if (typeof loadedState.itemsPerPage === 'number' || !loadedState.itemsPerPage) {
+                    loadedState.itemsPerPage = { courses: 10, sports: 10, tutors: 6 };
+                }
+
                 appState = { ...appState, ...loadedState, ...transientState };
-                 // Ensure new filters have default values
                 appState.selectedFilters.memberSportType = appState.selectedFilters.memberSportType || 'all';
                 appState.selectedFilters.memberTutor = appState.selectedFilters.memberTutor || 'all';
             } else {
@@ -411,8 +473,8 @@
                 ];
                 appState.members = [
                     { id: 'm_owner', name: 'Studio Owner', email: 'owner@gmail.com', password: '001234', phone: '+1 555000000', type: 'owner' },
-                    { id: 'm_member1', name: 'Perry Yuen', email: 'member1@gmail.com', password: '001234', phone: '+852 98001055', credits: 50, initialCredits: 50, creditCost: 80, purchaseAmount: 4000, monthlyPlan: false, type: 'member', lastBooking: null, expiryDate: '2026-06-30' },
-                    { id: 'm_member2', name: 'Irene Kwok', email: 'member2@gmail.com', password: '001234', phone: '+852 94909142', monthlyPlan: true, monthlyPlanAmount: 980, planStartDate: '2025-06-01', monthlyCreditValue: 25, type: 'member', lastBooking: null, expiryDate: null }
+                    { id: 'm_member1', name: 'Perry Yuen', email: 'member1@gmail.com', password: '001234', phone: '+852 98001055', credits: 50, initialCredits: 50, creditCost: 80, purchaseAmount: 4000, monthlyPlan: false, type: 'member', lastBooking: null, expiryDate: '2026-06-30', purchaseHistory: [{ id: 1688720400000, date: '2025-06-30T10:00:00.000Z', amount: 4000, credits: 50 }] },
+                    { id: 'm_member2', name: 'Irene Kwok', email: 'member2@gmail.com', password: '001234', phone: '+852 94909142', monthlyPlan: true, monthlyPlanAmount: 980, planStartDate: '2025-06-01', monthlyCreditValue: 25, type: 'member', lastBooking: null, expiryDate: null, purchaseHistory: [] }
                 ];
                 saveData();
             }
@@ -432,7 +494,8 @@
         
         const formatShortDateWithYear = (isoString) => {
             if (!isoString) return 'N/A';
-            const date = new Date(isoString + 'T00:00:00Z'); // Ensure date is parsed as UTC
+            const date = new Date(isoString.includes('T') ? isoString : isoString + 'T00:00:00Z');
+            if (isNaN(date)) return 'Invalid Date';
             const day = String(date.getUTCDate()).padStart(2, '0');
             const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
             const year = String(date.getUTCFullYear()).slice(-2);
@@ -441,11 +504,13 @@
         
         const formatDateWithWeekday = (isoString) => {
             if (!isoString) return 'N/A';
-            const date = new Date(isoString + 'T12:00:00Z'); // Use noon to avoid timezone shifts
-            const day = String(date.getUTCDate()).padStart(2, '0');
-            const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-            const weekday = date.toLocaleString('en-US', { weekday: 'short', timeZone: 'UTC' });
-            return `${day} ${month} (${weekday})`;
+            const date = new Date(isoString + 'T12:00:00Z');
+            return new Intl.DateTimeFormat('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric', 
+                timeZone: 'UTC' 
+            }).format(date);
         };
 
         const formatDisplayPhoneNumber = (fullPhoneNumber) => {
@@ -1291,24 +1356,45 @@ Thank you for your understanding.
                     <div class="embla overflow-hidden card p-4 md:p-6">
                         <div class="embla__viewport"><div class="embla__container flex -mx-2"></div></div>
                     </div>
-                    <button class="embla__button embla__button--prev absolute left-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
-                    <button class="embla__button embla__button--next absolute right-[-15px] top-1/2 -translate-y-1/2 bg-white text-slate-700 p-2 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
+                    <button class="embla__button embla__button--prev absolute left-[-28px] top-0 h-full bg-white/80 backdrop-blur-sm text-slate-700 px-2 rounded-none shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition flex items-center" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
+                    <button class="embla__button embla__button--next absolute right-[-28px] top-0 h-full bg-white/80 backdrop-blur-sm text-slate-700 px-2 rounded-none shadow-lg border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 z-10 hidden md:block transition flex items-center" type="button"><svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
                 </div>`;
             
             const emblaContainer = container.querySelector('.embla__container');
             emblaContainer.innerHTML = '';
             let content = '';
 
+            const todayIso = getIsoDate(new Date());
+            const headerDateFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
             datesArray.forEach(dateIso => {
-                const date = new Date(dateIso + 'T12:00:00Z'); 
-                 const copyButtonsHTML = showAddButton ? `
+                const date = new Date(dateIso + 'T12:00:00Z');
+                const isToday = (dateIso === todayIso);
+                const todayBadge = isToday ? '<span class="ml-2 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">Today</span>' : '';
+                const headerClasses = `day-header p-2 rounded-t-xl ${isToday ? 'bg-indigo-50' : 'hover:bg-slate-100'}`;
+
+                const copyButtonsHTML = showAddButton ? `
                     <div class="mt-2 grid grid-cols-2 gap-2">
                         <button data-date="${dateIso}" class="copy-class-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Class</button>
                         <button data-date="${dateIso}" class="copy-day-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">Copy Day</button>
                     </div>
                 ` : '';
-                
-                content += `<div class="embla__slide px-2"><div class="day-column bg-slate-50/50 rounded-xl p-4 flex flex-col"><div class="day-header text-center mb-4"><p class="text-lg font-bold text-slate-700">${date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p><p class="text-3xl font-extrabold text-slate-800">${date.getUTCDate()}</p><p class="text-xs font-semibold text-slate-500 uppercase">${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</p></div><div data-date="${dateIso}" class="courses-container px-1 py-1"></div><div class="add-controls-wrapper mt-auto pt-4">${showAddButton ? `<button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}</div></div></div>`;
+
+                content += `
+                    <div class="embla__slide px-2">
+                        <div class="day-column bg-slate-50/50 rounded-xl flex flex-col">
+                            <div class="${headerClasses}" data-date="${dateIso}">
+                                <div class="flex items-center justify-center font-semibold text-slate-700">
+                                    <span>${headerDateFormatter.format(date)}</span>
+                                    ${todayBadge}
+                                </div>
+                            </div>
+                            <div data-date="${dateIso}" class="courses-container px-1 py-1 flex-grow"></div>
+                            <div class="add-controls-wrapper mt-auto p-2">
+                                ${showAddButton ? `<button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}
+                            </div>
+                        </div>
+                    </div>`;
             });
             emblaContainer.innerHTML = content;
 
@@ -1505,14 +1591,14 @@ Thank you for your understanding.
                         const newCourse = { ...course, id: `c_${Date.now()}_${Math.random()}`, date: targetDate, bookedBy: [], attendedBy: [] };
                         appState.courses.push(newCourse);
                     });
-                    showMessageBox(`Copied ${coursesToCopy.length} class(es) from ${formatShortDateWithYear(sourceDate)} to ${formatShortDateWithYear(targetDate)}.`, 'success');
+                    showMessageBox(`Copied ${coursesToCopy.length} class(es) from ${formatDateWithWeekday(sourceDate)} to ${formatDateWithWeekday(targetDate)}.`, 'success');
                 }
             } else if (type === 'class') {
                 const courseToCopy = sourceData;
                 const newCourse = { ...courseToCopy, id: `c_${Date.now()}_${Math.random()}`, date: targetDate, bookedBy: [], attendedBy: [] };
                 appState.courses.push(newCourse);
                 const sportTypeName = appState.sportTypes.find(st => st.id === courseToCopy.sportTypeId).name;
-                showMessageBox(`Copied "${sportTypeName}" to ${formatShortDateWithYear(targetDate)}.`, 'success');
+                showMessageBox(`Copied "${sportTypeName}" to ${formatDateWithWeekday(targetDate)}.`, 'success');
             }
             
             saveData();
@@ -1526,6 +1612,7 @@ Thank you for your understanding.
 
             schedulePage.querySelectorAll('.copy-mode-source, .copy-mode-source-class, .copy-mode-paste-zone').forEach(el => {
                 el.classList.remove('copy-mode-source', 'copy-mode-source-class', 'copy-mode-paste-zone');
+                el.style.cursor = '';
             });
 
             if (!appState.copyMode.active) return;
@@ -1539,10 +1626,10 @@ Thank you for your understanding.
 
             if (type === 'day') {
                 showMessageBox('Copy Day: Select a day to copy FROM.', 'info');
-                schedulePage.querySelectorAll('.day-column').forEach(dayEl => {
-                    const date = dayEl.querySelector('.courses-container').dataset.date;
-                    if (date !== targetDate) {
-                        dayEl.classList.add('copy-mode-source');
+                schedulePage.querySelectorAll('.day-header').forEach(headerEl => {
+                    if (headerEl.dataset.date !== targetDate) {
+                        headerEl.classList.add('copy-mode-source');
+                        headerEl.style.cursor = 'copy';
                     }
                 });
             } else if (type === 'class') {
@@ -1555,7 +1642,6 @@ Thank you for your understanding.
                 });
             }
         }
-
 
         function renderAccountPage(container) {
             const member = appState.members.find(m => m.id === appState.currentUser.id);
@@ -1578,11 +1664,20 @@ Thank you for your understanding.
                                        <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</p></div>`
                                 }
                             </div>
-                            <div class="mt-8 space-y-4">
+                             <div class="mt-8 space-y-4">
                                 <button id="editProfileBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Edit Profile</button>
                                 <button id="changePasswordBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-lg transition">Change Password</button>
                             </div>
                         </div>
+                         ${!member.monthlyPlan ? `
+                        <div class="card p-6 mt-8">
+                             <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Purchase History</h4>
+                            <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
+                                ${member.purchaseHistory && member.purchaseHistory.length > 0 ? member.purchaseHistory.map(p => `
+                                    <div class="text-slate-600 bg-slate-50 p-2 rounded-md"><strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits</div>
+                                `).join('') : '<p class="text-sm text-slate-500 text-center">No purchase history.</p>'}
+                            </div>
+                        </div>` : ''}
                     </div>
                     <div class="md:col-span-2">
                         <div class="card p-6">
@@ -1746,7 +1841,6 @@ Thank you for your understanding.
             }
         }
 
-
         function renderMembersPage(container) {
             container.innerHTML = `
                 <div class="card p-6 md:p-8">
@@ -1766,11 +1860,11 @@ Thank you for your understanding.
                         <table class="w-full text-left">
                             <thead>
                                 <tr class="border-b">
-                                    <th class="p-2">Name</th>
+                                    <th class="p-2 sortable cursor-pointer" data-sort-key="name">Name<span class="sort-icon"></span></th>
                                     <th class="p-2">Contact</th>
-                                    <th class="p-2">Credits/Plan</th>
-                                    <th class="p-2">Credit Expiry</th>
-                                    <th class="p-2">Last Active</th>
+                                    <th class="p-2 sortable cursor-pointer" data-sort-key="credits">Credits/Plan<span class="sort-icon"></span></th>
+                                    <th class="p-2 sortable cursor-pointer" data-sort-key="expiryDate">Credit Expiry<span class="sort-icon"></span></th>
+                                    <th class="p-2 sortable cursor-pointer" data-sort-key="lastBooking">Last Active<span class="sort-icon"></span></th>
                                     <th class="p-2"></th>
                                 </tr>
                             </thead>
@@ -1784,13 +1878,44 @@ Thank you for your understanding.
             const tableBody = container.querySelector('#membersTableBody');
 
             const updateTable = (searchTerm = '') => {
-                const filteredMembers = appState.members.filter(m => 
+                const { key, direction } = appState.membersSort;
+
+                container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
+                    icon.className = 'sort-icon';
+                });
+                const activeHeader = container.querySelector(`th[data-sort-key="${key}"] .sort-icon`);
+                if (activeHeader) {
+                    activeHeader.classList.add(direction);
+                }
+
+                const sortedMembers = [...appState.members].sort((a, b) => {
+                    if (a.type === 'owner' || b.type === 'owner') return 0;
+
+                    let valA = a[key];
+                    let valB = b[key];
+
+                    if (key === 'credits') {
+                        if (a.monthlyPlan) valA = Infinity;
+                        if (b.monthlyPlan) valB = Infinity;
+                    }
+                    if (key === 'expiryDate' || key === 'lastBooking') {
+                        valA = valA ? new Date(valA).getTime() : -Infinity;
+                        valB = valB ? new Date(valB).getTime() : -Infinity;
+                    }
+
+                    if (valA < valB) return direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                const filteredMembers = sortedMembers.filter(m => 
                     m.type !== 'owner' && (
                     !searchTerm ||
                     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     m.phone.includes(searchTerm))
                 );
+
                 tableBody.innerHTML = filteredMembers.map(member => `
                     <tr class="border-b border-slate-100">
                         <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
@@ -1820,7 +1945,6 @@ Thank you for your understanding.
                             });
                             saveData();
                             updateTable(searchInput.value);
-                            renderCurrentPage();
                             showMessageBox('Member deleted.', 'info');
                         });
                     };
@@ -1832,6 +1956,20 @@ Thank you for your understanding.
                     };
                 });
             };
+
+            container.querySelectorAll('th.sortable').forEach(header => {
+                header.onclick = () => {
+                    const newKey = header.dataset.sortKey;
+                    const { key, direction } = appState.membersSort;
+                    if (key === newKey) {
+                        appState.membersSort.direction = direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        appState.membersSort.key = newKey;
+                        appState.membersSort.direction = 'asc';
+                    }
+                    updateTable(searchInput.value);
+                };
+            });
 
             searchInput.oninput = () => {
                 const term = searchInput.value;
@@ -1850,12 +1988,15 @@ Thank you for your understanding.
             updateTable();
         }
         
+        // FIX #2: Update Member Modal to show and edit credit history
         function openMemberModal(memberToEdit = null) {
             DOMElements.memberModal.innerHTML = `
                 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                     <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                     <h2 id="memberModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
-                    <form id="memberForm" class="space-y-4"><input type="hidden" id="memberModalId">
+                    <form id="memberForm" class="space-y-4">
+                        <input type="hidden" id="memberModalId">
+                        <input type="hidden" id="purchaseHistoryId">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label for="memberName" class="block text-slate-600 text-sm font-semibold mb-2">Member Name</label><input type="text" id="memberName" required class="form-input"></div>
                             <div><label for="memberEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email Address</label><input type="email" id="memberEmail" required class="form-input"></div>
@@ -1868,14 +2009,12 @@ Thank you for your understanding.
                             <div class="flex items-center mb-4"><input type="checkbox" id="monthlyPlan" class="h-4 w-4 rounded text-indigo-600"><label for="monthlyPlan" class="ml-2 text-slate-700">Monthly Plan</label></div>
                             <div id="creditFields" class="space-y-4">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label for="purchaseAmount" class="block text-slate-600 text-sm font-semibold mb-2">Purchase Amount ($)</label><input type="number" id="purchaseAmount" class="form-input" min="0"></div>
-                                    <div><label for="initialCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits Purchased</label><input type="number" id="initialCredits" class="form-input" min="0"></div>
+                                    <div><label for="purchaseAmount" class="block text-slate-600 text-sm font-semibold mb-2">Top-up Amount ($)</label><input type="number" id="purchaseAmount" class="form-input" min="0"></div>
+                                    <div><label for="creditsToAdd" class="block text-slate-600 text-sm font-semibold mb-2">Credits to Add/Edit</label><input type="number" id="creditsToAdd" class="form-input" min="0"></div>
                                 </div>
-                                <div class="flex justify-end">
-                                    <div id="costPerCredit" class="text-right"><span class="text-sm text-slate-500">Cost/Credit:</span> <span class="font-bold text-lg text-slate-700"></span></div>
-                                </div>
+                                <div id="purchaseHistoryContainer" class="space-y-2 max-h-32 overflow-y-auto"></div>
                                 <div>
-                                    <label for="expiryDate" class="block text-slate-600 text-sm font-semibold mb-2">Credit Expiry</label>
+                                    <label for="expiryDate" class="block text-slate-600 text-sm font-semibold mb-2">New Credit Expiry</label>
                                     <div class="flex gap-2 mb-2">
                                         <button type="button" data-years="1" class="expiry-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">1 Year</button>
                                         <button type="button" data-years="2" class="expiry-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">2 Years</button>
@@ -1902,26 +2041,14 @@ Thank you for your understanding.
             const submitBtn = modal.querySelector('.submit-btn');
 
             const purchaseAmountInput = form.querySelector('#purchaseAmount');
-            const creditsInput = form.querySelector('#initialCredits');
-            const costPerCreditSpan = form.querySelector('#costPerCredit span:last-child');
+            const creditsInput = form.querySelector('#creditsToAdd');
             const memberCountryCodeInput = form.querySelector('#memberCountryCode');
             const memberPhoneInput = form.querySelector('#memberPhone');
             const expiryDateInput = form.querySelector('#expiryDate');
             const planStartDateInput = form.querySelector('#planStartDate');
+            const historyContainer = form.querySelector('#purchaseHistoryContainer');
+            const historyIdInput = form.querySelector('#purchaseHistoryId');
 
-
-            const calculateCost = () => {
-                const amount = parseFloat(purchaseAmountInput.value);
-                const credits = parseFloat(creditsInput.value);
-                if(amount > 0 && credits > 0) {
-                    costPerCreditSpan.textContent = formatCurrency(amount / credits);
-                } else {
-                    costPerCreditSpan.textContent = 'N/A';
-                }
-            };
-            purchaseAmountInput.oninput = calculateCost;
-            creditsInput.oninput = calculateCost;
-            
             memberPhoneInput.oninput = (e) => {
                 const digitsOnly = e.target.value.replace(/\D/g, '');
                 e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
@@ -1955,12 +2082,22 @@ Thank you for your understanding.
                 }
                 
                 form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
-                form.querySelector('#initialCredits').value = memberToEdit.initialCredits;
-                form.querySelector('#purchaseAmount').value = memberToEdit.purchaseAmount;
                 form.querySelector('#expiryDate').value = memberToEdit.expiryDate;
                 form.querySelector('#monthlyPlanAmount').value = memberToEdit.monthlyPlanAmount;
                 planStartDateInput.value = memberToEdit.planStartDate;
                 form.querySelector('#monthlyCreditValue').value = memberToEdit.monthlyCreditValue;
+
+                // Render purchase history
+                if (memberToEdit.purchaseHistory && memberToEdit.purchaseHistory.length > 0) {
+                    historyContainer.innerHTML = memberToEdit.purchaseHistory.map(p => {
+                        const costPerCredit = p.credits > 0 ? formatCurrency(p.amount / p.credits) : 'N/A';
+                        return `<div class="text-slate-600 bg-slate-50 p-2 rounded-md cursor-pointer hover:bg-slate-200 transition" data-history-id="${p.id}">
+                                    <strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits <span class="text-xs text-slate-500">(${costPerCredit}/credit)</span>
+                                </div>`;
+                    }).join('');
+                } else {
+                     historyContainer.innerHTML = '<p class="text-sm text-slate-500 text-center">No purchase history.</p>';
+                }
                 
             } else {
                 title.textContent = "Add New Member";
@@ -1969,6 +2106,21 @@ Thank you for your understanding.
                 const today = new Date();
                 planStartDateInput.value = today.toISOString().split('T')[0];
             }
+            
+            historyContainer.onclick = (e) => {
+                const target = e.target.closest('[data-history-id]');
+                if (target) {
+                    const id = target.dataset.historyId;
+                    const historyEntry = memberToEdit.purchaseHistory.find(p => p.id == id);
+                    if (historyEntry) {
+                        purchaseAmountInput.value = historyEntry.amount;
+                        creditsInput.value = historyEntry.credits;
+                        historyIdInput.value = id;
+                        showMessageBox(`Editing purchase from ${formatShortDateWithYear(historyEntry.date)}.`, 'info');
+                    }
+                }
+            };
+
 
             const monthlyPlanCheckbox = form.querySelector('#monthlyPlan');
             const creditFieldsContainer = form.querySelector('#creditFields');
@@ -1980,7 +2132,6 @@ Thank you for your understanding.
             };
             monthlyPlanCheckbox.onchange = updatePlanFields;
             updatePlanFields();
-            calculateCost();
 
             form.onsubmit = handleMemberFormSubmit;
             openModal(DOMElements.memberModal);
@@ -1992,13 +2143,13 @@ Thank you for your understanding.
             const id = form.querySelector('#memberModalId').value;
             const password = form.querySelector('#memberPassword').value;
             const isMonthly = form.querySelector('#monthlyPlan').checked;
-            const purchaseAmount = parseFloat(form.querySelector('#purchaseAmount').value) || 0;
-            const initialCredits = parseFloat(form.querySelector('#initialCredits').value) || 0;
+            const topUpAmount = parseFloat(form.querySelector('#purchaseAmount').value) || 0;
+            const creditsToAdd = parseFloat(form.querySelector('#creditsToAdd').value) || 0;
+            const historyId = form.querySelector('#purchaseHistoryId').value;
             
             const countryCode = form.querySelector('#memberCountryCode').value.trim();
             const phoneNumberDigits = form.querySelector('#memberPhone').value.replace(/\D/g, '');
             const fullPhoneNumber = countryCode ? `+${countryCode} ${phoneNumberDigits}` : phoneNumberDigits;
-
 
             let memberData = {
                 name: form.querySelector('#memberName').value,
@@ -2006,28 +2157,73 @@ Thank you for your understanding.
                 phone: fullPhoneNumber,
                 monthlyPlan: isMonthly,
                 type: 'member',
-                initialCredits: isMonthly ? 0 : initialCredits,
-                purchaseAmount: isMonthly ? 0 : purchaseAmount,
-                creditCost: (isMonthly || !initialCredits) ? 0 : purchaseAmount / initialCredits,
-                expiryDate: isMonthly ? null : form.querySelector('#expiryDate').value,
                 monthlyPlanAmount: isMonthly ? parseFloat(form.querySelector('#monthlyPlanAmount').value) : 0,
                 planStartDate: isMonthly ? form.querySelector('#planStartDate').value : null,
                 monthlyCreditValue: isMonthly ? parseFloat(form.querySelector('#monthlyCreditValue').value) : 0,
             };
             
-            if (id) {
+            if (id) { // Editing existing member
                 const index = appState.members.findIndex(m => m.id === id);
                 if (index > -1) {
-                    if (password) memberData.password = password;
-                    memberData.credits = appState.members[index].initialCredits === initialCredits ? appState.members[index].credits : initialCredits;
-                    appState.members[index] = { ...appState.members[index], ...memberData };
+                    const member = appState.members[index];
+                    if (password) member.password = password;
+
+                    if (!isMonthly && (topUpAmount > 0 || creditsToAdd > 0)) {
+                        if (historyId) { // Editing an existing history entry
+                            const historyIndex = member.purchaseHistory.findIndex(p => p.id == historyId);
+                            if (historyIndex > -1) {
+                                const oldEntry = member.purchaseHistory[historyIndex];
+                                // Revert old values from totals
+                                member.credits -= oldEntry.credits;
+                                member.initialCredits -= oldEntry.credits;
+                                
+                                // Apply new values
+                                oldEntry.amount = topUpAmount;
+                                oldEntry.credits = creditsToAdd;
+                                member.credits += creditsToAdd;
+                                member.initialCredits += creditsToAdd;
+                            }
+                        } else { // Adding a new purchase
+                             const newPurchase = {
+                                id: Date.now(),
+                                date: new Date().toISOString(),
+                                amount: topUpAmount,
+                                credits: creditsToAdd
+                            };
+                            if (!member.purchaseHistory) member.purchaseHistory = [];
+                            member.purchaseHistory.push(newPurchase);
+                            member.credits = (member.credits || 0) + creditsToAdd;
+                            member.initialCredits = (member.initialCredits || 0) + creditsToAdd;
+                        }
+                        member.expiryDate = form.querySelector('#expiryDate').value;
+                    }
+                    
+                    appState.members[index] = { ...member, ...memberData };
                     showMessageBox('Member updated successfully.', 'success');
                 }
-            } else {
+            } else { // Adding new member
                 memberData.id = `m_${Date.now()}`;
                 memberData.password = password;
                 memberData.lastBooking = null;
-                memberData.credits = initialCredits;
+                memberData.purchaseHistory = [];
+                
+                if (!isMonthly && topUpAmount > 0 && creditsToAdd > 0) {
+                     const newPurchase = {
+                        id: Date.now(),
+                        date: new Date().toISOString(),
+                        amount: topUpAmount,
+                        credits: creditsToAdd
+                    };
+                    memberData.purchaseHistory.push(newPurchase);
+                    memberData.credits = creditsToAdd;
+                    memberData.initialCredits = creditsToAdd;
+                    memberData.expiryDate = form.querySelector('#expiryDate').value;
+                } else {
+                    memberData.credits = 0;
+                    memberData.initialCredits = 0;
+                    memberData.expiryDate = null;
+                }
+
                 appState.members.push(memberData);
                 showMessageBox('Member added successfully.', 'success');
             }
@@ -2037,13 +2233,14 @@ Thank you for your understanding.
             renderMembersPage(document.getElementById('page-members'));
         }
         
+        // FIX #3: Refactor Admin page rendering for live updates
         function renderAdminPage(container) {
             container.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     <!-- Sport Types Card -->
                     <div class="card p-6 flex flex-col">
                         <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
-                            <h3 class="text-2xl font-bold text-slate-800">Sport Types (${appState.sportTypes.length})</h3>
+                            <h3 id="sportsHeader" class="text-2xl font-bold text-slate-800"></h3>
                             <div class="relative">
                                 <input type="text" id="sportSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.sports}">
                             </div>
@@ -2057,7 +2254,7 @@ Thank you for your understanding.
                     <!-- Tutors Card -->
                     <div class="card p-6 flex flex-col">
                         <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
-                            <h3 class="text-2xl font-bold text-slate-800">Tutors (${appState.tutors.length})</h3>
+                            <h3 id="tutorsHeader" class="text-2xl font-bold text-slate-800"></h3>
                             <div class="relative">
                                 <input type="text" id="tutorSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.tutors}">
                             </div>
@@ -2077,7 +2274,6 @@ Thank you for your understanding.
             container.querySelector('#sportsList').addEventListener('click', handleAdminListClick);
             container.querySelector('#tutorsList').addEventListener('click', handleAdminListClick);
             
-            // Search listeners
             container.querySelector('#sportSearchInput').oninput = (e) => {
                 appState.searchTerms.sports = e.target.value;
                 appState.pagination.sports.page = 1;
@@ -2090,29 +2286,33 @@ Thank you for your understanding.
             };
         }
 
+        // FIX #3: Update admin lists to show skills and update counts
         function renderAdminLists() {
             const { itemsPerPage } = appState;
 
             // --- Render Sports List ---
             const sportsList = document.getElementById('sportsList');
             const sportsPaginationContainer = document.getElementById('sportsPagination');
-            if (sportsList && sportsPaginationContainer) {
+            const sportsHeader = document.getElementById('sportsHeader');
+
+            if (sportsList && sportsPaginationContainer && sportsHeader) {
+                sportsHeader.textContent = `Sport Types (${appState.sportTypes.length})`;
                 const sportSearchTerm = appState.searchTerms.sports.toLowerCase();
                 const filteredSports = appState.sportTypes.filter(st => st.name.toLowerCase().includes(sportSearchTerm));
                 
-                const sportsTotalPages = Math.ceil(filteredSports.length / itemsPerPage) || 1;
+                const sportsTotalPages = Math.ceil(filteredSports.length / itemsPerPage.sports) || 1;
                 let sportPage = appState.pagination.sports.page;
                 if (sportPage > sportsTotalPages) sportPage = sportsTotalPages;
                 
-                const paginatedSports = filteredSports.slice((sportPage - 1) * itemsPerPage, sportPage * itemsPerPage);
+                const paginatedSports = filteredSports.slice((sportPage - 1) * itemsPerPage.sports, sportPage * itemsPerPage.sports);
 
                 sportsList.innerHTML = paginatedSports.map(st => `
                     <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
-                        <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700">${st.name}</span></div>
+                        <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700 font-semibold">${st.name}</span></div>
                         <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
                     </li>`).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
                 
-                renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, (newPage) => {
+                renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, itemsPerPage.sports, (newPage) => {
                     appState.pagination.sports.page = newPage;
                     renderAdminLists();
                 });
@@ -2121,27 +2321,35 @@ Thank you for your understanding.
             // --- Render Tutors List ---
             const tutorsList = document.getElementById('tutorsList');
             const tutorsPaginationContainer = document.getElementById('tutorsPagination');
-            if (tutorsList && tutorsPaginationContainer) {
+            const tutorsHeader = document.getElementById('tutorsHeader');
+            if (tutorsList && tutorsPaginationContainer && tutorsHeader) {
+                tutorsHeader.textContent = `Tutors (${appState.tutors.length})`;
                 const tutorSearchTerm = appState.searchTerms.tutors.toLowerCase();
                 const filteredTutors = appState.tutors.filter(t => t.name.toLowerCase().includes(tutorSearchTerm) || (t.email && t.email.toLowerCase().includes(tutorSearchTerm)));
 
-                const tutorsTotalPages = Math.ceil(filteredTutors.length / itemsPerPage) || 1;
+                const tutorsTotalPages = Math.ceil(filteredTutors.length / itemsPerPage.tutors) || 1;
                 let tutorPage = appState.pagination.tutors.page;
                 if (tutorPage > tutorsTotalPages) tutorPage = tutorsTotalPages;
 
-                const paginatedTutors = filteredTutors.slice((tutorPage - 1) * itemsPerPage, tutorPage * itemsPerPage);
+                const paginatedTutors = filteredTutors.slice((tutorPage - 1) * itemsPerPage.tutors, tutorPage * itemsPerPage.tutors);
 
-                tutorsList.innerHTML = paginatedTutors.map(t => `
-                     <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
+                tutorsList.innerHTML = paginatedTutors.map(t => {
+                    const skillsHtml = t.skills.map(skill => {
+                        const sportType = appState.sportTypes.find(st => st.id === skill.sportTypeId);
+                        return sportType ? `<span class="text-xs font-medium me-2 px-2.5 py-0.5 rounded-full" style="background-color:${sportType.color}20; color:${sportType.color};">${sportType.name}</span>` : '';
+                    }).join('');
+
+                    return `
+                     <li class="flex justify-between items-center bg-slate-100 p-3 rounded-md min-h-[68px]">
                         <div>
                             <p class="text-slate-700 font-semibold">${t.name}</p>
-                            <p class="text-xs text-slate-500">${t.email || ''}</p>
-                            <p class="text-xs text-slate-500">${formatDisplayPhoneNumber(t.phone) || ''}</p>
+                            <div class="flex flex-wrap gap-1 mt-1">${skillsHtml}</div>
                         </div>
                         <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
-                    </li>`).join('') || `<li class="text-center text-slate-500 p-4">No tutors found.</li>`;
+                    </li>`
+                }).join('') || `<li class="text-center text-slate-500 p-4">No tutors found.</li>`;
                 
-                renderPaginationControls(tutorsPaginationContainer, tutorPage, tutorsTotalPages, filteredTutors.length, (newPage) => {
+                renderPaginationControls(tutorsPaginationContainer, tutorPage, tutorsTotalPages, filteredTutors.length, itemsPerPage.tutors, (newPage) => {
                     appState.pagination.tutors.page = newPage;
                     renderAdminLists();
                 });
@@ -2158,7 +2366,6 @@ Thank you for your understanding.
                 if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
             } else if (target.classList.contains('delete-btn')) {
                 showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
-                    saveSchedulePosition();
                     if (type === 'sportType') {
                         appState.sportTypes = appState.sportTypes.filter(st => st.id !== id);
                         appState.courses = appState.courses.filter(c => c.sportTypeId !== id);
@@ -2169,7 +2376,6 @@ Thank you for your understanding.
                     }
                     saveData();
                     renderAdminLists();
-                    renderCurrentPage();
                     showMessageBox(`${type} deleted.`, 'info');
                 });
             }
@@ -2204,7 +2410,6 @@ Thank you for your understanding.
 
         function handleSportTypeFormSubmit(e) {
             e.preventDefault();
-            saveSchedulePosition();
             const form = e.target;
             const id = form.querySelector('#sportTypeModalId').value;
             const sportTypeData = { name: form.querySelector('#sportTypeName').value, color: form.querySelector('#sportTypeColor').value };
@@ -2217,8 +2422,7 @@ Thank you for your understanding.
             }
             saveData(); 
             closeModal(DOMElements.sportTypeModal); 
-            renderAdminPage(document.getElementById('page-admin')); 
-            renderCurrentPage();
+            renderAdminLists();
         }
 
         function openTutorModal(tutorToEdit = null) {
@@ -2343,7 +2547,7 @@ Thank you for your understanding.
             }
             saveData(); 
             closeModal(DOMElements.tutorModal); 
-            renderAdminPage(document.getElementById('page-admin'));
+            renderAdminLists();
         }
 
         function renderSalaryPage(container) {
@@ -2637,14 +2841,13 @@ Thank you for your understanding.
             selectEl.innerHTML = optionsHtml;
         }
 
-        function renderPaginationControls(container, currentPage, totalPages, totalItems, onPageChange) {
+        function renderPaginationControls(container, currentPage, totalPages, totalItems, itemsPerPage, onPageChange) {
             container.innerHTML = '';
             if (totalItems === 0) {
                 container.innerHTML = `<span class="text-sm text-slate-500">No items to display</span>`;
                 return;
             }
 
-            const { itemsPerPage } = appState;
             const startItem = (currentPage - 1) * itemsPerPage + 1;
             const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
@@ -2765,18 +2968,23 @@ Thank you for your understanding.
                 });
                 
                 const { itemsPerPage } = appState;
-                const totalPages = Math.ceil(filteredCourses.length / itemsPerPage) || 1;
+                const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
                 let page = appState.pagination.courses.page;
                 if (page > totalPages) page = totalPages;
 
-                const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+                const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage.courses, page * itemsPerPage.courses);
 
+                let lastDate = null;
                 coursesTableBody.innerHTML = paginatedCourses.map((course, index) => {
                     const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                     const tutor = appState.tutors.find(t => t.id === course.tutorId);
-                    const entryNumber = (page - 1) * itemsPerPage + index + 1;
+                    const entryNumber = (page - 1) * itemsPerPage.courses + index + 1;
+                    
+                    const isNewDay = course.date !== lastDate;
+                    lastDate = course.date;
+
                     return `
-                        <tr class="border-b border-slate-100">
+                        <tr class="border-b border-slate-100 ${isNewDay && index > 0 ? 'day-divider' : ''}">
                             <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
                             <td class="p-2">${formatShortDateWithYear(course.date)}<br><span class="text-sm text-slate-500">${getTimeRange(course.time, course.duration)}</span></td>
                             <td class="p-2 font-semibold">${sportType?.name || 'Unknown'}</td>
@@ -2791,7 +2999,7 @@ Thank you for your understanding.
                     `;
                 }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
             
-                renderPaginationControls(coursesPaginationContainer, page, totalPages, filteredCourses.length, (newPage) => {
+                renderPaginationControls(coursesPaginationContainer, page, totalPages, filteredCourses.length, itemsPerPage.courses, (newPage) => {
                     appState.pagination.courses.page = newPage;
                     updateCoursesTable();
                 });
@@ -2834,7 +3042,6 @@ Thank you for your understanding.
                 openCourseModal(defaultDateForNewCourse);
             };
             
-            // Swipe functionality for table
             const tableContainer = container.querySelector('.table-swipe-container');
             let isDown = false;
             let startX;
@@ -2858,7 +3065,7 @@ Thank you for your understanding.
                 if(!isDown) return;
                 e.preventDefault();
                 const x = e.pageX - tableContainer.offsetLeft;
-                const walk = (x - startX) * 2; //scroll-fast
+                const walk = (x - startX) * 2;
                 tableContainer.scrollLeft = scrollLeft - walk;
             });
 
@@ -2955,7 +3162,6 @@ Thank you for your understanding.
             DOMElements.cancelCopyBtn.onclick = cancelCopy;
 
             document.body.addEventListener('click', e => {
-                // MODIFIED: Deactivate time editing if clicking outside
                 if (!e.target.closest('.time-slot-editable.editing')) {
                     document.querySelectorAll('.time-slot-editable.editing').forEach(el => {
                         el.classList.remove('editing');
@@ -2979,19 +3185,30 @@ Thank you for your understanding.
                 }
 
                 if (appState.copyMode.active) {
+                    let copyActionTaken = false;
                     const { type, targetDate } = appState.copyMode;
 
                     if (type === 'day') {
-                        const sourceDayColumn = e.target.closest('.copy-mode-source');
-                        if (sourceDayColumn) {
-                            const sourceDate = sourceDayColumn.querySelector('.courses-container').dataset.date;
+                        const sourceHeader = e.target.closest('.copy-mode-source.day-header');
+                        if (sourceHeader) {
+                            copyActionTaken = true;
+                            const sourceDate = sourceHeader.dataset.date;
                             if (sourceDate !== targetDate) {
-                                performCopy('day', sourceDate, targetDate);
+                                const friendlySourceDate = formatDateWithWeekday(sourceDate);
+                                const friendlyTargetDate = formatDateWithWeekday(targetDate);
+                                showConfirmation(
+                                    'Confirm Copy Day',
+                                    `Are you sure you want to copy all classes from <strong>${friendlySourceDate}</strong> to <strong>${friendlyTargetDate}</strong>?`,
+                                    () => {
+                                        performCopy('day', sourceDate, targetDate);
+                                    }
+                                );
                             }
                         }
                     } else if (type === 'class') {
                         const sourceClassEl = e.target.closest('.copy-mode-source-class');
                         if (sourceClassEl) {
+                            copyActionTaken = true;
                             const courseId = sourceClassEl.id;
                             const courseToCopy = appState.courses.find(c => c.id === courseId);
                             if (courseToCopy && courseToCopy.date !== targetDate) {
@@ -2999,8 +3216,11 @@ Thank you for your understanding.
                             }
                         }
                     }
-                    e.stopPropagation();
-                    return; 
+                    
+                    if (copyActionTaken) {
+                        e.stopPropagation();
+                        return; 
+                    }
                 }
 
                 const addBtn = e.target.closest('.add-course-button');
