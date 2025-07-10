@@ -147,6 +147,19 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     const formatCurrency = (amount) => (amount || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
     
+    // --- START: Add this new function here ---
+    const formatCredits = (credits) => {
+        const num = parseFloat(credits);
+        if (isNaN(num)) return '0'; // Handle cases where credits might not be a number
+        // Check if the number is an integer
+        if (num % 1 === 0) {
+            return num.toString();
+        }
+        // Otherwise, return it with one decimal place
+        return num.toFixed(1);
+    };
+    // --- END: Add this new function here ---
+
     const formatShortDateWithYear = (isoString) => {
         if (!isoString) return 'N/A';
         const date = new Date(isoString.includes('T') ? isoString : isoString + 'T00:00:00Z');
@@ -1548,7 +1561,7 @@ Thank you for your understanding.
                                 ? `<div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
                                    <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.planStartDate)}</p></div>`
                                 : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
-                                        <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${(member.credits || 0).toFixed(1)}/${member.initialCredits || 'N/A'}</span>
+                                        <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>
                                     </p></div>
                                    <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</p></div>`
                             }
@@ -1822,8 +1835,8 @@ Thank you for your understanding.
                     <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
                     <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
                     <td class="p-2">${member.monthlyPlan 
-                        ? `<span class="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
-                        : `<span class="bg-yellow-100 text-yellow-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full">${(member.credits || 0).toFixed(1)}/${member.initialCredits || 'N/A'}</span>`}
+                        ? `<span ...>...</span>` 
+                        : `<span class="...">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>`}
                     </td>
                     <td class="p-2 text-sm">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</td>
                     <td class="p-2 text-sm">${member.lastBooking ? formatShortDateWithYear(member.lastBooking) : 'N/A'}</td>
