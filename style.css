@@ -110,11 +110,11 @@ input[type="date"].form-input {
 .modal-backdrop { 
     background-color: rgba(15, 23, 42, 0.6); 
     backdrop-filter: blur(8px);
-    /* This new padding rule handles all devices and safe areas */
-    padding: max(1rem, env(safe-area-inset-top)) 
-             max(1rem, env(safe-area-inset-right)) 
-             max(1rem, env(safe-area-inset-bottom)) 
-             max(1rem, env(safe-area-inset-left));
+    /* This rule adds safe padding for all devices, including iPhones with a notch */
+    padding: max(1.5rem, env(safe-area-inset-top)) 
+             max(1.5rem, env(safe-area-inset-right)) 
+             max(1.5rem, env(safe-area-inset-bottom)) 
+             max(1.5rem, env(safe-area-inset-left));
 }
 .modal-content {
     transition: all 0.3s ease-in-out;
