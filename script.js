@@ -3126,7 +3126,8 @@ Thank you for your understanding.
         };
 
         addCourseBtn.onclick = () => {
-            const defaultDateForNewCourse = monthFilter.value ? `${monthFilter.value}-01` : new Date().toISOString().split('T')[0];
+            // This now defaults directly to today's date.
+            const defaultDateForNewCourse = new Date().toISOString().split('T')[0];
             openCourseModal(defaultDateForNewCourse);
         };
         
