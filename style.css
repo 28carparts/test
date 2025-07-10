@@ -107,7 +107,15 @@ input[type="date"].form-input {
 .form-input:focus, .form-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px #c7d2fe; }
 
 /* Modals */
-.modal-backdrop { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); }
+.modal-backdrop { 
+    background-color: rgba(15, 23, 42, 0.6); 
+    backdrop-filter: blur(8px);
+    /* Add the following lines for safe-area support */
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    padding-left: calc(1rem + env(safe-area-inset-left));
+    padding-right: calc(1rem + env(safe-area-inset-right));
+}
 .modal-content { transition: all 0.3s ease-in-out; }
 .modal-content.open {
      opacity: 1;
