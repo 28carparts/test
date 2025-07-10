@@ -88,6 +88,17 @@ header h1 { flex-shrink: 0; }
     padding-right: 2.5rem; /* Add space for the arrow */
 }
 /* --- END: Custom Dropdown Styling Fix --- */
+
+/* --- START: Date Input Consistency Fix --- */
+input[type="date"].form-input {
+    /* Re-apply vertical padding to override browser defaults */
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+    /* Ensure text aligns vertically like other inputs */
+    line-height: 1.5; 
+}
+/* --- END: Date Input Consistency Fix --- */
+
 .form-input:focus, .form-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px #c7d2fe; }
 
 /* Modals */
