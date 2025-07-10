@@ -474,8 +474,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h2 class="text-2xl font-bold text-slate-800 mb-4 text-center">${title}</h2>
                 <p class="text-slate-600 text-center mb-6">${message}</p>
                 <div class="flex justify-center gap-4">
-                    <button class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-6 rounded-lg">Cancel</button>
-                    <button class="confirm-btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg">Confirm</button>
+                    <button type="button" class="cancel-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                    <button type="button" class="confirm-btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg">Confirm</button>
                 </div>
             </div>`;
         onConfirmCallback = onConfirm;
@@ -536,19 +536,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm" data-member-id="${member.id}">
                             <div class="flex-grow">
                                 <span class="font-semibold text-slate-700 member-name">${member.name}</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-sm text-slate-500">${formatDisplayPhoneNumber(member.phone)}</span>
-                                    <button class="copy-phone-btn text-slate-400 hover:text-indigo-600" data-phone-digits="${phoneDigits}" title="Copy Phone Number">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2H6zM8 7a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /></svg>
-                                    </button>
-                                </div>
+                                <!-- The changes are in the span below -->
+                                <span class="copy-phone-number text-sm text-slate-500 cursor-pointer hover:text-indigo-600 transition" 
+                                      data-phone-digits="${phoneDigits}" 
+                                      title="Click to copy number">
+                                    ${formatDisplayPhoneNumber(member.phone)}
+                                </span>
                             </div>
                             <button class="copy-notify-msg-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-full transition">Copy WhatsApp Msg</button>
                         </div>
                     `}).join('')}
                 </div>
                 <div class="flex justify-center mt-8">
-                    <button id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Course</button>
+                    <button type="button" id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Course</button>
                 </div>
             </div>`;
         
@@ -577,11 +577,12 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
         
-        modal.querySelectorAll('.copy-phone-btn').forEach(btn => {
-            btn.onclick = (e) => {
+        modal.querySelectorAll('.copy-phone-number').forEach(span => {
+            span.onclick = (e) => {
                 e.stopPropagation();
-                const phoneNumber = btn.dataset.phoneDigits;
-                copyTextToClipboard(phoneNumber, `Copied ${phoneNumber} to clipboard!`);
+                const phoneNumber = span.dataset.phoneDigits;
+                // We use just the digits, not the formatted number
+                copyTextToClipboard(phoneNumber, `Copied ${phoneNumber.replace(/(\d{4})(?=\d)/g, '$1 ')} to clipboard!`);
             };
         });
 
@@ -909,7 +910,16 @@ Thank you for your understanding.
 
             let creditRefundPromise = Promise.resolve();
             if (!memberToUpdate.monthlyPlan) {
-                creditRefundPromise = database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) + parseFloat(course.credits));
+                // We need to operate on the entire user object to access initialCredits
+                creditRefundPromise = database.ref(`/users/${memberId}`).transaction(user => {
+                    if (user) {
+                        const newCredits = (user.credits || 0) + parseFloat(course.credits);
+                        // This is the critical fix:
+                        // The user's balance cannot exceed their total purchased credits.
+                        user.credits = Math.min(newCredits, user.initialCredits);
+                    }
+                    return user;
+                });
             }
 
             creditRefundPromise.then(() => {
@@ -2397,7 +2407,7 @@ Thank you for your understanding.
             sportsList.innerHTML = paginatedSports.map(st => `
                 <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
                     <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700 font-semibold">${st.name}</span></div>
-                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
+                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">Edit</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">Delete</button></div>
                 </li>`).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
             
             renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, itemsPerPage.sports, (newPage) => {
@@ -2432,7 +2442,7 @@ Thank you for your understanding.
                         <p class="text-slate-700 font-semibold">${t.name}</p>
                         <div class="flex flex-wrap gap-1 mt-1">${skillsHtml || ''}</div>
                     </div>
-                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
+                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">Edit</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">Delete</button></div>
                 </li>`
             }).join('') || `<li class="text-center text-slate-500 p-4">No tutors found.</li>`;
             
