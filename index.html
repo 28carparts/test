@@ -91,14 +91,19 @@
                  <h1 class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter">
                     <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-fuchsia-600">StudioPulse</span>
                 </h1>
-                <nav id="mainNav" class="flex items-center gap-2 sm:gap-6 bg-white/60 backdrop-blur-sm rounded-full px-4 py-2 border border-slate-200 shadow-sm">
-                    <button data-page="schedule" class="nav-btn active font-semibold px-3 py-1 text-sm sm:text-base">Schedule</button>
-                    <button data-page="statistics" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Statistics</button>
-                    <button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Salary</button>
-                    <button data-page="members" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Members</button>
-                    <button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Admin</button>
-                    <button data-page="courses" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Courses</button>
-                    <button id="logoutBtn" class="font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">Logout</button>
+                <nav id="mainNav" class="bg-white/60 backdrop-blur-sm rounded-full border border-slate-200 shadow-sm">
+                    <!-- Mobile/Tablet: Swipeable Carousel (Visible below 1024px) -->
+                    <div id="nav-carousel-mobile" class="lg:hidden">
+                        <div class="embla-nav">
+                            <div class="embla-nav__container">
+                                <!-- Mobile nav buttons will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Desktop: Static Flex Container (Visible at 1024px and up) -->
+                    <div id="nav-static-desktop" class="hidden lg:flex items-center gap-2 sm:gap-6 px-4 py-2">
+                        <!-- Desktop nav buttons will be injected here -->
+                    </div>
                 </nav>
             </div>
         </header>
@@ -132,6 +137,7 @@
     <div id="confirmationModal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4 modal-backdrop"></div>
     <div id="memberBookingHistoryModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
     <div id="deleteCourseNotifyModal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4 modal-backdrop"></div>
+    <div id="filterModal" class="fixed inset-0 flex items-center justify-center z-40 hidden p-4 modal-backdrop"></div>
 
     <!-- Cancel Copy Button -->
     <button id="cancelCopyBtn" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-transform hover:scale-105">Cancel Copy</button>
