@@ -244,15 +244,17 @@ th.sortable:hover .sort-icon {
     border: 1px solid #0ea5e9; /* sky-500 */
 }
 
-/* --- Styles for Collapsible Filter Panel --- */
-#filtersToggleBtn svg {
-    transition: transform 0.3s ease-in-out;
+/* --- Navigation Carousel Styles --- */
+.embla-nav {
+    overflow: hidden;
+    padding: 0.5rem 1rem; /* 8px 16px */
 }
-
-#filtersPanel.active #filtersToggleBtn svg {
-    transform: rotate(180deg);
+.embla-nav__container {
+    display: flex;
 }
-
-#filtersPanel.active #filtersContent {
-    max-height: 500px; /* Adjust as needed, should be larger than content height */
+.embla-nav__slide {
+    flex: 0 0 auto; /* Let buttons take their natural width */
+    position: relative;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
 }
