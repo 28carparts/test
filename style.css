@@ -243,3 +243,16 @@ th.sortable:hover .sort-icon {
     background-color: #e0f2fe !important; /* sky-100 */
     border: 1px solid #0ea5e9; /* sky-500 */
 }
+
+/* --- Styles for Collapsible Filter Panel --- */
+#filtersToggleBtn svg {
+    transition: transform 0.3s ease-in-out;
+}
+
+#filtersPanel.active #filtersToggleBtn svg {
+    transform: rotate(180deg);
+}
+
+#filtersPanel.active #filtersContent {
+    max-height: 500px; /* Adjust as needed, should be larger than content height */
+}
