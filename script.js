@@ -837,7 +837,7 @@ Thank you for your understanding.
                     <div class="flex justify-between items-center"><span class="text-slate-500">Time:</span><strong class="text-slate-800">${formatDateWithWeekday(course.date)}, ${getTimeRange(course.time, course.duration)}</strong></div>
                     <hr class="my-4">
                     <div class="flex justify-between items-center"><span class="text-slate-500">Credits Required:</span><strong class="text-indigo-600 text-lg">${course.credits}</strong></div>
-                    <div class="flex justify-between items-center"><span class="text-slate-500">Your Balance:</span><strong class="text-slate-800 text-lg">${currentUser.monthlyPlan ? 'Monthly Plan' : `${(currentUser.credits || 0).toFixed(1)} Credits`}</strong></div>
+                    <div class="flex justify-between items-center"><span class="text-slate-500">Your Balance:</span><strong class="text-slate-800 text-lg">${currentUser.monthlyPlan ? 'Monthly Plan' : `${formatCredits(currentUser.credits)} Credits`}</strong></div>
                 </div>
                 <div class="p-6 bg-slate-50">
                     <button id="confirmBookingBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-transform hover:scale-105">Book Now & Confirm</button>
