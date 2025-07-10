@@ -300,19 +300,20 @@ th.sortable:hover .sort-icon {
     padding-left: 0.25rem;
     padding-right: 0.25rem;
 }
-/* Booking Highlight for Account Page */
+/* --- START: Corrected Booking Highlight --- */
 .booking-highlight {
-    animation: fade-out-highlight 2.5s ease-out forwards;
-    border: 1px solid #3b82f6; /* A subtle blue border initially */
+    /* Define the initial highlighted state */
+    background-color: #dbeafe; /* blue-100 */
+    border: 1px solid #3b82f6; /* blue-500 */
+    /* Apply the animation to fade back to normal */
+    animation: fade-highlight-to-normal 2.5s ease-out forwards;
 }
 
-@keyframes fade-out-highlight {
-    0% {
-        background-color: #dbeafe; /* blue-100 */
-        border-color: #3b82f6; /* blue-500 */
-    }
-    100% {
+@keyframes fade-highlight-to-normal {
+    /* Define the final state */
+    to {
         background-color: #f1f5f9; /* slate-100, the original color */
         border-color: transparent;
     }
 }
+/* --- END: Corrected Booking Highlight --- */
