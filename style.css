@@ -91,9 +91,14 @@ header h1 { flex-shrink: 0; }
 
 /* --- START: Date Input Consistency Fix --- */
 input[type="date"].form-input {
+    /* Force browser to abandon native styling */
+    -webkit-appearance: none;
+    appearance: none;
+    
     /* Re-apply vertical padding to override browser defaults */
     padding-top: 0.6rem;
     padding-bottom: 0.6rem;
+    
     /* Ensure text aligns vertically like other inputs */
     line-height: 1.5; 
 }
