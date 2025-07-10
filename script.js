@@ -1577,7 +1577,7 @@ Thank you for your understanding.
                                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                                 const isAttended = course.attendedBy && course.attendedBy[member.id];
                                 const isHighlighted = course.id === appState.highlightBookingId;
-                                return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center ${isHighlighted ? 'booking-highlight' : ''}" data-course-id="${course.id}">
+                                return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-course-id="${course.id}">
                                     <div>
                                         <p class="font-bold text-slate-800">${sportType.name}</p>
                                         <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
