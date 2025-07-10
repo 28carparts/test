@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sports: 10,
             tutors: 6 
         },
+        highlightBookingId: null,
         membersSort: { 
             key: 'name', 
             direction: 'asc' 
@@ -855,8 +856,10 @@ Thank you for your understanding.
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
                     return database.ref().update(updates);
                 }).then(() => {
+                    appState.highlightBookingId = course.id;
                     showMessageBox('Booking successful!', 'success');
                     closeModal(DOMElements.bookingModal);
+                    switchPage('account');
                 }).catch(error => {
                     showMessageBox(`Booking failed: ${error.message}`, 'error');
                 }).finally(() => {
@@ -1573,7 +1576,8 @@ Thank you for your understanding.
                             memberBookings.map(course => {
                                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                                 const isAttended = course.attendedBy && course.attendedBy[member.id];
-                                return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
+                                const isHighlighted = course.id === appState.highlightBookingId;
+                                return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center ${isHighlighted ? 'booking-highlight' : ''}" data-course-id="${course.id}">
                                     <div>
                                         <p class="font-bold text-slate-800">${sportType.name}</p>
                                         <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
@@ -1596,6 +1600,21 @@ Thank you for your understanding.
                 handleCancelBooking(course);
             };
         });
+
+        // --- START: New logic for scrolling to booking ---
+        if (appState.highlightBookingId) {
+            const elementToScrollTo = container.querySelector(`[data-course-id="${appState.highlightBookingId}"]`);
+            if (elementToScrollTo) {
+                // This scrolls the element to the vertical center of the scrollable area
+                elementToScrollTo.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+            // Reset the state so it doesn't scroll again on refresh
+            appState.highlightBookingId = null;
+        }
+        // --- END: New logic for scrolling to booking ---
 
         container.querySelector('#editProfileBtn').onclick = () => openEditMemberAccountModal(member);
         container.querySelector('#changePasswordBtn').onclick = () => openChangePasswordModal();
