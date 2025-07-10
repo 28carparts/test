@@ -787,9 +787,22 @@ Thank you for your understanding.
         showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
             saveSchedulePosition();
             const memberId = memberIdToUpdate || appState.currentUser.id;
-            const memberToUpdate = appState.users.find(u => u.id === memberId);
+            
+            // --- START: FIX ---
+            // The original code always searched appState.users, which is empty for a member.
+            // This new logic correctly gets the member data from the right place.
+            let memberToUpdate;
+            if (memberIdToUpdate) {
+                // If an owner is cancelling for another user, find them in the full list.
+                memberToUpdate = appState.users.find(u => u.id === memberId);
+            } else {
+                // If a member is cancelling for themselves, use their own currentUser object.
+                memberToUpdate = appState.currentUser;
+            }
+            // --- END: FIX ---
 
             if (!memberToUpdate) {
+                // This check now correctly handles both owner and member roles.
                 showMessageBox('Member not found.', 'error');
                 return;
             }
@@ -1231,23 +1244,51 @@ Thank you for your understanding.
 
     function renderMemberSchedulePage(container) {
         const { memberSportType, memberTutor } = appState.selectedFilters;
-        const isFilterActive = memberSportType !== 'all' || memberTutor !== 'all';
+        const activeFilterCount = (memberSportType !== 'all' ? 1 : 0) + (memberTutor !== 'all' ? 1 : 0);
+        const isFilterActive = activeFilterCount > 0;
 
         container.innerHTML = `
-            <div class="flex flex-wrap gap-4 justify-center items-center mb-4">
-                <select id="memberSportTypeFilter" class="form-select w-48"></select>
-                <select id="memberTutorFilter" class="form-select w-48"></select>
-                <button id="clearMemberFiltersBtn" class="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg transition ${!isFilterActive ? 'hidden' : ''}" title="Clear Filters">
-                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            <div id="filtersPanel" class="mb-4 card !rounded-xl overflow-hidden">
+                <button id="filtersToggleBtn" class="w-full flex justify-between items-center p-4 focus:outline-none">
+                    <span class="font-semibold text-slate-700 text-lg">Filters</span>
+                    <div class="flex items-center gap-3">
+                        <span id="activeFiltersIndicator" class="text-sm font-bold text-white bg-indigo-600 rounded-full h-6 w-6 flex items-center justify-center ${!isFilterActive ? 'hidden' : ''}">
+                            ${activeFilterCount}
+                        </span>
+                        <svg class="h-6 w-6 text-slate-500 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </div>
                 </button>
+                <div id="filtersContent" class="max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+                    <div class="p-4 border-t border-slate-200 bg-slate-50/50 space-y-4">
+                        <div>
+                            <label class="block text-slate-600 text-sm font-semibold mb-1">Sport Type</label>
+                            <select id="memberSportTypeFilter" class="form-select w-full"></select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 text-sm font-semibold mb-1">Tutor</label>
+                            <select id="memberTutorFilter" class="form-select w-full"></select>
+                        </div>
+                        <button id="clearMemberFiltersBtn" class="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition ${!isFilterActive ? 'hidden' : ''}">
+                            Clear All Filters
+                        </button>
+                    </div>
+                </div>
             </div>
             <div id="member-schedule-carousel"></div>
         `;
 
+        const filtersPanel = container.querySelector('#filtersPanel');
+        const filtersToggleBtn = container.querySelector('#filtersToggleBtn');
         const sportTypeFilter = container.querySelector('#memberSportTypeFilter');
         const tutorFilter = container.querySelector('#memberTutorFilter');
         const clearFiltersBtn = container.querySelector('#clearMemberFiltersBtn');
         const carouselContainer = container.querySelector('#member-schedule-carousel');
+        
+        filtersToggleBtn.onclick = () => {
+            filtersPanel.classList.toggle('active');
+        };
 
         populateSportTypeFilter(sportTypeFilter);
         sportTypeFilter.value = memberSportType;
