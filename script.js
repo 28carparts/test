@@ -139,7 +139,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return Object.entries(obj).map(([id, value]) => ({ id, ...value }));
     };
 
-    const getIsoDate = (date) => date.toISOString().split('T')[0];
+    const getIsoDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
     const formatTime = (date) => date.toTimeString().slice(0, 5);
     const getTimeRange = (startTime, duration) => {
         if (!startTime || !duration) return 'Invalid Time';
@@ -206,11 +211,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const formatShortDateWithYear = (isoString) => {
         if (!isoString) return 'N/A';
-        const date = new Date(isoString.includes('T') ? isoString : isoString + 'T00:00:00Z');
+        // Create a date object using the browser's local time zone.
+        // This correctly handles full ISO strings (like from a database) and date-only strings.
+        const date = new Date(isoString); 
         if (isNaN(date)) return 'Invalid Date';
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-        const year = String(date.getUTCFullYear()).slice(-2);
+
+        // Use local date methods instead of UTC methods
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = date.toLocaleString('en-US', { month: 'short' }); // Uses local time
+        const year = String(date.getFullYear()).slice(-2);
+        
         return `${day} ${month}, ${year}`;
     };
     
@@ -1365,13 +1375,12 @@ Thank you for your understanding.
 
     function renderOwnerSchedule(container) {
         const today = new Date();
-        today.setUTCHours(0, 0, 0, 0); 
+        today.setHours(0, 0, 0, 0); // Use local time
         
         const daysToLookBack = appState.ownerPastDaysVisible;
 
-        const ownerStartDate = new Date();
-        ownerStartDate.setUTCHours(0,0,0,0);
-        ownerStartDate.setUTCDate(today.getUTCDate() - daysToLookBack);
+        const ownerStartDate = new Date(today.getTime());
+        ownerStartDate.setDate(today.getDate() - daysToLookBack); // Use local date
 
         const ownerEndDate = new Date();
         ownerEndDate.setUTCHours(0,0,0,0);
@@ -1394,10 +1403,10 @@ Thank you for your understanding.
         const carouselContainer = container.querySelector('#member-schedule-carousel');
         
         const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0); // Use local time
 
         const memberStartDate = new Date(today.getTime());
-        memberStartDate.setUTCDate(today.getUTCDate() - MEMBER_PAST_DAYS);
+        memberStartDate.setDate(today.getDate() - MEMBER_PAST_DAYS); // Use local date
 
         let memberEndDate = new Date(today.getTime());
 
@@ -1876,8 +1885,8 @@ Thank you for your understanding.
                     <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
                     <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
                     <td class="p-2">${member.monthlyPlan 
-                        ? `<span ...>...</span>` 
-                        : `<span class="...">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>`}
+                        ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
+                        : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>`}
                     </td>
                     <td class="p-2 text-sm">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</td>
                     <td class="p-2 text-sm">${member.lastBooking ? formatShortDateWithYear(member.lastBooking) : 'N/A'}</td>
@@ -2234,6 +2243,10 @@ Thank you for your understanding.
             const isMonthly = monthlyPlanCheckbox.checked;
             creditFieldsContainer.style.display = isMonthly ? 'none' : 'block';
             monthlyPlanFieldsContainer.style.display = isMonthly ? 'block' : 'none';
+            // If monthly plan is checked and the start date is empty, set it to today
+            if (isMonthly && !planStartDateInput.value) {
+                planStartDateInput.value = getIsoDate(new Date());
+            }
         };
         monthlyPlanCheckbox.onchange = updatePlanFields;
         updatePlanFields();
@@ -3305,7 +3318,7 @@ Thank you for your understanding.
 
         addCourseBtn.onclick = () => {
             // This now defaults directly to today's date.
-            const defaultDateForNewCourse = new Date().toISOString().split('T')[0];
+            const defaultDateForNewCourse = getIsoDate(new Date());
             openCourseModal(defaultDateForNewCourse);
         };
         
