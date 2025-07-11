@@ -377,7 +377,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btn.id === 'logoutBtn') {
                 btn.onclick = handleLogout;
             } else if (btn.id === 'navFilterBtn') {
-                btn.onclick = openFilterModal;
+                btn.onclick = () => {
+                    // If the user is not on the schedule page, switch to it first.
+                    if (appState.activePage !== 'schedule') {
+                        switchPage('schedule');
+                    }
+                    // Then, open the filter modal.
+                    openFilterModal();
+                };
             } else if (btn.dataset.page) {
                 btn.onclick = () => switchPage(btn.dataset.page);
             }
@@ -1449,14 +1456,14 @@ Thank you for your understanding.
             appState.selectedFilters.memberSportType = sportTypeFilter.value;
             appState.selectedFilters.memberTutor = tutorFilter.value;
             closeModal(modal);
-            renderCurrentPage();
+            updateUIVisibility();
         };
         
         clearBtn.onclick = () => {
             appState.selectedFilters.memberSportType = 'all';
             appState.selectedFilters.memberTutor = 'all';
             closeModal(modal);
-            renderCurrentPage();
+            updateUIVisibility();
         };
 
         openModal(modal);
@@ -1948,7 +1955,7 @@ Thank you for your understanding.
             });
     }
 
-    function _renderMemberPurchaseHistory(member, container, historyIdInput, purchaseAmountInput, creditsInput) {
+    function _renderMemberPurchaseHistory(member, container, historyIdInput, purchaseAmountInput, creditsInput, onEditStart) {
         container.innerHTML = ''; 
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
         
@@ -2012,6 +2019,7 @@ Thank you for your understanding.
                     historyIdInput.value = id;
                     parentItem.classList.add('history-entry-highlighted');
                     showMessageBox(`Editing purchase from ${formatShortDateWithYear(historyEntry.date)}.`, 'info');
+                    onEditStart();
                 }
             }
         };
@@ -2039,7 +2047,7 @@ Thank you for your understanding.
                             <div class="flex items-end gap-2">
                                 <div class="flex-grow"><label for="purchaseAmount" class="block text-slate-600 text-sm font-semibold mb-2">Top-up Amount ($)</label><input type="number" id="purchaseAmount" class="form-input" min="0"></div>
                                 <div class="flex-grow"><label for="creditsToAdd" class="block text-slate-600 text-sm font-semibold mb-2">Credits to Add/Edit</label><input type="number" id="creditsToAdd" class="form-input" min="0"></div>
-                                <button type="button" id="addCreditEntryBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xl py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition" title="Add new credit entry">+</button>
+                                <button type="button" id="creditActionBtn" class="font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white"></button>
                             </div>
                             <div id="purchaseHistoryContainer" class="space-y-2 max-h-32 overflow-y-auto p-1"></div>
                             <div>
@@ -2074,62 +2082,102 @@ Thank you for your understanding.
         const planStartDateInput = form.querySelector('#planStartDate');
         const historyContainer = form.querySelector('#purchaseHistoryContainer');
         const historyIdInput = form.querySelector('#purchaseHistoryId');
-        const addCreditEntryBtn = form.querySelector('#addCreditEntryBtn');
+        const creditActionBtn = form.querySelector('#creditActionBtn');
 
-        memberPhoneInput.oninput = (e) => {
-            const digitsOnly = e.target.value.replace(/\D/g, '');
-            e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
-        };
-
-        form.querySelectorAll('.expiry-quick-select-btn').forEach(button => {
-            button.onclick = (e) => {
-                const years = parseInt(e.target.dataset.years);
-                const today = new Date();
-                today.setFullYear(today.getFullYear() + years);
-                expiryDateInput.value = today.toISOString().split('T')[0];
+        // --- START: RESTORED CODE FOR EXPIRY DATE BUTTONS ---
+        form.querySelectorAll('.expiry-quick-select-btn').forEach(btn => {
+            btn.onclick = () => {
+                const yearsToAdd = parseInt(btn.dataset.years);
+                if (!isNaN(yearsToAdd)) {
+                    const today = new Date();
+                    today.setFullYear(today.getFullYear() + yearsToAdd);
+                    
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    
+                    expiryDateInput.value = `${year}-${month}-${day}`;
+                }
             };
         });
+        // --- END: RESTORED CODE FOR EXPIRY DATE BUTTONS ---
+        
+        const plusIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>`;
+        const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>`;
 
-        addCreditEntryBtn.onclick = () => {
+        const setButtonToAddMode = () => {
+            creditActionBtn.innerHTML = plusIconSVG;
+            creditActionBtn.title = 'Add new credit entry';
+            // --- FIX IS HERE ---
+            creditActionBtn.className = 'creditActionBtn bg-green-500 hover:bg-green-600 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
+            purchaseAmountInput.value = '';
+            creditsInput.value = '';
+            historyIdInput.value = '';
+            historyContainer.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
+        };
+
+        const setButtonToEditMode = () => {
+            creditActionBtn.innerHTML = checkIconSVG;
+            creditActionBtn.title = 'Save this entry';
+            // --- FIX IS HERE ---
+            creditActionBtn.className = 'creditActionBtn bg-indigo-600 hover:bg-indigo-700 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
+        };
+
+        setButtonToAddMode(); // Set initial state
+
+        creditActionBtn.onclick = () => {
+            const historyId = historyIdInput.value;
+            let memberId = memberToEdit.id; // Use `let` so it can be reassigned
             const amount = parseFloat(purchaseAmountInput.value);
             const credits = parseFloat(creditsInput.value);
-            if (isNaN(amount) || isNaN(credits) || amount <= 0 || credits <= 0) {
-                showMessageBox('Please enter a valid amount and credits to add.', 'error');
-                return;
-            }
-            if (historyIdInput.value) {
-                showMessageBox('Clear current edit before adding a new one.', 'error');
-                return;
-            }
-            const memberId = memberToEdit.id;
-            const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
-            const newPurchase = { 
-                date: new Date().toISOString(), 
-                amount: amount, 
-                credits: credits,
-                costPerCredit: amount / credits
-            };
-            
-            database.ref(`/users/${memberId}`).transaction(user => {
-                if(user) {
-                    user.credits = (user.credits || 0) + credits;
-                    user.initialCredits = (user.initialCredits || 0) + credits;
+
+            if (historyId) { // --- UPDATE MODE ---
+                if (isNaN(amount) || isNaN(credits) || amount < 0 || credits < 0) {
+                    showMessageBox('Please enter a valid amount and credits.', 'error'); return;
                 }
-                return user;
-            }).then(() => {
-                return newPurchaseRef.set(newPurchase);
-            }).then(() => {
-                database.ref(`/users/${memberId}`).once('value', snapshot => {
-                    const updatedMember = { id: snapshot.key, ...snapshot.val() };
-                    _renderMemberPurchaseHistory(updatedMember, historyContainer, historyIdInput, purchaseAmountInput, creditsInput);
-                    purchaseAmountInput.value = '';
-                    creditsInput.value = '';
-                    historyIdInput.value = '';
+                const originalEntry = firebaseObjectToArray(memberToEdit.purchaseHistory).find(p => p.id === historyId);
+                if (!originalEntry) {
+                    showMessageBox('Could not find original entry.', 'error'); return;
+                }
+
+                const creditDifference = credits - originalEntry.credits;
+                const entryUpdate = { amount, credits, costPerCredit: amount / credits };
+                
+                database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate).then(() => {
+                    return database.ref(`/users/${memberId}`).transaction(user => {
+                        if (user) {
+                            user.credits = (user.credits || 0) + creditDifference;
+                            user.initialCredits = (user.initialCredits || 0) + creditDifference;
+                        }
+                        return user;
+                    });
+                }).then(() => {
+                    showMessageBox('Purchase entry updated!', 'success');
+                    database.ref(`/users/${memberId}`).once('value', snapshot => {
+                        memberToEdit = { id: snapshot.key, ...snapshot.val() }; // Update stale member data
+                        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
+                        setButtonToAddMode();
+                    });
+                }).catch(error => showMessageBox(`Update failed: ${error.message}`, 'error'));
+            } else { // --- ADD MODE ---
+                if (isNaN(amount) || isNaN(credits) || amount <= 0 || credits <= 0) {
+                    showMessageBox('Please enter a valid amount and credits to add.', 'error'); return;
+                }
+                const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
+                const newPurchase = { date: new Date().toISOString(), amount, credits, costPerCredit: amount / credits };
+                
+                database.ref(`/users/${memberId}`).transaction(user => {
+                    if (user) { user.credits = (user.credits || 0) + credits; user.initialCredits = (user.initialCredits || 0) + credits; }
+                    return user;
+                }).then(() => newPurchaseRef.set(newPurchase)).then(() => {
                     showMessageBox('New credit entry added!', 'success');
-                });
-            }).catch(error => {
-                showMessageBox(`Error adding credits: ${error.message}`, 'error');
-            });
+                     database.ref(`/users/${memberId}`).once('value', snapshot => {
+                        memberToEdit = { id: snapshot.key, ...snapshot.val() }; // Update stale member data
+                        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
+                        setButtonToAddMode();
+                    });
+                }).catch(error => showMessageBox(`Error adding credits: ${error.message}`, 'error'));
+            }
         };
 
         form.querySelector('#memberModalId').value = memberToEdit.id;
@@ -2146,7 +2194,7 @@ Thank you for your understanding.
         planStartDateInput.value = memberToEdit.planStartDate;
         form.querySelector('#monthlyCreditValue').value = memberToEdit.monthlyCreditValue;
         
-        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput);
+        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
         
         form.querySelector('#resetPasswordBtn').onclick = () => {
             auth.sendPasswordResetEmail(memberToEdit.email)
@@ -2176,9 +2224,6 @@ Thank you for your understanding.
         if (!id) return;
 
         const isMonthly = form.querySelector('#monthlyPlan').checked;
-        const topUpAmount = parseFloat(form.querySelector('#purchaseAmount').value) || 0;
-        const creditsToAdd = parseFloat(form.querySelector('#creditsToAdd').value) || 0;
-        const historyId = form.querySelector('#purchaseHistoryId').value;
         const countryCode = form.querySelector('#memberCountryCode').value.trim();
         const phoneNumber = form.querySelector('#memberPhone').value;
         const fullPhoneNumber = constructPhoneNumber(countryCode, phoneNumber);
@@ -2193,22 +2238,6 @@ Thank you for your understanding.
         updates[`/users/${id}/expiryDate`] = !isMonthly ? form.querySelector('#expiryDate').value || null : null;
         
         database.ref().update(updates).then(() => {
-            if (!isMonthly && historyId && (topUpAmount > 0 || creditsToAdd > 0)) {
-                const originalHistoryEntry = firebaseObjectToArray(originalMember.purchaseHistory).find(p => p.id === historyId);
-                const creditDifference = creditsToAdd - originalHistoryEntry.credits;
-
-                database.ref(`/users/${id}/purchaseHistory/${historyId}/amount`).set(topUpAmount);
-                database.ref(`/users/${id}/purchaseHistory/${historyId}/credits`).set(creditsToAdd);
-                database.ref(`/users/${id}/purchaseHistory/${historyId}/costPerCredit`).set(topUpAmount / creditsToAdd);
-
-                database.ref(`/users/${id}`).transaction(user => {
-                    if (user) {
-                        user.credits = (user.credits || 0) + creditDifference;
-                        user.initialCredits = (user.initialCredits || 0) + creditDifference;
-                    }
-                    return user;
-                });
-            }
             showMessageBox('Member updated successfully.', 'success');
             closeModal(DOMElements.memberModal);
         }).catch(error => showMessageBox(error.message, 'error'));
@@ -2298,6 +2327,8 @@ Thank you for your understanding.
     }
 
     function renderAdminPage(container) {
+        // --- START: MODIFIED HTML ---
+        // Added 'pr-8' to inputs and added the clear buttons.
         container.innerHTML = `
             <div class="space-y-8">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -2305,7 +2336,10 @@ Thank you for your understanding.
                         <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
                             <h3 id="sportsHeader" class="text-2xl font-bold text-slate-800"></h3>
                             <div class="relative">
-                                <input type="text" id="sportSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.sports}">
+                                <input type="text" id="sportSearchInput" placeholder="Search..." class="form-input w-40 pr-8" value="${appState.searchTerms.sports}">
+                                <button id="clearSportSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 hidden" aria-label="Clear search">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
                             </div>
                         </div>
                         <button id="addSportTypeBtn" class="w-full mb-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Sport Type</button>
@@ -2318,7 +2352,10 @@ Thank you for your understanding.
                         <div class="flex flex-wrap gap-4 justify-between items-center mb-4">
                             <h3 id="tutorsHeader" class="text-2xl font-bold text-slate-800"></h3>
                             <div class="relative">
-                                <input type="text" id="tutorSearchInput" placeholder="Search..." class="form-input w-40" value="${appState.searchTerms.tutors}">
+                                <input type="text" id="tutorSearchInput" placeholder="Search..." class="form-input w-40 pr-8" value="${appState.searchTerms.tutors}">
+                                <button id="clearTutorSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 hidden" aria-label="Clear search">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
                             </div>
                         </div>
                         <button id="addTutorBtn" class="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Tutor</button>
@@ -2356,6 +2393,7 @@ Thank you for your understanding.
                     </form>
                 </div>
             </div>`;
+        // --- END: MODIFIED HTML ---
         
         renderAdminLists();
         
@@ -2364,16 +2402,40 @@ Thank you for your understanding.
         container.querySelector('#sportsList').addEventListener('click', handleAdminListClick);
         container.querySelector('#tutorsList').addEventListener('click', handleAdminListClick);
         
-        container.querySelector('#sportSearchInput').oninput = (e) => {
-            appState.searchTerms.sports = e.target.value;
-            appState.pagination.sports.page = 1;
-            renderAdminLists();
+        // --- START: NEW EVENT HANDLER LOGIC ---
+        // Helper function to manage search field logic
+        const setupSearchField = (inputId, clearBtnId, stateKey, paginationKey) => {
+            const input = container.querySelector(`#${inputId}`);
+            const clearBtn = container.querySelector(`#${clearBtnId}`);
+
+            const toggleClearButton = () => {
+                clearBtn.classList.toggle('hidden', !input.value);
+            };
+
+            input.oninput = () => {
+                appState.searchTerms[stateKey] = input.value;
+                appState.pagination[paginationKey].page = 1;
+                toggleClearButton();
+                renderAdminLists();
+            };
+
+            clearBtn.onclick = () => {
+                input.value = '';
+                appState.searchTerms[stateKey] = '';
+                appState.pagination[paginationKey].page = 1;
+                toggleClearButton();
+                renderAdminLists();
+                input.focus();
+            };
+
+            // Set initial state of the button on page render
+            toggleClearButton();
         };
-        container.querySelector('#tutorSearchInput').oninput = (e) => {
-            appState.searchTerms.tutors = e.target.value;
-            appState.pagination.tutors.page = 1;
-            renderAdminLists();
-        };
+        
+        // Setup both search fields
+        setupSearchField('sportSearchInput', 'clearSportSearchBtn', 'sports', 'sports');
+        setupSearchField('tutorSearchInput', 'clearTutorSearchBtn', 'tutors', 'tutors');
+        // --- END: NEW EVENT HANDLER LOGIC ---
 
         const settingsForm = container.querySelector('#adminSettingsForm');
         if (settingsForm) {
@@ -2509,8 +2571,22 @@ Thank you for your understanding.
 
         let promise;
         if (id) {
+            // This is an EDIT operation, no change in pagination needed.
             promise = database.ref('/sportTypes/' + id).update(sportTypeData);
         } else {
+            // --- START: NEW LOGIC FOR ADDING ---
+            // Clear any search filters to show the full list.
+            appState.searchTerms.sports = '';
+
+            // Calculate which page the new item will be on.
+            const totalItemsAfterAdd = appState.sportTypes.length + 1;
+            const itemsPerPage = appState.itemsPerPage.sports;
+            const lastPage = Math.ceil(totalItemsAfterAdd / itemsPerPage);
+
+            // Update the state to navigate to the last page.
+            appState.pagination.sports.page = lastPage;
+            // --- END: NEW LOGIC FOR ADDING ---
+
             promise = database.ref('/sportTypes').push(sportTypeData);
         }
         promise.then(() => closeModal(DOMElements.sportTypeModal));
@@ -2628,8 +2704,22 @@ Thank you for your understanding.
 
         let promise;
         if (id) {
+            // This is an EDIT operation, no change in pagination needed.
             promise = database.ref('/tutors/' + id).update(tutorData);
         } else {
+            // --- START: NEW LOGIC FOR ADDING ---
+            // Clear any search filters to show the full list.
+            appState.searchTerms.tutors = '';
+
+            // Calculate which page the new item will be on.
+            const totalItemsAfterAdd = appState.tutors.length + 1;
+            const itemsPerPage = appState.itemsPerPage.tutors;
+            const lastPage = Math.ceil(totalItemsAfterAdd / itemsPerPage);
+
+            // Update the state to navigate to the last page.
+            appState.pagination.tutors.page = lastPage;
+            // --- END: NEW LOGIC FOR ADDING ---
+
             promise = database.ref('/tutors').push(tutorData);
         }
         promise.then(() => closeModal(DOMElements.tutorModal));
