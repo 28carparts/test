@@ -3336,44 +3336,77 @@ Thank you for your understanding.
         updateCoursesTable();
     }
 
-    function openMemberBookingHistoryModal(member) {
-        const memberBookings = appState.courses.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => new Date(b.date) - new Date(a.date));
-
+    // --- START: Replacement for openMemberBookingHistoryModal ---
+    async function openMemberBookingHistoryModal(member) {
+        // Show a loading state in the modal first
         DOMElements.memberBookingHistoryModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">${member.name}'s Booking History</h2>
                 <p class="text-center text-slate-500 mb-6">${member.email} | ${formatDisplayPhoneNumber(member.phone)}</p>
-                <div class="space-y-3 max-h-[60vh] overflow-y-auto">
-                    ${memberBookings.length === 0 ? '<p class="text-slate-500 text-center">This member has no booking history.</p>' :
-                    memberBookings.map(course => {
-                        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                        const isAttended = course.attendedBy && course.attendedBy[member.id];
-                        return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
-                            <div>
-                                <p class="font-bold text-slate-800">${sportType.name}</p>
-                                <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
-                                <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
-                            </div>
-                            ${isAttended 
-                                ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
-                                : `<button class="cancel-booking-btn-member-history text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}" data-member-id="${member.id}">Cancel</button>`
-                            }
-                        </div>`
-                    }).join('')}
+                <div class="space-y-3 max-h-[60vh] overflow-y-auto" id="history-content-area">
+                    <p class="text-center text-slate-500 p-8">Loading booking history...</p>
                 </div>
             </div>
         `;
-        DOMElements.memberBookingHistoryModal.querySelectorAll('.cancel-booking-btn-member-history').forEach(btn => {
-            btn.onclick = () => {
-                const course = appState.courses.find(c => c.id === btn.dataset.courseId);
-                const memberId = btn.dataset.memberId;
-                handleCancelBooking(course, memberId);
-            };
-        });
-
         openModal(DOMElements.memberBookingHistoryModal);
+
+        try {
+            // Step 1: Get the list of course IDs from the member's index
+            const memberBookingsSnapshot = await database.ref(`/memberBookings/${member.id}`).once('value');
+            if (!memberBookingsSnapshot.exists()) {
+                document.getElementById('history-content-area').innerHTML = '<p class="text-slate-500 text-center p-8">This member has no booking history.</p>';
+                return;
+            }
+            
+            const bookedCourseIds = Object.keys(memberBookingsSnapshot.val());
+
+            // Step 2: Fetch the full details for each of those courses
+            const coursePromises = bookedCourseIds.map(courseId => database.ref(`/courses/${courseId}`).once('value'));
+            const courseSnapshots = await Promise.all(coursePromises);
+
+            const memberBookings = courseSnapshots
+                .map(snap => ({ id: snap.key, ...snap.val() }))
+                .filter(course => course.date) // Ensure course data exists
+                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by most recent
+
+            // Step 3: Render the modal content with the fetched data
+            const historyContentArea = document.getElementById('history-content-area');
+            historyContentArea.innerHTML = memberBookings.length === 0 ? '<p class="text-slate-500 text-center p-8">This member has no booking history.</p>' :
+                memberBookings.map(course => {
+                    // We must find the sportType and tutor from the main appState, which is already loaded
+                    const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                    const isAttended = course.attendedBy && course.attendedBy[member.id];
+                    return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-slate-800">${sportType?.name || 'Unknown Course'}</p>
+                            <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
+                            <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
+                        </div>
+                        ${isAttended 
+                            ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
+                            : `<button class="cancel-booking-btn-member-history text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}" data-member-id="${member.id}">Cancel</button>`
+                        }
+                    </div>`
+                }).join('');
+
+            // Step 4: Re-attach event listeners for the cancel buttons
+            DOMElements.memberBookingHistoryModal.querySelectorAll('.cancel-booking-btn-member-history').forEach(btn => {
+                btn.onclick = () => {
+                    // This logic remains the same, but it now needs to find the course
+                    // from the locally fetched `memberBookings` list.
+                    const course = memberBookings.find(c => c.id === btn.dataset.courseId);
+                    const memberId = btn.dataset.memberId;
+                    handleCancelBooking(course, memberId);
+                };
+            });
+
+        } catch (error) {
+            console.error("Error fetching member booking history:", error);
+            document.getElementById('history-content-area').innerHTML = `<p class="text-center text-red-500 p-8">Could not load booking history. Please try again.</p>`;
+        }
     }
+    // --- END: Replacement for openMemberBookingHistoryModal ---
     
     // --- Data Seeding ---
     const seedDatabaseIfEmpty = () => {
