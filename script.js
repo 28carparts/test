@@ -224,6 +224,24 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${day} ${month}, ${year}`;
     };
     
+    const calculateNextRenewalDate = (planStartDateStr) => {
+        if (!planStartDateStr) return 'N/A';
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // This is a more reliable way to parse a "YYYY-MM-DD" string into a local date
+        const parts = planStartDateStr.split('-').map(Number);
+        const nextRenewal = new Date(parts[0], parts[1] - 1, parts[2]); // month is 0-indexed
+
+        // Add months until the renewal date is in the future
+        while (nextRenewal <= today) {
+            nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+        }
+        
+        return nextRenewal;
+    };
+    
     const formatDateWithWeekday = (isoString) => {
         if (!isoString) return 'N/A';
         const date = new Date(isoString + 'T12:00:00Z');
@@ -1609,7 +1627,7 @@ Thank you for your understanding.
                         <div class="space-y-4 text-left">
                             ${member.monthlyPlan 
                                 ? `<div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
-                                   <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.planStartDate)}</p></div>`
+                                   <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(calculateNextRenewalDate(member.planStartDate))}</p></div>`
                                 : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
                                         <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>
                                     </p></div>
