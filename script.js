@@ -1690,7 +1690,7 @@ Thank you for your understanding.
                     <div>
                         <label for="editMemberPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label>
                         <div class="flex gap-2">
-                            <input type="text" id="editMemberCountryCode" class="form-input w-24" placeholder="e.g., 852">
+                            <input type="text" id="editMemberCountryCode" class="form-input w-24" placeholder="852">
                             <input type="tel" id="editMemberPhone" required class="form-input flex-grow">
                         </div>
                     </div>
