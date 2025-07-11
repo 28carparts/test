@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let navEmblaApi = null;
     let onConfirmCallback = null;
     let dataListeners = {}; // To hold references to our listeners
+    let activeCoursesRef = null;
 
     // --- DOM Element Cache ---
     const DOMElements = {
@@ -159,6 +160,48 @@ document.addEventListener('DOMContentLoaded', function() {
         return num.toFixed(1);
     };
     // --- END: Add this new function here ---
+
+    // --- PLACE THE NEW FUNCTION HERE ---
+    function calculateCourseRevenueAndPayout(course, allUsers, allTutors, allCourses) {
+        const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+        const tutor = allTutors.find(t => t.id === course.tutorId);
+        let tutorPayout = 0;
+        
+        // This part requires a full set of courses to trace member purchase history
+        const membersOnThisCourse = bookedMemberIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+        const allBookingsByTheseMembers = [];
+        if (membersOnThisCourse.length > 0) {
+            const memberIdSet = new Set(membersOnThisCourse.map(m => m.id));
+            allCourses.forEach(c => {
+                if (c.bookedBy) {
+                    for (const memberId of Object.keys(c.bookedBy)) {
+                        if (memberIdSet.has(memberId)) {
+                            const member = allUsers.find(u => u.id === memberId);
+                            if (member) allBookingsByTheseMembers.push({ member, course: c });
+                        }
+                    }
+                }
+            });
+        }
+        
+        const { revenueByCourseId } = calculateRevenueForBookings(allBookingsByTheseMembers);
+        const grossRevenue = revenueByCourseId.get(course.id) || 0;
+
+        const skill = tutor?.skills.find(s => s.sportTypeId === course.sportTypeId);
+        if (skill) {
+            if (skill.salaryType === 'perCourse') {
+                tutorPayout = skill.salaryValue;
+            } else if (skill.salaryType === 'percentage') {
+                tutorPayout = grossRevenue * (skill.salaryValue / 100);
+            } else if (skill.salaryType === 'perHeadcount') {
+                tutorPayout = bookedMemberIds.length * skill.salaryValue;
+            }
+        }
+        
+        const netRevenue = grossRevenue - tutorPayout;
+        return { grossRevenue, tutorPayout, netRevenue };
+    }
+    // --- END OF NEW FUNCTION ---
 
     const formatShortDateWithYear = (isoString) => {
         if (!isoString) return 'N/A';
@@ -678,50 +721,19 @@ Thank you for your understanding.
         const listEl = DOMElements.joinedMembersModal.querySelector('#joinedMembersList');
         const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
 
-        const tutor = appState.tutors.find(t => t.id === course.tutorId);
-        const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
-        let tutorSalary = 0;
-        
-        const membersOnThisCourse = bookedMemberIds.map(id => appState.users.find(u => u.id === id)).filter(Boolean);
-        const allBookingsByTheseMembers = [];
-        if (membersOnThisCourse.length > 0) {
-            const memberIdSet = new Set(membersOnThisCourse.map(m => m.id));
-            appState.courses.forEach(c => {
-                if (c.bookedBy) {
-                    for (const memberId of Object.keys(c.bookedBy)) {
-                        if (memberIdSet.has(memberId)) {
-                            const member = appState.users.find(u => u.id === memberId);
-                            if (member) {
-                                allBookingsByTheseMembers.push({ member, course: c });
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        const { revenueByCourseId } = calculateRevenueForBookings(allBookingsByTheseMembers);
-        const grossRevenue = revenueByCourseId.get(course.id) || 0;
-
-        if (skill) {
-            if (skill.salaryType === 'perCourse') {
-                tutorSalary = skill.salaryValue;
-            } else if (skill.salaryType === 'percentage') {
-                tutorSalary = grossRevenue * (skill.salaryValue / 100);
-            } else if (skill.salaryType === 'perHeadcount') {
-                tutorSalary = bookedMemberIds.length * skill.salaryValue;
-            }
-        }
-        
-        const netRevenue = grossRevenue - tutorSalary;
-        const netRevenueColor = netRevenue >= 0 ? 'text-slate-800' : 'text-red-600';
+        // --- START: CORRECTED CODE BLOCK ---
+        // This single block now handles all revenue calculation by calling the helper function.
+        // The old, duplicated code has been removed.
+        const { grossRevenue, tutorPayout, netRevenue } = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, appState.courses);
+        const netRevenueColor = netRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
         revenueEl.innerHTML = `
             <div class="flex justify-center gap-4">
                 <div><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-green-600">${formatCurrency(grossRevenue)}</p></div>
-                <div><p class="text-sm text-slate-500">Tutor Payout</p><p class="text-2xl font-bold text-red-600">(${formatCurrency(tutorSalary)})</p></div>
+                <div><p class="text-sm text-slate-500">Tutor Payout</p><p class="text-2xl font-bold text-red-600">(${formatCurrency(tutorPayout)})</p></div>
                 <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
             </div>`;
+        // --- END: CORRECTED CODE BLOCK ---
 
         if (bookedMemberIds.length === 0) {
             listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this course yet.</p>`;
@@ -811,8 +823,11 @@ Thank you for your understanding.
                     database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(course.credits));
                 }
 
-                // Add to course
-                database.ref(`/courses/${course.id}/bookedBy/${memberId}`).set(true).then(() => {
+                // Add to course and member's booking index
+                const updates = {};
+                updates[`/courses/${course.id}/bookedBy/${memberId}`] = true;
+                updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
+                database.ref().update(updates).then(() => {
                     showMessageBox('Member added to course.', 'success');
                     closeModal(DOMElements.joinedMembersModal);
                 });
@@ -874,6 +889,7 @@ Thank you for your understanding.
                 creditUpdatePromise.then(() => {
                     const updates = {};
                     updates[`/courses/${course.id}/bookedBy/${memberId}`] = true;
+                    updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
                     return database.ref().update(updates);
                 }).then(() => {
@@ -930,7 +946,10 @@ Thank you for your understanding.
             }
 
             creditRefundPromise.then(() => {
-                return database.ref(`/courses/${course.id}/bookedBy/${memberId}`).remove();
+                const updates = {};
+                updates[`/courses/${course.id}/bookedBy/${memberId}`] = null; // Use null for multi-path updates
+                updates[`/memberBookings/${memberId}/${course.id}`] = null; // New index
+                return database.ref().update(updates);
             }).then(() => {
                 if (memberIdToUpdate) {
                     const updatedMember = appState.users.find(u => u.id === memberIdToUpdate);
@@ -1302,23 +1321,27 @@ Thank you for your understanding.
         
         const isOwner = appState.currentUser?.role === 'owner';
         
+        // --- START: MODIFIED SCROLL LOGIC ---
         const scrollPrev = () => {
             if (isOwner && !emblaApi.canScrollPrev()) {
-                if (appState.ownerPastDaysVisible < 30) {
-                    saveSchedulePosition();
-                    appState.ownerPastDaysVisible += 7;
-                    renderOwnerSchedule(document.getElementById('page-schedule'));
+                if (appState.ownerPastDaysVisible < 30) { // Limit how far back they can go
+                    appState.ownerPastDaysVisible += 7; // Load another week
+                    detachDataListeners(); // Detach all listeners to prevent memory leaks
+                    initDataListeners();   // Re-attach all listeners, which will use the new date range
+                    // The UI will update automatically when the new data arrives
                 }
             } else {
                 emblaApi.scrollPrev();
             }
         };
+        // --- END: MODIFIED SCROLL LOGIC ---
 
         const updateButtons = () => { 
             if(!emblaApi) return;
             const canScrollPrev = emblaApi.canScrollPrev();
             const canScrollNext = emblaApi.canScrollNext();
             
+            // Allow the prev button to be active if we can load more past data
             prevBtn.disabled = !canScrollPrev && !(isOwner && appState.ownerPastDaysVisible < 30);
             nextBtn.disabled = !canScrollNext;
         };
@@ -1394,7 +1417,7 @@ Thank you for your understanding.
 
         _renderScheduleCarousel(carouselContainer, memberStartDate, memberEndDate, datesArray, initialScrollIndex, false);
     }
-    
+
     function openFilterModal() {
         const { memberSportType, memberTutor } = appState.selectedFilters;
         const isFilterActive = memberSportType !== 'all' || memberTutor !== 'all';
@@ -1934,6 +1957,7 @@ Thank you for your understanding.
             // Only cancel upcoming, non-attended bookings
             if (!isAttended) {
                 updates[`/courses/${course.id}/bookedBy/${memberId}`] = null;
+                updates[`/memberBookings/${memberId}/${course.id}`] = null; // New index
                 upcomingCancellations++;
             }
         });
@@ -2524,6 +2548,24 @@ Thank you for your understanding.
             if (type === 'sportType') openSportTypeModal(appState.sportTypes.find(st => st.id === id));
             if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
         } else if (target.classList.contains('delete-btn')) {
+            // --- START: REFINED LOGIC WITH DATA INTEGRITY CHECK ---
+            // First, check if the item is in use.
+            if (type === 'sportType') {
+                const isInUse = appState.courses.some(c => c.sportTypeId === id);
+                if (isInUse) {
+                    showMessageBox(`Cannot delete "${name}" because it is assigned to one or more courses.`, 'error');
+                    return; // Prevent deletion
+                }
+            }
+            if (type === 'tutor') {
+                const isInUse = appState.courses.some(c => c.tutorId === id);
+                if (isInUse) {
+                    showMessageBox(`Cannot delete "${name}" because they are assigned to one or more courses.`, 'error');
+                    return; // Prevent deletion
+                }
+            }
+
+            // If not in use, proceed with the original confirmation and deletion logic.
             showConfirmation(`Delete ${type}`, `Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.`, () => {
                 if (type === 'sportType') {
                     database.ref('/sportTypes/' + id).remove();
@@ -2533,6 +2575,7 @@ Thank you for your understanding.
                 }
                 showMessageBox(`${type} deleted.`, 'info');
             });
+            // --- END: REFINED LOGIC ---
         }
     }
     
@@ -3340,47 +3383,159 @@ Thank you for your understanding.
 
     // --- Firebase Listeners ---
     const initDataListeners = () => {
+        const isOwner = appState.currentUser?.role === 'owner';
+
         const refs = {
-            courses: database.ref('/courses'),
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
         };
-        
+
         refs.currentUser = database.ref('/users/' + appState.currentUser.id);
         
-        if (appState.currentUser.role === 'owner') {
+        if (isOwner) {
             refs.users = database.ref('/users');
             refs.studioSettings = database.ref('/studioSettings');
         }
 
         let initialDataLoaded = {};
-        // --- FIX: Removed 'studioSettings' from the list of required keys to prevent blocking app load ---
-        const requiredKeys = appState.currentUser.role === 'owner' 
-            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser'] 
+        const requiredKeys = isOwner 
+            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings']
             : ['courses', 'tutors', 'sportTypes', 'currentUser'];
         requiredKeys.forEach(k => initialDataLoaded[k] = false);
 
         let allDataLoaded = false;
         
         const checkAllDataLoaded = () => {
-            if(allDataLoaded) return;
+            if (allDataLoaded) return;
             if (requiredKeys.every(key => initialDataLoaded[key])) {
                 allDataLoaded = true;
                 updateUIVisibility();
             }
         };
 
+        // This is the listener for the OWNER role. It's a simple, direct query.
+        const ownerCourseListener = (snapshot) => {
+            const val = snapshot.val();
+            let previousCourses = [];
+
+            if (initialDataLoaded.courses && isOwner) {
+                previousCourses = [...appState.courses];
+            }
+
+            appState.courses = firebaseObjectToArray(val);
+
+            if (isOwner && previousCourses.length > 0) {
+                const newCourses = appState.courses;
+                newCourses.forEach(newCourse => {
+                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                    if (oldCourse) {
+                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                        if (newBookedIds.length > oldBookedIds.length) {
+                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                            if (newMemberId) {
+                                const member = appState.users.find(u => u.id === newMemberId);
+                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                                if (member && sportType) {
+                                    showBookingNotification({
+                                        memberName: member.name,
+                                        courseName: sportType.name,
+                                        courseTime: newCourse.time,
+                                        duration: newCourse.duration
+                                    });
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            if (!initialDataLoaded.courses){
+                initialDataLoaded.courses = true;
+                checkAllDataLoaded();
+            } else {
+                 renderCurrentPage();
+            }
+        };
+
+        // This is the more complex data fetcher for the MEMBER role.
+        const memberCourseFetcher = async () => {
+            try {
+                const memberId = appState.currentUser.id;
+                const todayIso = getIsoDate(new Date());
+
+                const memberBookingsSnapshot = await database.ref(`/memberBookings/${memberId}`).once('value');
+                const bookedCourseIds = memberBookingsSnapshot.exists() ? Object.keys(memberBookingsSnapshot.val()) : [];
+
+                const bookedCoursePromises = bookedCourseIds.map(courseId =>
+                    database.ref(`/courses/${courseId}`).once('value')
+                );
+                const bookedCourseSnapshots = await Promise.all(bookedCoursePromises);
+                const memberHistoryCourses = bookedCourseSnapshots
+                    .map(snap => ({ id: snap.key, ...snap.val() }))
+                    .filter(course => course.date); 
+
+                if (activeCoursesRef) activeCoursesRef.off(); 
+                activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(todayIso);
+
+                dataListeners.courses = (futureCoursesSnapshot) => {
+                    const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
+                    const allCoursesMap = new Map();
+                    memberHistoryCourses.forEach(course => allCoursesMap.set(course.id, course));
+                    futureCourses.forEach(course => allCoursesMap.set(course.id, course));
+                    appState.courses = Array.from(allCoursesMap.values());
+
+                    if (!initialDataLoaded.courses){
+                        initialDataLoaded.courses = true;
+                        checkAllDataLoaded();
+                    } else {
+                         renderCurrentPage();
+                    }
+                };
+                activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on member /courses`, error));
+
+            } catch (error) {
+                console.error("Failed to fetch member's courses:", error);
+                // Fallback to old behavior in case of error
+                initialDataLoaded.courses = true;
+                checkAllDataLoaded();
+            }
+        };
+
+        // --- FIX: Correctly attach the right course listener based on role ---
+        if (isOwner) {
+            // Owner: Fetch courses within a "sliding window"
+            const today = new Date();
+            const daysToLookBack = appState.ownerPastDaysVisible || 0;
+            const daysToLookForward = 30;
+
+            const startDate = new Date();
+            startDate.setUTCHours(0, 0, 0, 0);
+            startDate.setUTCDate(today.getUTCDate() - daysToLookBack);
+            const startIso = getIsoDate(startDate);
+            
+            const endDate = new Date();
+            endDate.setUTCHours(0, 0, 0, 0);
+            endDate.setUTCDate(today.getUTCDate() + daysToLookForward);
+            const endIso = getIsoDate(endDate);
+
+            activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso).endAt(endIso);
+            dataListeners.courses = ownerCourseListener;
+            activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on owner /courses`, error));
+        } else {
+            // Member: Use the multi-step fetcher
+            memberCourseFetcher();
+        }
+        // --- END FIX ---
+
+        // Process the rest of the listeners (tutors, sportTypes, etc.) for ALL roles.
+        // This part was previously being skipped for members.
         Object.entries(refs).forEach(([key, ref]) => {
-            if(dataListeners[key]) ref.off('value', dataListeners[key]);
+            if (dataListeners[key]) ref.off('value', dataListeners[key]);
 
             dataListeners[key] = (snapshot) => {
                 const val = snapshot.val();
-                let previousCourses = [];
-
-                if (key === 'courses' && initialDataLoaded[key] && appState.currentUser?.role === 'owner') {
-                    previousCourses = [...appState.courses];
-                }
-
+                
                 if (key === 'currentUser') {
                     appState.currentUser = { ...appState.currentUser, ...val };
                 } else if (key === 'studioSettings') {
@@ -3394,34 +3549,8 @@ Thank you for your understanding.
                 } else {
                     appState[key] = firebaseObjectToArray(val);
                 }
-
-                if (key === 'courses' && previousCourses.length > 0) {
-                    const newCourses = appState.courses;
-                    newCourses.forEach(newCourse => {
-                        const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                        if (oldCourse) {
-                            const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                            const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                            if (newBookedIds.length > oldBookedIds.length) {
-                                const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                                if (newMemberId) {
-                                    const member = appState.users.find(u => u.id === newMemberId);
-                                    const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                                    if (member && sportType) {
-                                        showBookingNotification({
-                                            memberName: member.name,
-                                            courseName: sportType.name,
-                                            courseTime: newCourse.time,
-                                            duration: newCourse.duration
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
                 
-                if(!initialDataLoaded[key]){
+                if (!initialDataLoaded[key]){
                     initialDataLoaded[key] = true;
                     if (requiredKeys.includes(key)) {
                         checkAllDataLoaded();
@@ -3435,6 +3564,15 @@ Thank you for your understanding.
     };
 
     const detachDataListeners = () => {
+        // --- START: MODIFIED LOGIC ---
+        // Specifically detach the courses listener using its stored query reference
+        if (activeCoursesRef && dataListeners.courses) {
+            activeCoursesRef.off('value', dataListeners.courses);
+            delete dataListeners.courses; // Clean up the listener map
+        }
+        activeCoursesRef = null; // Reset the reference
+        // --- END: MODIFIED LOGIC ---
+
         Object.entries(dataListeners).forEach(([key, listener]) => {
             let path = `/${key}`;
             if (key === 'currentUser' && appState.currentUser) {
@@ -3444,8 +3582,11 @@ Thank you for your understanding.
             } else if (key === 'studioSettings' && appState.currentUser?.role !== 'owner') {
                 return;
             }
+            // The loop now handles all other listeners
             database.ref(path).off('value', listener);
         });
+        
+        // Reset the object for a clean state
         dataListeners = {};
     };
 
