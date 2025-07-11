@@ -2062,7 +2062,7 @@ Thank you for your understanding.
                         <div><label for="memberEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email Address</label><input type="email" id="memberEmail" required class="form-input" disabled></div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label for="memberPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><input type="text" id="memberCountryCode" class="form-input w-24" placeholder="e.g., 852"><input type="tel" id="memberPhone" required class="form-input flex-grow"></div></div>
+                        <div><label for="memberPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><input type="text" id="memberCountryCode" class="form-input w-24" placeholder="852"><input type="tel" id="memberPhone" required class="form-input flex-grow"></div></div>
                         <div><label class="block text-slate-600 text-sm font-semibold mb-2">Password</label><button type="button" id="resetPasswordBtn" class="form-input text-left text-indigo-600 hover:bg-slate-100">Reset Password</button></div>
                     </div>
                     <div class="pt-4 border-t">
@@ -2645,7 +2645,7 @@ Thank you for your understanding.
                        <div><label for="tutorName" class="block text-slate-600 text-sm font-semibold mb-2">Tutor Name</label><input type="text" id="tutorName" required class="form-input"></div>
                        <div><label for="tutorEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email</label><input type="email" id="tutorEmail" class="form-input"></div>
                     </div>
-                    <div><label for="tutorPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><input type="text" id="tutorCountryCode" class="form-input w-24" placeholder="e.g., 852"><input type="tel" id="tutorPhone" class="form-input flex-grow"></div></div>
+                    <div><label for="tutorPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><input type="text" id="tutorCountryCode" class="form-input w-24" placeholder="852"><input type="tel" id="tutorPhone" class="form-input flex-grow"></div></div>
                     <div><label class="block text-slate-600 text-sm font-semibold mb-2">Skills & Salaries</label><div id="tutorSkillsList" class="space-y-3"></div><button type="button" id="addTutorSkillBtn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2">+ Add Skill</button></div>
                 </div><div class="flex justify-center mt-8"><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg"></button></div></form>
             </div>`;
