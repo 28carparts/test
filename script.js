@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let appState = { 
         courses: [], 
+        allCourses: [], 
         tutors: [], 
         sportTypes: [], 
         users: [],
@@ -724,7 +725,7 @@ Thank you for your understanding.
         // --- START: CORRECTED CODE BLOCK ---
         // This single block now handles all revenue calculation by calling the helper function.
         // The old, duplicated code has been removed.
-        const { grossRevenue, tutorPayout, netRevenue } = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, appState.courses);
+        const { grossRevenue, tutorPayout, netRevenue } = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, appState.allCourses);
         const netRevenueColor = netRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
         revenueEl.innerHTML = `
@@ -2815,7 +2816,7 @@ Thank you for your understanding.
     }
 
     function populateSalaryPeriods(selectEl) {
-        const periods = [...new Set(appState.courses.map(c => c.date.substring(0, 7)))].sort().reverse();
+        const periods = [...new Set(appState.allCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
         selectEl.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
     }
 
@@ -2829,7 +2830,7 @@ Thank you for your understanding.
         }
 
         const tutor = appState.tutors.find(t => t.id === tutorId);
-        const coursesInPeriod = appState.courses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+        const coursesInPeriod = appState.allCourses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
 
         const memberIdsInPeriod = new Set();
         coursesInPeriod.forEach(course => {
@@ -2840,7 +2841,7 @@ Thank you for your understanding.
 
         const allMemberBookings = [];
         if (memberIdsInPeriod.size > 0) {
-            appState.courses.forEach(course => {
+            appState.allCourses.forEach(course => {
                 if (course.bookedBy) {
                     for (const memberId of Object.keys(course.bookedBy)) {
                         if (memberIdsInPeriod.has(memberId)) {
@@ -2926,7 +2927,7 @@ Thank you for your understanding.
             const days = parseInt(periodSelect.value);
             const now = new Date();
             const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-            const filteredCourses = appState.courses.filter(c => new Date(c.date) >= startDate);
+            const filteredCourses = appState.allCourses.filter(c => new Date(c.date) >= startDate);
             
             if (filteredCourses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500">No data available for the selected period.</p>`;
@@ -2942,7 +2943,7 @@ Thank you for your understanding.
 
             const allRelevantBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                appState.courses.forEach(course => {
+                appState.allCourses.forEach(course => {
                     if (course.bookedBy) {
                         for (const memberId of Object.keys(course.bookedBy)) {
                             if (memberIdsInPeriod.has(memberId)) {
@@ -3072,7 +3073,9 @@ Thank you for your understanding.
     }
 
     function populateCoursesPeriods(selectEl) {
-        const periods = [...new Set(appState.courses.map(c => c.date.substring(0, 7)))].sort().reverse();
+        const isOwner = appState.currentUser?.role === 'owner';
+        const sourceData = isOwner ? appState.allCourses : appState.courses;
+        const periods = [...new Set(sourceData.map(c => c.date.substring(0, 7)))].sort().reverse();
         if (periods.length === 0) {
             selectEl.innerHTML = '<option value="">No Months Available</option>';
         } else {
@@ -3212,7 +3215,7 @@ Thank you for your understanding.
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
 
-            let filteredCourses = appState.courses.filter(c => c.date.startsWith(selectedMonth));
+            let filteredCourses = appState.allCourses.filter(c => c.date.startsWith(selectedMonth));
             
             if (selectedSportType !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
@@ -3428,11 +3431,14 @@ Thank you for your understanding.
         if (isOwner) {
             refs.users = database.ref('/users');
             refs.studioSettings = database.ref('/studioSettings');
+            // --- NEW: Add a reference for all courses ---
+            refs.allCourses = database.ref('/courses');
         }
 
         let initialDataLoaded = {};
+        // --- NEW: Add 'allCourses' to the list of required data for owners ---
         const requiredKeys = isOwner 
-            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings']
+            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings', 'allCourses']
             : ['courses', 'tutors', 'sportTypes', 'currentUser'];
         requiredKeys.forEach(k => initialDataLoaded[k] = false);
 
@@ -3446,42 +3452,59 @@ Thank you for your understanding.
             }
         };
 
-        // This is the listener for the OWNER role. It's a simple, direct query.
-        const ownerCourseListener = (snapshot) => {
-            const val = snapshot.val();
-            let previousCourses = [];
+        // --- NEW: This is the listener for the owner's ALL courses data ---
+        if (isOwner) {
+            dataListeners.allCourses = (snapshot) => {
+                const val = snapshot.val();
+                let previousCourses = [];
 
-            if (initialDataLoaded.courses && isOwner) {
-                previousCourses = [...appState.courses];
-            }
+                if (initialDataLoaded.allCourses) {
+                    previousCourses = [...appState.allCourses];
+                }
 
-            appState.courses = firebaseObjectToArray(val);
+                appState.allCourses = firebaseObjectToArray(val);
 
-            if (isOwner && previousCourses.length > 0) {
-                const newCourses = appState.courses;
-                newCourses.forEach(newCourse => {
-                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                    if (oldCourse) {
-                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                        if (newBookedIds.length > oldBookedIds.length) {
-                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                            if (newMemberId) {
-                                const member = appState.users.find(u => u.id === newMemberId);
-                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                                if (member && sportType) {
-                                    showBookingNotification({
-                                        memberName: member.name,
-                                        courseName: sportType.name,
-                                        courseTime: newCourse.time,
-                                        duration: newCourse.duration
-                                    });
+                // Notification logic now uses the complete dataset
+                if (previousCourses.length > 0) {
+                    const newCourses = appState.allCourses;
+                    newCourses.forEach(newCourse => {
+                        const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                        if (oldCourse) {
+                            const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                            const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                            if (newBookedIds.length > oldBookedIds.length) {
+                                const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                                if (newMemberId) {
+                                    const member = appState.users.find(u => u.id === newMemberId);
+                                    const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                                    if (member && sportType) {
+                                        showBookingNotification({
+                                            memberName: member.name,
+                                            courseName: sportType.name,
+                                            courseTime: newCourse.time,
+                                            duration: newCourse.duration
+                                        });
+                                    }
                                 }
                             }
                         }
-                    }
-                });
-            }
+                    });
+                }
+
+                if (!initialDataLoaded.allCourses) {
+                    initialDataLoaded.allCourses = true;
+                    checkAllDataLoaded();
+                } else {
+                    renderCurrentPage();
+                }
+            };
+            refs.allCourses.on('value', dataListeners.allCourses, (error) => console.error(`Listener error on owner /allCourses`, error));
+        }
+
+        const ownerCourseListener = (snapshot) => {
+            const val = snapshot.val();
+            // This listener now ONLY updates appState.courses for the schedule view
+            appState.courses = firebaseObjectToArray(val);
             
             if (!initialDataLoaded.courses){
                 initialDataLoaded.courses = true;
@@ -3491,7 +3514,6 @@ Thank you for your understanding.
             }
         };
 
-        // This is the more complex data fetcher for the MEMBER role.
         const memberCourseFetcher = async () => {
             try {
                 const memberId = appState.currentUser.id;
@@ -3529,15 +3551,12 @@ Thank you for your understanding.
 
             } catch (error) {
                 console.error("Failed to fetch member's courses:", error);
-                // Fallback to old behavior in case of error
                 initialDataLoaded.courses = true;
                 checkAllDataLoaded();
             }
         };
 
-        // --- FIX: Correctly attach the right course listener based on role ---
         if (isOwner) {
-            // Owner: Fetch courses within a "sliding window"
             const today = new Date();
             const daysToLookBack = appState.ownerPastDaysVisible || 0;
             const daysToLookForward = 30;
@@ -3556,14 +3575,13 @@ Thank you for your understanding.
             dataListeners.courses = ownerCourseListener;
             activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on owner /courses`, error));
         } else {
-            // Member: Use the multi-step fetcher
             memberCourseFetcher();
         }
-        // --- END FIX ---
 
-        // Process the rest of the listeners (tutors, sportTypes, etc.) for ALL roles.
-        // This part was previously being skipped for members.
         Object.entries(refs).forEach(([key, ref]) => {
+            // --- NEW: Skip the 'allCourses' ref here since we handled it above ---
+            if (key === 'allCourses') return;
+
             if (dataListeners[key]) ref.off('value', dataListeners[key]);
 
             dataListeners[key] = (snapshot) => {
@@ -3597,6 +3615,11 @@ Thank you for your understanding.
     };
 
     const detachDataListeners = () => {
+        // --- NEW: Detach the 'allCourses' listener if it exists ---
+        if (dataListeners.allCourses) {
+            database.ref('/courses').off('value', dataListeners.allCourses);
+        }
+        
         // --- START: MODIFIED LOGIC ---
         // Specifically detach the courses listener using its stored query reference
         if (activeCoursesRef && dataListeners.courses) {
