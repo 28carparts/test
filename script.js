@@ -570,31 +570,22 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function handleDeleteCourseRequest(course) {
-        // Refund credits for all booked members
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
-        const refundPromises = bookedMemberIds.map(memberId => {
-            const member = appState.users.find(u => u.id === memberId);
-            const attended = course.attendedBy && course.attendedBy[memberId];
-            if (member && !member.monthlyPlan && !attended) {
-                return database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) + parseFloat(course.credits));
-            }
-            return Promise.resolve();
-        });
 
-        Promise.all(refundPromises).then(() => {
-            if (bookedMemberIds.length > 0) {
-                openDeleteCourseNotifyModal(course);
-            } else {
-                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
-                    saveSchedulePosition();
-                    database.ref('/courses/' + course.id).remove().then(() => {
-                        closeModal(DOMElements.courseModal);
-                        showMessageBox('Course deleted.', 'info');
-                    });
+        if (bookedMemberIds.length > 0) {
+            // If there are bookings, open the notification modal. No refund happens here.
+            openDeleteCourseNotifyModal(course);
+        } else {
+            // If no bookings, just show the simple confirmation to delete.
+            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
+                saveSchedulePosition();
+                database.ref('/courses/' + course.id).remove().then(() => {
+                    closeModal(DOMElements.courseModal);
+                    showMessageBox('Course deleted.', 'info');
                 });
-            }
-        });
+            });
+        }
     }
 
     function openDeleteCourseNotifyModal(course) {
@@ -666,11 +657,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         modal.querySelector('#final-delete-btn').onclick = () => {
-            saveSchedulePosition();
-            database.ref('/courses/' + course.id).remove().then(() => {
-                closeModal(modal);
-                closeModal(DOMElements.courseModal);
-                showMessageBox('Course deleted and members notified.', 'success');
+            // --- START: Add the refund logic here ---
+            const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+            const refundPromises = bookedMemberIds.map(memberId => {
+                const member = appState.users.find(u => u.id === memberId);
+                const attended = course.attendedBy && course.attendedBy[memberId];
+                // Only refund non-monthly members who have not attended the class.
+                if (member && !member.monthlyPlan && !attended) {
+                    return database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) + parseFloat(course.credits));
+                }
+                return Promise.resolve(); // For members who don't need a refund.
+            });
+
+            // Wait for all refunds to complete before deleting the course.
+            Promise.all(refundPromises).then(() => {
+            // --- END: Add the refund logic here ---
+                saveSchedulePosition();
+                database.ref('/courses/' + course.id).remove().then(() => {
+                    closeModal(modal);
+                    closeModal(DOMElements.courseModal);
+                    showMessageBox('Course deleted and members notified.', 'success');
+                });
             });
         };
 
