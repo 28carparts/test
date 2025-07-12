@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
             memberTutor: 'all' 
         },
         ownerPastDaysVisible: 0,
-        scheduleScrollIndex: null,
+        scheduleScrollDate: null,
         scrollToDateOnNextLoad: null,
         copyMode: { 
             active: false,
@@ -290,23 +290,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const saveSchedulePosition = () => {
         if (emblaApi) {
-            appState.scheduleScrollIndex = emblaApi.selectedScrollSnap();
+            const currentIndex = emblaApi.selectedScrollSnap();
+            const currentSlideNode = emblaApi.slideNodes()[currentIndex];
+            if (currentSlideNode) {
+                // Find the date from the data attribute within the slide
+                const coursesContainer = currentSlideNode.querySelector('.courses-container[data-date]');
+                if (coursesContainer) {
+                    appState.scheduleScrollDate = coursesContainer.dataset.date;
+                }
+            }
         }
     };
 
     const getInitialScheduleIndex = (datesArray, defaultIndex) => {
-        // Priority 1: Handle immediate reloads on the same page (existing behavior)
-        if (appState.scheduleScrollIndex !== null) {
-            const index = appState.scheduleScrollIndex;
-            appState.scheduleScrollIndex = null; // Consume the index
-            return index;
+        let targetDate = null;
+
+        // Priority 1: Handle immediate reloads (Copy Day, Edit Course, etc.)
+        if (appState.scheduleScrollDate !== null) {
+            targetDate = appState.scheduleScrollDate;
+            appState.scheduleScrollDate = null; // Consume the state so it's only used once
+        } 
+        // Priority 2: Handle navigating back after booking
+        else if (appState.scrollToDateOnNextLoad !== null) {
+            targetDate = appState.scrollToDateOnNextLoad;
+            appState.scrollToDateOnNextLoad = null; // Consume the state
         }
 
-        // Priority 2: Handle navigating back to the schedule page (new behavior)
-        if (appState.scrollToDateOnNextLoad !== null) {
-            const targetDate = appState.scrollToDateOnNextLoad;
-            appState.scrollToDateOnNextLoad = null; // Consume the date so it's only used once
-            
+        if (targetDate) {
             const index = datesArray.indexOf(targetDate);
             // If the date exists in the current view, scroll to it.
             if (index !== -1) {
@@ -314,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Priority 3: Fallback to the default index
+        // Priority 3: Fallback to the default index (e.g., "today")
         return defaultIndex;
     };
     
@@ -1383,6 +1393,7 @@ Thank you for your understanding.
         const scrollPrev = () => {
             if (isOwner && !emblaApi.canScrollPrev()) {
                 if (appState.ownerPastDaysVisible < 30) { // Limit how far back they can go
+                    saveSchedulePosition();
                     appState.ownerPastDaysVisible += 7; // Load another week
                     detachDataListeners(); // Detach all listeners to prevent memory leaks
                     initDataListeners();   // Re-attach all listeners, which will use the new date range
@@ -1571,12 +1582,16 @@ Thank you for your understanding.
     }
 
     function performCopy(type, sourceData, targetDate) {
+        // --- FIX: The save operation is now guaranteed to happen first. ---
         saveSchedulePosition();
+
         if (type === 'day') {
             const sourceDate = sourceData;
             const coursesToCopy = appState.courses.filter(c => c.date === sourceDate);
             if (coursesToCopy.length === 0) {
                 showMessageBox('Source day has no classes to copy.', 'error');
+                cancelCopy(); // Cancel if there's nothing to do
+                return;       // Exit the function
             } else {
                 const copyPromises = coursesToCopy.map(course => {
                     const { id, bookedBy, attendedBy, ...restOfCourse } = course;
@@ -1596,6 +1611,7 @@ Thank you for your understanding.
             });
         }
         
+        // This runs after the copy action has been initiated.
         cancelCopy();
     }
 
@@ -3532,6 +3548,7 @@ Thank you for your understanding.
                 initialDataLoaded.courses = true;
                 checkAllDataLoaded();
             } else {
+                 if (appState.activePage === 'schedule') { saveSchedulePosition(); }
                  renderCurrentPage();
             }
         };
@@ -3566,6 +3583,7 @@ Thank you for your understanding.
                         initialDataLoaded.courses = true;
                         checkAllDataLoaded();
                     } else {
+                         if (appState.activePage === 'schedule') { saveSchedulePosition(); }
                          renderCurrentPage();
                     }
                 };
@@ -3626,10 +3644,12 @@ Thank you for your understanding.
                         checkAllDataLoaded();
                     }
                 } else {
-                    // --- START OF FIX ---
-                    // Only re-render if the change was NOT from the currentUser
-                    // AND we are currently on the schedule page.
-                    if (key === 'currentUser' && appState.activePage === 'schedule') {
+                    // --- START OF MODIFIED FIX ---
+                    // If any user data changes while on the schedule page,
+                    // do not re-render. Let the `courses` listener handle it.
+                    // This covers both a member canceling (currentUser) and an
+                    // owner deleting/refunding (users)
+                    if ((key === 'currentUser' || key === 'users') && appState.activePage === 'schedule') {
                         // Do nothing. The courses listener will handle the visual update.
                     } else {
                         // For all other cases, re-render as normal.
