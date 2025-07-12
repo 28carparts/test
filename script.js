@@ -732,7 +732,7 @@ Thank you for your understanding.
     }
     
     // --- Course, Booking, and Member List Modals (Refactored) ---
-    function openJoinedMembersModal(course) {
+    async function openJoinedMembersModal(course) {
         if (appState.copyMode.active) return;
         
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
@@ -742,7 +742,7 @@ Thank you for your understanding.
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">Course Details</h2>
                 <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === course.sportTypeId).name} on ${formatShortDateWithYear(course.date)}</p>
-                <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"></div>
+                <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">Calculating revenue...</p></div>
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Booked Members</h3>
                 <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto"></div>
                 
@@ -754,22 +754,31 @@ Thank you for your understanding.
                     </div>
                 </div>
             </div>`;
+        openModal(DOMElements.joinedMembersModal);
+
         const listEl = DOMElements.joinedMembersModal.querySelector('#joinedMembersList');
         const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
+        
+        // --- Revenue Calculation (On-Demand) ---
+        let grossRevenue = 0, tutorPayout = 0, netRevenue = 0;
+        if (bookedMemberIds.length > 0) {
+            // Fetch all course data just for this calculation.
+            const allCoursesSnapshot = await database.ref('/courses').once('value');
+            const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
 
-        // --- START: CORRECTED CODE BLOCK ---
-        // This single block now handles all revenue calculation by calling the helper function.
-        // The old, duplicated code has been removed.
-        const { grossRevenue, tutorPayout, netRevenue } = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, appState.allCourses);
+            const revenueData = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, allCoursesForCalc);
+            grossRevenue = revenueData.grossRevenue;
+            tutorPayout = revenueData.tutorPayout;
+            netRevenue = revenueData.netRevenue;
+        }
+        
         const netRevenueColor = netRevenue >= 0 ? 'text-green-600' : 'text-red-600';
-
         revenueEl.innerHTML = `
             <div class="flex justify-center gap-4">
                 <div><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-green-600">${formatCurrency(grossRevenue)}</p></div>
                 <div><p class="text-sm text-slate-500">Tutor Payout</p><p class="text-2xl font-bold text-red-600">(${formatCurrency(tutorPayout)})</p></div>
                 <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
             </div>`;
-        // --- END: CORRECTED CODE BLOCK ---
 
         if (bookedMemberIds.length === 0) {
             listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this course yet.</p>`;
@@ -814,7 +823,7 @@ Thank you for your understanding.
             }
 
             const unbookedMembers = appState.users.filter(u => 
-                u.role !== 'owner' && !u.isDeleted && // <<< ADD !u.isDeleted HERE
+                u.role !== 'owner' && !u.isDeleted &&
                 (!course.bookedBy || !course.bookedBy[u.id]) && (
                     u.name.toLowerCase().includes(searchTerm) ||
                     u.email.toLowerCase().includes(searchTerm) ||
@@ -855,22 +864,18 @@ Thank you for your understanding.
                         showMessageBox('Member has insufficient credits.', 'error');
                         return;
                     }
-                    // Use a transaction to deduct credits
                     database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(course.credits));
                 }
 
-                // Add to course and member's booking index
                 const updates = {};
                 updates[`/courses/${course.id}/bookedBy/${memberId}`] = true;
-                updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
+                updates[`/memberBookings/${memberId}/${course.id}`] = true;
                 database.ref().update(updates).then(() => {
                     showMessageBox('Member added to course.', 'success');
                     closeModal(DOMElements.joinedMembersModal);
                 });
             }
         };
-
-        openModal(DOMElements.joinedMembersModal);
     }
 
     function openBookingModal(course) {
@@ -2807,7 +2812,7 @@ Thank you for your understanding.
         promise.then(() => closeModal(DOMElements.tutorModal));
     }
 
-    function renderSalaryPage(container) {
+    async function renderSalaryPage(container) {
         container.innerHTML = `
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
@@ -2817,7 +2822,7 @@ Thank you for your understanding.
                         <select id="salaryPeriodSelect" class="form-select w-full sm:w-48"></select>
                     </div>
                 </div>
-                <div id="salaryDetailsContainer"></div>
+                <div id="salaryDetailsContainer"><p class="text-center text-slate-500 p-8">Loading available months...</p></div>
             </div>`;
         
         const tutorSelect = container.querySelector('#salaryTutorSelect');
@@ -2827,48 +2832,52 @@ Thank you for your understanding.
         if (appState.selectedFilters.salaryTutorId) {
             tutorSelect.value = appState.selectedFilters.salaryTutorId;
         }
-        populateSalaryPeriods(periodSelect);
+
+        // Fetch all courses just to populate the month dropdown
+        const allCoursesSnapshot = await database.ref('/courses').once('value');
+        const allCoursesForPeriods = firebaseObjectToArray(allCoursesSnapshot.val());
+        
+        const periods = [...new Set(allCoursesForPeriods.map(c => c.date.substring(0, 7)))].sort().reverse();
+        periodSelect.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
         
         if (appState.selectedFilters.salaryPeriod) {
             periodSelect.value = appState.selectedFilters.salaryPeriod;
         } else {
             const currentMonth = new Date().toISOString().substring(0, 7);
-            if ([...periodSelect.options].some(option => option.value === currentMonth)) {
+            if (periods.includes(currentMonth)) {
                 periodSelect.value = currentMonth;
-                appState.selectedFilters.salaryPeriod = periodSelect.value;
             } else if (periodSelect.options.length > 0) {
                 periodSelect.value = periodSelect.options[0].value;
-                appState.selectedFilters.salaryPeriod = periodSelect.options[0].value;
             }
+            appState.selectedFilters.salaryPeriod = periodSelect.value;
         }
 
-        tutorSelect.onchange = () => {
+        const onFilterChange = () => {
             appState.selectedFilters.salaryTutorId = tutorSelect.value;
-            renderSalaryDetails();
-        };
-        periodSelect.onchange = () => {
             appState.selectedFilters.salaryPeriod = periodSelect.value;
-            renderSalaryDetails();
+            renderSalaryDetails(allCoursesForPeriods); // Pass the already-fetched data
         };
-        renderSalaryDetails();
+
+        tutorSelect.onchange = onFilterChange;
+        periodSelect.onchange = onFilterChange;
+        
+        // Initial render
+        renderSalaryDetails(allCoursesForPeriods);
     }
 
-    function populateSalaryPeriods(selectEl) {
-        const periods = [...new Set(appState.allCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
-        selectEl.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
-    }
-
-    function renderSalaryDetails() {
+    function renderSalaryDetails(allCourses) {
         const container = document.getElementById('salaryDetailsContainer');
         const tutorId = document.getElementById('salaryTutorSelect').value;
         const period = document.getElementById('salaryPeriodSelect').value;
+
         if(!tutorId || !period || !container) {
             if(container) container.innerHTML = `<p class="text-center text-slate-500">Please select a tutor and period to view details.</p>`;
             return;
         }
 
         const tutor = appState.tutors.find(t => t.id === tutorId);
-        const coursesInPeriod = appState.allCourses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+        // Use the pre-fetched course data instead of a global state
+        const coursesInPeriod = allCourses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
 
         const memberIdsInPeriod = new Set();
         coursesInPeriod.forEach(course => {
@@ -2879,7 +2888,7 @@ Thank you for your understanding.
 
         const allMemberBookings = [];
         if (memberIdsInPeriod.size > 0) {
-            appState.allCourses.forEach(course => {
+            allCourses.forEach(course => {
                 if (course.bookedBy) {
                     for (const memberId of Object.keys(course.bookedBy)) {
                         if (memberIdsInPeriod.has(memberId)) {
@@ -2953,7 +2962,7 @@ Thank you for your understanding.
                         <select id="statsPeriodSelect" class="form-select w-48"></select>
                      </div>
                 </div>
-                <div id="statisticsContainer" class="space-y-8"></div>
+                <div id="statisticsContainer" class="space-y-8"><p class="text-center text-slate-500 p-8">Calculating statistics...</p></div>
             </div>`;
         
         const periodSelect = container.querySelector('#statsPeriodSelect');
@@ -2961,17 +2970,23 @@ Thank you for your understanding.
         const periods = { 'Last 7 Days': 7, 'Last 30 Days': 30, 'Last 90 Days': 90, 'All Time': Infinity };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
         
-        const renderFilteredStats = () => {
+        const renderFilteredStats = async () => {
+            statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Calculating statistics...</p>`;
             const days = parseInt(periodSelect.value);
             const now = new Date();
             const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-            const filteredCourses = appState.allCourses.filter(c => new Date(c.date) >= startDate);
+            const startDateIso = getIsoDate(startDate);
             
+            // Query only the courses within the selected date range
+            const coursesSnapshot = await database.ref('/courses').orderByChild('date').startAt(startDateIso).once('value');
+            const filteredCourses = firebaseObjectToArray(coursesSnapshot.val());
+
             if (filteredCourses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500">No data available for the selected period.</p>`;
                  return;
             }
 
+            // For revenue, we still need the full history of members who booked in this period.
             const memberIdsInPeriod = new Set();
             filteredCourses.forEach(course => {
                 if (course.bookedBy) {
@@ -2981,7 +2996,11 @@ Thank you for your understanding.
 
             const allRelevantBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                appState.allCourses.forEach(course => {
+                // Fetch all courses just for this calculation
+                const allCoursesSnapshot = await database.ref('/courses').once('value');
+                const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+
+                allCoursesForCalc.forEach(course => {
                     if (course.bookedBy) {
                         for (const memberId of Object.keys(course.bookedBy)) {
                             if (memberIdsInPeriod.has(memberId)) {
@@ -3022,7 +3041,6 @@ Thank you for your understanding.
                 }
             });
 
-
             const totalNetRevenue = grossRevenue - totalTutorPayout;
             const totalCapacity = filteredCourses.reduce((sum, c) => sum + c.maxParticipants, 0);
             const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
@@ -3059,7 +3077,7 @@ Thank you for your understanding.
         };
 
         periodSelect.onchange = renderFilteredStats;
-        renderFilteredStats();
+        renderFilteredStats(); // Initial call
     }
 
     function rankByStat(courses, groupByKey, valueKey, lookup) {
@@ -3108,17 +3126,6 @@ Thank you for your understanding.
     function renderColorPicker(container, colorInput) {
         container.innerHTML = COURSE_COLORS.map((color, index) => `<input type="radio" name="color" id="color-${index}" value="${color}" class="color-swatch-radio" ${color === colorInput.value ? 'checked' : ''}><label for="color-${index}" class="color-swatch-label" style="background-color: ${color};"></label>`).join('');
         container.onchange = e => { if (e.target.name === 'color') colorInput.value = e.target.value; };
-    }
-
-    function populateCoursesPeriods(selectEl) {
-        const isOwner = appState.currentUser?.role === 'owner';
-        const sourceData = isOwner ? appState.allCourses : appState.courses;
-        const periods = [...new Set(sourceData.map(c => c.date.substring(0, 7)))].sort().reverse();
-        if (periods.length === 0) {
-            selectEl.innerHTML = '<option value="">No Months Available</option>';
-        } else {
-            selectEl.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
-        }
     }
 
     function populateSportTypeFilter(selectEl, sourceData = appState.sportTypes) {
@@ -3180,7 +3187,7 @@ Thank you for your understanding.
         container.appendChild(buttonsEl);
     }
 
-    function renderCoursesPage(container) {
+    async function renderCoursesPage(container) {
         container.innerHTML = `
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
@@ -3215,37 +3222,38 @@ Thank you for your understanding.
         const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
         const tutorFilter = container.querySelector('#coursesTutorFilter');
         const addCourseBtn = container.querySelector('#addCourseBtn');
+        const coursesTableBody = container.querySelector('#coursesTableBody');
 
-        populateCoursesPeriods(monthFilter);
+        // Fetch all courses ONCE to populate the month dropdown
+        coursesTableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading available months...</td></tr>`;
+        const allCoursesSnapshot = await database.ref('/courses').once('value');
+        const allCourses = firebaseObjectToArray(allCoursesSnapshot.val());
+
+        const periods = [...new Set(allCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
+        if (periods.length > 0) {
+            monthFilter.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
+        } else {
+            monthFilter.innerHTML = '<option value="">No Months Available</option>';
+        }
+        
         populateSportTypeFilter(sportTypeFilter);
         
-        if (appState.selectedFilters.coursesPeriod && !Array.from(monthFilter.options).some(opt => opt.value === appState.selectedFilters.coursesPeriod)) {
-            appState.selectedFilters.coursesPeriod = monthFilter.options.length > 0 ? monthFilter.options[0].value : '';
-        }
-        if (appState.selectedFilters.coursesPeriod) {
+        // Set initial filter values from app state or defaults
+        if (appState.selectedFilters.coursesPeriod && periods.includes(appState.selectedFilters.coursesPeriod)) {
             monthFilter.value = appState.selectedFilters.coursesPeriod;
-        } else if (monthFilter.options.length > 0) {
-            monthFilter.value = monthFilter.options[0].value;
-            appState.selectedFilters.coursesPeriod = monthFilter.options[0].value;
+        } else if (periods.length > 0) {
+            monthFilter.value = periods[0];
+            appState.selectedFilters.coursesPeriod = periods[0];
         }
-
 
         if (appState.selectedFilters.coursesSportTypeId) {
             sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId;
         }
 
         populateTutorFilter(tutorFilter, sportTypeFilter.value);
-
-        if (appState.selectedFilters.coursesTutorId && !Array.from(tutorFilter.options).some(opt => opt.value === appState.selectedFilters.coursesTutorId)) {
-            appState.selectedFilters.coursesTutorId = 'all';
-        }
-        if (appState.selectedFilters.coursesTutorId) {
-            tutorFilter.value = appState.selectedFilters.coursesTutorId;
-        }
-
-
+        tutorFilter.value = appState.selectedFilters.coursesTutorId || 'all';
+        
         const updateCoursesTable = () => {
-            const coursesTableBody = container.querySelector('#coursesTableBody');
             const coursesPaginationContainer = container.querySelector('#coursesPagination');
             const coursesCountEl = container.querySelector('#coursesCount');
 
@@ -3253,7 +3261,8 @@ Thank you for your understanding.
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
 
-            let filteredCourses = appState.allCourses.filter(c => c.date.startsWith(selectedMonth));
+            // Filter the pre-fetched `allCourses` array instead of querying again
+            let filteredCourses = allCourses.filter(c => c.date.startsWith(selectedMonth));
             
             if (selectedSportType !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
@@ -3283,7 +3292,6 @@ Thank you for your understanding.
                 const tutor = appState.tutors.find(t => t.id === course.tutorId);
                 const entryNumber = (page - 1) * itemsPerPage.courses + index + 1;
                 const bookingsCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-                
                 const isNewDay = course.date !== lastDate;
                 lastDate = course.date;
 
@@ -3310,7 +3318,7 @@ Thank you for your understanding.
 
             coursesTableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
                 btn.onclick = () => {
-                    const courseToEdit = appState.courses.find(c => c.id === btn.dataset.id);
+                    const courseToEdit = allCourses.find(c => c.id === btn.dataset.id);
                     openCourseModal(courseToEdit.date, courseToEdit);
                 };
             });
@@ -3318,7 +3326,7 @@ Thank you for your understanding.
             coursesTableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
                 btn.onclick = () => {
                     const courseId = btn.dataset.id;
-                    const course = appState.courses.find(c => c.id === courseId);
+                    const course = allCourses.find(c => c.id === courseId);
                     handleDeleteCourseRequest(course);
                 };
             });
@@ -3329,8 +3337,8 @@ Thank you for your understanding.
             appState.selectedFilters.coursesPeriod = monthFilter.value;
             appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
+            tutorFilter.value = 'all'; // Reset tutor filter when sport type changes
             appState.selectedFilters.coursesTutorId = 'all';
-            tutorFilter.value = 'all';
             updateCoursesTable();
         };
 
@@ -3342,38 +3350,18 @@ Thank you for your understanding.
         };
 
         addCourseBtn.onclick = () => {
-            // This now defaults directly to today's date.
             const defaultDateForNewCourse = getIsoDate(new Date());
             openCourseModal(defaultDateForNewCourse);
         };
         
         const tableContainer = container.querySelector('.table-swipe-container');
-        let isDown = false;
-        let startX;
-        let scrollLeft;
+        let isDown = false, startX, scrollLeft;
+        tableContainer.addEventListener('mousedown', (e) => { isDown = true; tableContainer.classList.add('swiping'); startX = e.pageX - tableContainer.offsetLeft; scrollLeft = tableContainer.scrollLeft; });
+        tableContainer.addEventListener('mouseleave', () => { isDown = false; tableContainer.classList.remove('swiping'); });
+        tableContainer.addEventListener('mouseup', () => { isDown = false; tableContainer.classList.remove('swiping'); });
+        tableContainer.addEventListener('mousemove', (e) => { if(!isDown) return; e.preventDefault(); const x = e.pageX - tableContainer.offsetLeft; const walk = (x - startX) * 2; tableContainer.scrollLeft = scrollLeft - walk; });
 
-        tableContainer.addEventListener('mousedown', (e) => {
-            isDown = true;
-            tableContainer.classList.add('swiping');
-            startX = e.pageX - tableContainer.offsetLeft;
-            scrollLeft = tableContainer.scrollLeft;
-        });
-        tableContainer.addEventListener('mouseleave', () => {
-            isDown = false;
-            tableContainer.classList.remove('swiping');
-        });
-        tableContainer.addEventListener('mouseup', () => {
-            isDown = false;
-            tableContainer.classList.remove('swiping');
-        });
-        tableContainer.addEventListener('mousemove', (e) => {
-            if(!isDown) return;
-            e.preventDefault();
-            const x = e.pageX - tableContainer.offsetLeft;
-            const walk = (x - startX) * 2;
-            tableContainer.scrollLeft = scrollLeft - walk;
-        });
-
+        // Initial table render
         updateCoursesTable();
     }
 
@@ -3469,14 +3457,12 @@ Thank you for your understanding.
         if (isOwner) {
             refs.users = database.ref('/users');
             refs.studioSettings = database.ref('/studioSettings');
-            // --- NEW: Add a reference for all courses ---
-            refs.allCourses = database.ref('/courses');
         }
 
         let initialDataLoaded = {};
-        // --- NEW: Add 'allCourses' to the list of required data for owners ---
+        // 'allCourses' is removed. We will query data on-demand instead.
         const requiredKeys = isOwner 
-            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings', 'allCourses']
+            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings']
             : ['courses', 'tutors', 'sportTypes', 'currentUser'];
         requiredKeys.forEach(k => initialDataLoaded[k] = false);
 
@@ -3490,59 +3476,40 @@ Thank you for your understanding.
             }
         };
 
-        // --- NEW: This is the listener for the owner's ALL courses data ---
-        if (isOwner) {
-            dataListeners.allCourses = (snapshot) => {
-                const val = snapshot.val();
-                let previousCourses = [];
+        const ownerCourseListener = (snapshot) => {
+            const val = snapshot.val();
+            const previousCourses = [...appState.courses];
+            const newCourses = firebaseObjectToArray(val);
 
-                if (initialDataLoaded.allCourses) {
-                    previousCourses = [...appState.allCourses];
-                }
-
-                appState.allCourses = firebaseObjectToArray(val);
-
-                // Notification logic now uses the complete dataset
-                if (previousCourses.length > 0) {
-                    const newCourses = appState.allCourses;
-                    newCourses.forEach(newCourse => {
-                        const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                        if (oldCourse) {
-                            const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                            const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                            if (newBookedIds.length > oldBookedIds.length) {
-                                const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                                if (newMemberId) {
-                                    const member = appState.users.find(u => u.id === newMemberId);
-                                    const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                                    if (member && sportType) {
-                                        showBookingNotification({
-                                            memberName: member.name,
-                                            courseName: sportType.name,
-                                            courseTime: newCourse.time,
-                                            duration: newCourse.duration
-                                        });
-                                    }
+            // --- Notification Logic ---
+            // It now compares the live schedule data to detect new bookings.
+            if (previousCourses.length > 0) {
+                newCourses.forEach(newCourse => {
+                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                    if (oldCourse) {
+                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                        if (newBookedIds.length > oldBookedIds.length) {
+                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                            if (newMemberId) {
+                                const member = appState.users.find(u => u.id === newMemberId);
+                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                                if (member && sportType) {
+                                    showBookingNotification({
+                                        memberName: member.name,
+                                        courseName: sportType.name,
+                                        courseTime: newCourse.time,
+                                        duration: newCourse.duration
+                                    });
                                 }
                             }
                         }
-                    });
-                }
-
-                if (!initialDataLoaded.allCourses) {
-                    initialDataLoaded.allCourses = true;
-                    checkAllDataLoaded();
-                } else {
-                    renderCurrentPage();
-                }
-            };
-            refs.allCourses.on('value', dataListeners.allCourses, (error) => console.error(`Listener error on owner /allCourses`, error));
-        }
-
-        const ownerCourseListener = (snapshot) => {
-            const val = snapshot.val();
+                    }
+                });
+            }
+            
             // This listener now ONLY updates appState.courses for the schedule view
-            appState.courses = firebaseObjectToArray(val);
+            appState.courses = newCourses;
             
             if (!initialDataLoaded.courses){
                 initialDataLoaded.courses = true;
@@ -3617,9 +3584,6 @@ Thank you for your understanding.
         }
 
         Object.entries(refs).forEach(([key, ref]) => {
-            // --- NEW: Skip the 'allCourses' ref here since we handled it above ---
-            if (key === 'allCourses') return;
-
             if (dataListeners[key]) ref.off('value', dataListeners[key]);
 
             dataListeners[key] = (snapshot) => {
