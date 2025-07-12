@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         ownerPastDaysVisible: 0,
         scheduleScrollIndex: null,
+        scrollToDateOnNextLoad: null,
         copyMode: { 
             active: false,
             type: null, 
@@ -293,12 +294,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    const getInitialScheduleIndex = (defaultIndex) => {
+    const getInitialScheduleIndex = (datesArray, defaultIndex) => {
+        // Priority 1: Handle immediate reloads on the same page (existing behavior)
         if (appState.scheduleScrollIndex !== null) {
             const index = appState.scheduleScrollIndex;
             appState.scheduleScrollIndex = null; // Consume the index
             return index;
         }
+
+        // Priority 2: Handle navigating back to the schedule page (new behavior)
+        if (appState.scrollToDateOnNextLoad !== null) {
+            const targetDate = appState.scrollToDateOnNextLoad;
+            appState.scrollToDateOnNextLoad = null; // Consume the date so it's only used once
+            
+            const index = datesArray.indexOf(targetDate);
+            // If the date exists in the current view, scroll to it.
+            if (index !== -1) {
+                return index;
+            }
+        }
+        
+        // Priority 3: Fallback to the default index
         return defaultIndex;
     };
     
@@ -934,6 +950,7 @@ Thank you for your understanding.
                     return database.ref().update(updates);
                 }).then(() => {
                     appState.highlightBookingId = course.id;
+                    appState.scrollToDateOnNextLoad = course.date;
                     showMessageBox('Booking successful!', 'success');
                     closeModal(DOMElements.bookingModal);
                     switchPage('account');
@@ -949,7 +966,6 @@ Thank you for your understanding.
 
     function handleCancelBooking(course, memberIdToUpdate = null) {
         showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
-            saveSchedulePosition();
             const memberId = memberIdToUpdate || appState.currentUser.id;
             
             // --- START: FIX ---
@@ -1286,6 +1302,7 @@ Thank you for your understanding.
             if (cancelButton) {
                 cancelButton.onclick = (e) => {
                     e.stopPropagation();
+                    saveSchedulePosition();
                     handleCancelBooking(course);
                 };
                 cancelButton.onmouseenter = () => cancelButton.textContent = cancelButton.dataset.cancelText;
@@ -1421,7 +1438,7 @@ Thank you for your understanding.
             datesArray.push(getIsoDate(d));
         }
 
-        const initialScrollIndex = getInitialScheduleIndex(daysToLookBack);
+        const initialScrollIndex = getInitialScheduleIndex(datesArray, daysToLookBack);
         
         _renderScheduleCarousel(container, ownerStartDate, ownerEndDate, datesArray, initialScrollIndex, true);
         updateCopyUI();
@@ -1453,7 +1470,7 @@ Thank you for your understanding.
             datesArray.push(getIsoDate(d));
         }
 
-        const initialScrollIndex = getInitialScheduleIndex(MEMBER_PAST_DAYS);
+        const initialScrollIndex = getInitialScheduleIndex(datesArray, MEMBER_PAST_DAYS);
 
         _renderScheduleCarousel(carouselContainer, memberStartDate, memberEndDate, datesArray, initialScrollIndex, false);
     }
@@ -3609,7 +3626,16 @@ Thank you for your understanding.
                         checkAllDataLoaded();
                     }
                 } else {
-                     renderCurrentPage();
+                    // --- START OF FIX ---
+                    // Only re-render if the change was NOT from the currentUser
+                    // AND we are currently on the schedule page.
+                    if (key === 'currentUser' && appState.activePage === 'schedule') {
+                        // Do nothing. The courses listener will handle the visual update.
+                    } else {
+                        // For all other cases, re-render as normal.
+                        renderCurrentPage();
+                    }
+                    // --- END OF FIX ---
                 }
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
