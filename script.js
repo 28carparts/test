@@ -1275,6 +1275,7 @@ Thank you for your understanding.
 
                     clearTimeout(timeChangeDebounce);
                     timeChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
                         database.ref(`/courses/${course.id}/time`).set(localCourseTime);
                     }, 1500);
                 });
