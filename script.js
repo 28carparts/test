@@ -21,8 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#FF007F', '#00BFFF', '#32CD32', '#FFD700', '#8A2BE2', '#FF4500', '#20B2AA', '#DAA520', '#4682B4', '#FF69B4', '#7CFC00', '#ADFF2F', '#DC143C', '#BA55D3'];
     
     let appState = { 
-        courses: [], 
-        allCourses: [], 
+        courses: [],  
         tutors: [], 
         sportTypes: [], 
         users: [],
