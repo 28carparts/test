@@ -1722,9 +1722,27 @@ Thank you for your understanding.
                     <div class="card p-6 mt-8">
                          <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Purchase History</h4>
                         <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
-                            ${purchaseHistory.length > 0 ? purchaseHistory.sort((a,b) => new Date(b.date) - new Date(a.date)).map(p => `
-                                <div class="text-slate-600 bg-slate-50 p-2 rounded-md"><strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits</div>
-                            `).join('') : '<p class="text-sm text-slate-500 text-center">No purchase history.</p>'}
+                            ${purchaseHistory.length > 0 
+                                ? purchaseHistory
+                                    .filter(p => p.status !== 'deleted') // <-- Filter out deleted items
+                                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                                    .map(p => {
+                                        // --- START: New rendering logic for member view ---
+                                        let auditMessage = '';
+                                        if (p.lastModifiedBy) {
+                                            const action = (p.date === p.lastModifiedAt ? 'Added' : 'Edited');
+                                            auditMessage = `<span class="text-xs text-slate-500 mt-1">${action} by ${p.lastModifiedBy} on ${formatShortDateWithYear(p.lastModifiedAt)}</span>`;
+                                        }
+                                        return `
+                                            <div class="text-slate-600 bg-slate-50 p-2 rounded-md">
+                                                <div><strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits</div>
+                                                ${auditMessage}
+                                            </div>
+                                        `;
+                                        // --- END: New rendering logic for member view ---
+                                    }).join('') 
+                                : '<p class="text-sm text-slate-500 text-center">No purchase history.</p>'
+                            }
                         </div>
                     </div>` : ''}
                 </div>
@@ -2094,14 +2112,27 @@ Thank you for your understanding.
             const sortedHistory = purchaseHistory.sort((a,b) => new Date(b.date) - new Date(a.date));
 
             container.innerHTML = sortedHistory.map(p => {
+                // --- START: Replacement logic for rendering audit trail ---
                 const costPerCredit = p.costPerCredit ? formatCurrency(p.costPerCredit) : 'N/A';
+                const isDeleted = p.status === 'deleted';
+                
+                let auditMessage = '';
+                if (p.lastModifiedBy) {
+                    const action = isDeleted ? 'Deleted' : (p.date === p.lastModifiedAt ? 'Added' : 'Edited');
+                    auditMessage = `<span class="text-xs text-slate-500 mt-1">${action} by ${p.lastModifiedBy} on ${formatShortDateWithYear(p.lastModifiedAt)}</span>`;
+                }
+
                 return `
-                    <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-md transition" data-history-item-id="${p.id}">
+                    <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-md transition ${isDeleted ? 'opacity-50' : ''}" data-history-item-id="${p.id}">
                         <div class="flex-grow cursor-pointer hover:bg-slate-200 p-1 rounded-md">
-                            <strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits <span class="text-xs text-slate-500">(${costPerCredit}/credit)</span>
+                            <div class="flex flex-col">
+                                <strong class="${isDeleted ? 'line-through' : ''}">${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.credits} credits <span class="text-xs text-slate-500">(${costPerCredit}/credit)</span>
+                                ${auditMessage}
+                            </div>
                         </div>
-                        <button type="button" class="remove-history-btn text-red-500 hover:text-red-700 font-bold text-lg leading-none" data-history-id="${p.id}" title="Remove entry">&times;</button>
+                        <button type="button" class="remove-history-btn text-red-500 hover:text-red-700 font-bold text-lg leading-none ${isDeleted ? 'hidden' : ''}" data-history-id="${p.id}" title="Remove entry">×</button>
                     </div>`;
+                // --- END: Replacement logic for rendering audit trail ---
             }).join('');
         } else {
              container.innerHTML = '<p class="text-sm text-slate-500 text-center">No purchase history.</p>';
@@ -2115,20 +2146,35 @@ Thank you for your understanding.
             
             if (removeTarget) {
                 const historyId = removeTarget.dataset.historyId;
-                const entryToRemove = purchaseHistory.find(p => p.id === historyId);
+                const entryToUpdate = purchaseHistory.find(p => p.id === historyId);
                 const memberId = member.id;
-                showConfirmation('Delete Purchase Entry', `Are you sure you want to delete this entry? This will also deduct ${entryToRemove.credits} credits from the member's balance.`, () => {
-                    database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).remove()
+
+                // --- START: Replacement logic for soft delete ---
+                if (entryToUpdate.status === 'deleted') {
+                    showMessageBox('This entry has already been deleted.', 'info');
+                    return;
+                }
+
+                showConfirmation('Delete Purchase Entry', `Are you sure you want to delete this entry? This will also deduct ${entryToUpdate.credits} credits from the member's balance.`, () => {
+                    const updates = {
+                        status: 'deleted',
+                        lastModifiedBy: appState.currentUser.name,
+                        lastModifiedAt: new Date().toISOString()
+                    };
+
+                    database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(updates)
                         .then(() => {
+                            // Deduct the credits from the member's balance
                             return database.ref(`/users/${memberId}`).transaction(user => {
-                                if(user) {
-                                    user.credits = (user.credits || 0) - entryToRemove.credits;
-                                    user.initialCredits = (user.initialCredits || 0) - entryToRemove.credits;
+                                if (user) {
+                                    user.credits = (user.credits || 0) - entryToUpdate.credits;
+                                    user.initialCredits = (user.initialCredits || 0) - entryToUpdate.credits;
                                 }
                                 return user;
                             });
                         })
                         .then(() => {
+                            // Refresh the modal's list with the updated data
                             database.ref(`/users/${memberId}`).once('value', snapshot => {
                                 const updatedMember = { id: snapshot.key, ...snapshot.val() };
                                 _renderMemberPurchaseHistory(updatedMember, container, historyIdInput, purchaseAmountInput, creditsInput);
@@ -2136,9 +2182,10 @@ Thank you for your understanding.
                             });
                         })
                         .catch(error => {
-                             showMessageBox(`Error deleting entry: ${error.message}`, 'error');
+                            showMessageBox(`Error deleting entry: ${error.message}`, 'error');
                         });
                 });
+                // --- END: Replacement logic for soft delete ---
             }
             else if (editTarget) {
                 const parentItem = editTarget.closest('[data-history-item-id]');
@@ -2272,7 +2319,15 @@ Thank you for your understanding.
                 }
 
                 const creditDifference = credits - originalEntry.credits;
-                const entryUpdate = { amount, credits, costPerCredit: amount / credits };
+                const entryUpdate = { 
+                    amount, 
+                    credits, 
+                    costPerCredit: amount / credits,
+                    // --- START: Add these lines ---
+                    lastModifiedBy: appState.currentUser.name,
+                    lastModifiedAt: new Date().toISOString()
+                    // --- END: Add these lines ---
+                };
                 
                 database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate).then(() => {
                     return database.ref(`/users/${memberId}`).transaction(user => {
@@ -2294,8 +2349,19 @@ Thank you for your understanding.
                 if (isNaN(amount) || isNaN(credits) || amount <= 0 || credits <= 0) {
                     showMessageBox('Please enter a valid amount and credits to add.', 'error'); return;
                 }
+
                 const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
-                const newPurchase = { date: new Date().toISOString(), amount, credits, costPerCredit: amount / credits };
+                const newPurchase = { 
+                    date: new Date().toISOString(), 
+                    amount, 
+                    credits, 
+                    costPerCredit: amount / credits,
+                    // --- START: Add these lines ---
+                    status: 'active',
+                    lastModifiedBy: appState.currentUser.name,
+                    lastModifiedAt: new Date().toISOString()
+                    // --- END: Add these lines ---
+                };
                 
                 database.ref(`/users/${memberId}`).transaction(user => {
                     if (user) { user.credits = (user.credits || 0) + credits; user.initialCredits = (user.initialCredits || 0) + credits; }
