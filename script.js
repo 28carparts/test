@@ -1322,12 +1322,20 @@ Thank you for your understanding.
             // --- Attach listener for MOBILE native time input ---
             const timeInput = el.querySelector('input[type="time"]');
             if (timeInput) {
+                let timeChangeDebounce; // A timer for this specific course block
+
                 // Prevent the click from bubbling up to the main course block, which opens the modal.
                 timeInput.addEventListener('click', (e) => e.stopPropagation());
 
                 timeInput.addEventListener('change', () => {
-                    saveSchedulePosition();
-                    database.ref(`/courses/${course.id}/time`).set(timeInput.value);
+                    // Clear any previous timer to reset the delay
+                    clearTimeout(timeChangeDebounce);
+
+                    // Set a new timer to save the changes after a 2-second pause
+                    timeChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        database.ref(`/courses/${course.id}/time`).set(timeInput.value);
+                    }, 1500);
                 });
             }
 
