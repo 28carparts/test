@@ -1322,6 +1322,9 @@ Thank you for your understanding.
             // --- Attach listener for MOBILE native time input ---
             const timeInput = el.querySelector('input[type="time"]');
             if (timeInput) {
+                // Prevent the click from bubbling up to the main course block, which opens the modal.
+                timeInput.addEventListener('click', (e) => e.stopPropagation());
+
                 timeInput.addEventListener('change', () => {
                     saveSchedulePosition();
                     database.ref(`/courses/${course.id}/time`).set(timeInput.value);
