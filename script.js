@@ -305,15 +305,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const getInitialScheduleIndex = (datesArray, defaultIndex) => {
         let targetDate = null;
 
-        // Priority 1: Handle immediate reloads (Copy Day, Edit Course, etc.)
-        if (appState.scheduleScrollDate !== null) {
-            targetDate = appState.scheduleScrollDate;
-            appState.scheduleScrollDate = null; // Consume the state so it's only used once
-        } 
-        // Priority 2: Handle navigating back after booking
-        else if (appState.scrollToDateOnNextLoad !== null) {
+        // Priority 1: Handle one-time navigation (e.g., after booking)
+        if (appState.scrollToDateOnNextLoad !== null) {
             targetDate = appState.scrollToDateOnNextLoad;
-            appState.scrollToDateOnNextLoad = null; // Consume the state
+            appState.scrollToDateOnNextLoad = null; // Consume this one-time state
+        } 
+        // Priority 2: Use the persistent scroll date if it exists
+        else if (appState.scheduleScrollDate !== null) {
+            targetDate = appState.scheduleScrollDate;
+            // Do not consume this state. This allows the position to be remembered.
         }
 
         if (targetDate) {
@@ -1268,43 +1268,83 @@ Thank you for your understanding.
             
             const timeSlotEl = el.querySelector('.time-slot-editable');
             if (timeSlotEl) {
-                let localCourseTime = course.time;
-                
-                timeSlotEl.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
-                        if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
+                // A more reliable check that detects if a fine-grained pointer (like a mouse) is available.
+                const hasFinePointer = window.matchMedia('(any-pointer: fine)').matches;
+
+                if (hasFinePointer) {
+                    // --- Desktop Logic: Retain original mouse wheel behavior ---
+                    let localCourseTime = course.time;
+                    
+                    timeSlotEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
+                            if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
+                        });
+                        timeSlotEl.classList.toggle('editing');
                     });
-                    timeSlotEl.classList.toggle('editing');
-                });
 
-                let timeChangeDebounce;
-                timeSlotEl.addEventListener('wheel', (e) => {
-                    if (!timeSlotEl.classList.contains('editing')) return;
-                    
-                    e.preventDefault();
-                    
-                    const [hours, minutes] = localCourseTime.split(':').map(Number);
-                    let totalMinutes = hours * 60 + minutes;
-                    
-                    if (e.deltaY < 0) totalMinutes -= 15;
-                    else totalMinutes += 15;
+                    let timeChangeDebounce;
+                    timeSlotEl.addEventListener('wheel', (e) => {
+                        if (!timeSlotEl.classList.contains('editing')) return;
+                        
+                        e.preventDefault();
+                        
+                        const [hours, minutes] = localCourseTime.split(':').map(Number);
+                        let totalMinutes = hours * 60 + minutes;
+                        
+                        if (e.deltaY < 0) totalMinutes -= 15;
+                        else totalMinutes += 15;
 
-                    if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
-                    if (totalMinutes >= 24 * 60) totalMinutes = 0;
+                        if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
+                        if (totalMinutes >= 24 * 60) totalMinutes = 0;
 
-                    const newHours = Math.floor(totalMinutes / 60);
-                    const newMinutes = totalMinutes % 60;
-                    
-                    localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
-                    timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
+                        const newHours = Math.floor(totalMinutes / 60);
+                        const newMinutes = totalMinutes % 60;
+                        
+                        localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                        timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
 
-                    clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => {
-                        saveSchedulePosition();
-                        database.ref(`/courses/${course.id}/time`).set(localCourseTime);
-                    }, 1500);
-                });
+                        clearTimeout(timeChangeDebounce);
+                        timeChangeDebounce = setTimeout(() => {
+                            saveSchedulePosition();
+                            database.ref(`/courses/${course.id}/time`).set(localCourseTime);
+                        }, 1500);
+                    });
+                } else {
+                    // --- Touch Device Logic: Open native time picker ---
+                    timeSlotEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+
+                        const timeInput = document.createElement('input');
+                        timeInput.type = 'time';
+                        timeInput.value = course.time;
+                        timeInput.style.position = 'fixed';
+                        timeInput.style.top = '-100px'; // Hide off-screen
+                        document.body.appendChild(timeInput);
+
+                        timeInput.addEventListener('change', () => {
+                            saveSchedulePosition();
+                            database.ref(`/courses/${course.id}/time`).set(timeInput.value);
+                            document.body.removeChild(timeInput);
+                        });
+
+                        timeInput.addEventListener('blur', () => {
+                            setTimeout(() => { // Use timeout to ensure 'change' fires first
+                                if (document.body.contains(timeInput)) {
+                                    document.body.removeChild(timeInput);
+                                }
+                            }, 100);
+                        });
+                        
+                        // Programmatically open the native time picker UI
+                        try {
+                            timeInput.showPicker();
+                        } catch (error) {
+                            console.error("showPicker() is not supported, falling back to focus().", error);
+                            timeInput.focus();
+                        }
+                    });
+                }
             }
 
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
@@ -1417,6 +1457,8 @@ Thank you for your understanding.
         
         emblaApi.on('select', updateButtons);
         emblaApi.on('reInit', updateButtons);
+        
+        emblaApi.on('select', saveSchedulePosition);
         
         prevBtn.onclick = scrollPrev;
         nextBtn.onclick = () => emblaApi.scrollNext();
@@ -2723,7 +2765,17 @@ Thank you for your understanding.
                        <div><label for="tutorEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email</label><input type="email" id="tutorEmail" class="form-input"></div>
                     </div>
                     <div><label for="tutorPhone" class="block text-slate-600 text-sm font-semibold mb-2">Mobile Number</label><div class="flex gap-2"><input type="text" id="tutorCountryCode" class="form-input w-24" placeholder="852"><input type="tel" id="tutorPhone" class="form-input flex-grow"></div></div>
-                    <div><label class="block text-slate-600 text-sm font-semibold mb-2">Skills & Salaries</label><div id="tutorSkillsList" class="space-y-3"></div><button type="button" id="addTutorSkillBtn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2">+ Add Skill</button></div>
+                    
+                    <!-- START: New Employee Checkbox -->
+                    <div class="pt-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="isEmployeeCheckbox" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <label for="isEmployeeCheckbox" class="ml-2 text-slate-700">This tutor is an employee</label>
+                        </div>
+                    </div>
+                    <!-- END: New Employee Checkbox -->
+
+                    <div><label class="block text-slate-600 text-sm font-semibold mb-2 pt-2 border-t">Skills & Salaries</label><div id="tutorSkillsList" class="space-y-3"></div><button type="button" id="addTutorSkillBtn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2">+ Add Skill</button></div>
                 </div><div class="flex justify-center mt-8"><button type="submit" class="submit-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg"></button></div></form>
             </div>`;
         const modal = DOMElements.tutorModal;
@@ -2740,6 +2792,31 @@ Thank you for your understanding.
             e.target.value = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ');
         };
 
+        // --- START: Add this new logic block ---
+        const employeeCheckbox = form.querySelector('#isEmployeeCheckbox');
+
+        // This function handles enabling/disabling the salary fields
+        const toggleSalaryFields = (isEmployee) => {
+            form.querySelectorAll('.tutor-skill-row').forEach(row => {
+                const salaryValueInput = row.querySelector('.salary-value-input');
+                const salaryTypeButtons = row.querySelectorAll('.salary-type-btn');
+
+                salaryValueInput.disabled = isEmployee;
+                salaryTypeButtons.forEach(btn => btn.disabled = isEmployee);
+                
+                if (isEmployee) {
+                    salaryValueInput.value = 0; // Set value to 0
+                    salaryValueInput.removeAttribute('required'); // Explicitly remove the attribute
+                } else {
+                    salaryValueInput.setAttribute('required', ''); // Add the attribute back
+                }
+            });
+        };
+        
+        // Add the event listener to the checkbox
+        employeeCheckbox.onchange = () => toggleSalaryFields(employeeCheckbox.checked);
+        // --- END: Add this new logic block ---
+
         if (tutorToEdit) {
             modal.querySelector('#tutorModalTitle').textContent = 'Edit Tutor';
             modal.querySelector('.submit-btn').textContent = 'Save Changes';
@@ -2751,16 +2828,30 @@ Thank you for your understanding.
             tutorCountryCodeInput.value = countryCode;
             tutorPhoneInput.value = number;
 
+            // --- START: Corrected Logic ---
+            // Set the checkbox value first.
+            employeeCheckbox.checked = tutorToEdit.isEmployee || false;
+
+            // Create all the skill rows from the tutor's data.
             if (tutorToEdit.skills) {
                 tutorToEdit.skills.forEach(skill => addSkillRow(skillsList, skill));
             }
+            
+            // NOW, with all rows created, apply the correct enabled/disabled state.
+            toggleSalaryFields(employeeCheckbox.checked);
+            // --- END: Corrected Logic ---
+
         } else {
             modal.querySelector('#tutorModalTitle').textContent = 'Add Tutor';
             modal.querySelector('.submit-btn').textContent = 'Add Tutor';
             form.querySelector('#tutorModalId').value = '';
             addSkillRow(skillsList);
         }
-        form.querySelector('#addTutorSkillBtn').onclick = () => addSkillRow(skillsList);
+        form.querySelector('#addTutorSkillBtn').onclick = () => {
+            addSkillRow(skillsList);
+            // Immediately apply the correct state to the new row
+            toggleSalaryFields(employeeCheckbox.checked); 
+        };
         form.onsubmit = handleTutorFormSubmit;
         openModal(modal);
     }
@@ -2819,7 +2910,8 @@ Thank you for your understanding.
             name: form.querySelector('#tutorName').value, 
             email: form.querySelector('#tutorEmail').value,
             phone: fullPhoneNumber,
-            skills 
+            skills,
+            isEmployee: form.querySelector('#isEmployeeCheckbox').checked // Add this line
         };
 
         let promise;
