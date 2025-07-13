@@ -1245,7 +1245,19 @@ Thank you for your understanding.
                 </span>
             </div>
             <div class="mt-2 flex justify-between items-center">
-                <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot ${isOwner ? 'time-slot-editable' : ''}">${getTimeRange(course.time, course.duration)}</p>
+                ${isOwner
+                    ? (window.matchMedia('(any-pointer: fine)').matches
+                        // Desktop: Render the div for mouse wheel interaction
+                        ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot time-slot-editable">${getTimeRange(course.time, course.duration)}</p>`
+                        // Mobile: Render a wrapper with a transparent input overlay
+                        : `<div class="relative inline-block">
+                               <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md">${getTimeRange(course.time, course.duration)}</p>
+                               <input type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${course.time}" />
+                           </div>`
+                    )
+                    // Not owner: Just display the time range text
+                    : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
+                }
                 ${isOwner 
                     ? (isFull 
                         ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
@@ -1266,85 +1278,54 @@ Thank you for your understanding.
                 openCourseModal(course.date, course);
             };
             
+            // --- Attach listener for DESKTOP mouse wheel editing ---
             const timeSlotEl = el.querySelector('.time-slot-editable');
             if (timeSlotEl) {
-                // A more reliable check that detects if a fine-grained pointer (like a mouse) is available.
-                const hasFinePointer = window.matchMedia('(any-pointer: fine)').matches;
+                let localCourseTime = course.time;
+                
+                timeSlotEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
+                        if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
+                    });
+                    timeSlotEl.classList.toggle('editing');
+                });
 
-                if (hasFinePointer) {
-                    // --- Desktop Logic: Retain original mouse wheel behavior ---
-                    let localCourseTime = course.time;
+                let timeChangeDebounce;
+                timeSlotEl.addEventListener('wheel', (e) => {
+                    if (!timeSlotEl.classList.contains('editing')) return;
+                    e.preventDefault();
                     
-                    timeSlotEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
-                            if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
-                        });
-                        timeSlotEl.classList.toggle('editing');
-                    });
+                    const [hours, minutes] = localCourseTime.split(':').map(Number);
+                    let totalMinutes = hours * 60 + minutes;
+                    
+                    if (e.deltaY < 0) totalMinutes -= 15;
+                    else totalMinutes += 15;
 
-                    let timeChangeDebounce;
-                    timeSlotEl.addEventListener('wheel', (e) => {
-                        if (!timeSlotEl.classList.contains('editing')) return;
-                        
-                        e.preventDefault();
-                        
-                        const [hours, minutes] = localCourseTime.split(':').map(Number);
-                        let totalMinutes = hours * 60 + minutes;
-                        
-                        if (e.deltaY < 0) totalMinutes -= 15;
-                        else totalMinutes += 15;
+                    if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
+                    if (totalMinutes >= 24 * 60) totalMinutes = 0;
 
-                        if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
-                        if (totalMinutes >= 24 * 60) totalMinutes = 0;
+                    const newHours = Math.floor(totalMinutes / 60);
+                    const newMinutes = totalMinutes % 60;
+                    
+                    localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                    timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
 
-                        const newHours = Math.floor(totalMinutes / 60);
-                        const newMinutes = totalMinutes % 60;
-                        
-                        localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
-                        timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
+                    clearTimeout(timeChangeDebounce);
+                    timeChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        database.ref(`/courses/${course.id}/time`).set(localCourseTime);
+                    }, 1500);
+                });
+            }
 
-                        clearTimeout(timeChangeDebounce);
-                        timeChangeDebounce = setTimeout(() => {
-                            saveSchedulePosition();
-                            database.ref(`/courses/${course.id}/time`).set(localCourseTime);
-                        }, 1500);
-                    });
-                } else {
-                    // --- Touch Device Logic: Open native time picker ---
-                    timeSlotEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
-
-                        const timeInput = document.createElement('input');
-                        timeInput.type = 'time';
-                        timeInput.value = course.time;
-                        timeInput.style.position = 'fixed';
-                        timeInput.style.top = '-100px'; // Hide off-screen
-                        document.body.appendChild(timeInput);
-
-                        timeInput.addEventListener('change', () => {
-                            saveSchedulePosition();
-                            database.ref(`/courses/${course.id}/time`).set(timeInput.value);
-                            document.body.removeChild(timeInput);
-                        });
-
-                        timeInput.addEventListener('blur', () => {
-                            setTimeout(() => { // Use timeout to ensure 'change' fires first
-                                if (document.body.contains(timeInput)) {
-                                    document.body.removeChild(timeInput);
-                                }
-                            }, 100);
-                        });
-                        
-                        // Programmatically open the native time picker UI
-                        try {
-                            timeInput.showPicker();
-                        } catch (error) {
-                            console.error("showPicker() is not supported, falling back to focus().", error);
-                            timeInput.focus();
-                        }
-                    });
-                }
+            // --- Attach listener for MOBILE native time input ---
+            const timeInput = el.querySelector('input[type="time"]');
+            if (timeInput) {
+                timeInput.addEventListener('change', () => {
+                    saveSchedulePosition();
+                    database.ref(`/courses/${course.id}/time`).set(timeInput.value);
+                });
             }
 
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
