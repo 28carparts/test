@@ -71,6 +71,14 @@ document.addEventListener('DOMContentLoaded', function() {
         membersSort: { 
             key: 'name', 
             direction: 'asc' 
+        },
+        salarySort: {
+            key: 'date',
+            direction: 'asc'
+        },
+        coursesSort: {
+            key: 'date',
+            direction: 'asc'
         }
     };
     let emblaApi = null;
@@ -154,6 +162,23 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     const formatCurrency = (amount) => (amount || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
     
+    const formatBookingAuditText = (bookingInfo) => {
+        // If for some reason booking info is missing, return an empty string.
+        if (!bookingInfo || !bookingInfo.bookedAt) {
+            return '';
+        }
+
+        const formattedDate = formatShortDateWithYear(bookingInfo.bookedAt);
+
+        // Case 1: Booking was made by an owner/staff
+        if (bookingInfo.bookedBy && bookingInfo.bookedBy !== 'member') {
+            return `Booked by <strong>${bookingInfo.bookedBy}</strong> on ${formattedDate}`;
+        }
+        
+        // Case 2 (Default): Member self-booking
+        return `Booked on ${formattedDate}`;
+    };
+
     // --- START: Add this new function here ---
     const formatCredits = (credits) => {
         const num = parseFloat(credits);
@@ -361,6 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     credits: 0,
                     initialCredits: 0,
                     monthlyPlan: false,
+                    joinDate: new Date().toISOString(),
                     lastBooking: null,
                     expiryDate: null,
                     purchaseHistory: {}
@@ -893,7 +919,10 @@ Thank you for your understanding.
                 }
 
                 const updates = {};
-                updates[`/courses/${course.id}/bookedBy/${memberId}`] = true;
+                updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
+                    bookedAt: new Date().toISOString(),
+                    bookedBy: appState.currentUser.name // The currently logged-in owner's name
+                };
                 updates[`/memberBookings/${memberId}/${course.id}`] = true;
                 database.ref().update(updates).then(() => {
                     showMessageBox('Member added to course.', 'success');
@@ -954,7 +983,10 @@ Thank you for your understanding.
 
                 creditUpdatePromise.then(() => {
                     const updates = {};
-                    updates[`/courses/${course.id}/bookedBy/${memberId}`] = true;
+                    updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
+                        bookedAt: new Date().toISOString(),
+                        bookedBy: 'member' // Flag for self-booking
+                    };
                     updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
                     return database.ref().update(updates);
@@ -1705,11 +1737,17 @@ Thank you for your understanding.
                         <hr class="my-6">
                         <div class="space-y-4 text-left">
                             ${member.monthlyPlan 
-                                ? `<div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
+                                ? `
+                                   {/* START: Add this block */}
+                                   <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
+                                   {/* END: Add this block */}
+                                   <div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
                                    <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(calculateNextRenewalDate(member.planStartDate))}</p></div>`
-                                : `<div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
-                                        <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>
-                                    </p></div>
+                                : `
+                                   <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
+                                   <div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
+                                       <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>
+                                   </p></div>
                                    <div><p class="text-sm text-slate-500">Credits Expire</p><p class="font-bold text-lg text-slate-800">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</p></div>`
                             }
                         </div>
@@ -1760,6 +1798,7 @@ Thank you for your understanding.
                                         <p class="font-bold text-slate-800">${sportType.name}</p>
                                         <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
                                         <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
+                                        <p class="text-xs text-slate-500">${formatBookingAuditText(course.bookedBy[member.id])}</p>
                                     </div>
                                     ${isAttended 
                                         ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
@@ -1941,6 +1980,7 @@ Thank you for your understanding.
                             <tr class="border-b">
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="name">Name<span class="sort-icon"></span></th>
                                 <th class="p-2">Contact</th>
+                                <th class="p-2 sortable cursor-pointer" data-sort-key="joinDate">Join<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="credits">Credits/Plan<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="expiryDate">Credit Expiry<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="lastBooking">Last Active<span class="sort-icon"></span></th>
@@ -1977,7 +2017,7 @@ Thank you for your understanding.
                     if (a.monthlyPlan) valA = Infinity;
                     if (b.monthlyPlan) valB = Infinity;
                 }
-                if (key === 'expiryDate' || key === 'lastBooking') {
+                if (key === 'expiryDate' || key === 'lastBooking' || key === 'joinDate') {
                     valA = valA ? new Date(valA).getTime() : -Infinity;
                     valB = valB ? new Date(valB).getTime() : -Infinity;
                 }
@@ -1999,6 +2039,7 @@ Thank you for your understanding.
                 <tr class="border-b border-slate-100">
                     <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
                     <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
+                    <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
                     <td class="p-2">${member.monthlyPlan 
                         ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
                         : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>`}
@@ -3089,28 +3130,49 @@ Thank you for your understanding.
         
         let totalEarnings = 0;
         const courseDetails = coursesInPeriod.map(course => {
-            const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
-            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-            let earnings = 0;
-            let calculation = "N/A";
-            const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-            
-            if (skill) {
-                const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
-                if (skill.salaryType === 'perCourse') {
-                    earnings = skill.salaryValue;
-                    calculation = `${formatCurrency(skill.salaryValue)} (fixed)`;
-                } else if (skill.salaryType === 'percentage') {
-                    earnings = courseGrossRevenue * (skill.salaryValue / 100);
-                    calculation = `${formatCurrency(courseGrossRevenue)} x ${skill.salaryValue}%`;
-                } else if (skill.salaryType === 'perHeadcount') {
-                    earnings = attendeesCount * skill.salaryValue;
-                    calculation = `${attendeesCount} attendees x ${formatCurrency(skill.salaryValue)}`;
-                }
+        const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
+        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+        let earnings = 0;
+        let calculation = "N/A";
+        const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+        
+        if (skill) {
+            const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
+            if (skill.salaryType === 'perCourse') {
+                earnings = skill.salaryValue;
+                calculation = `${formatCurrency(skill.salaryValue)} (fixed)`;
+            } else if (skill.salaryType === 'percentage') {
+                earnings = courseGrossRevenue * (skill.salaryValue / 100);
+                calculation = `${formatCurrency(courseGrossRevenue)} x ${skill.salaryValue}%`;
+            } else if (skill.salaryType === 'perHeadcount') {
+                earnings = attendeesCount * skill.salaryValue;
+                calculation = `${formatCurrency(skill.salaryValue)}`;
             }
-            totalEarnings += earnings;
-            return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
-        }).sort((a,b) => new Date(a.date) - new Date(b.date));
+        }
+        totalEarnings += earnings;
+        return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
+        });
+
+        // --- START: New dynamic sorting logic ---
+        const { key, direction } = appState.salarySort;
+        courseDetails.sort((a, b) => {
+            let valA = a[key];
+            let valB = b[key];
+
+            if (key === 'date') {
+                valA = new Date(a.date).getTime();
+                valB = new Date(b.date).getTime();
+            }
+            
+            if (typeof valA === 'string') {
+                valA = valA.toLowerCase();
+                valB = valB.toLowerCase();
+            }
+
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
 
         container.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -3121,7 +3183,15 @@ Thank you for your understanding.
             <div>
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Detailed Breakdown</h3>
                 <div class="overflow-x-auto"><table class="w-full text-left">
-                    <thead><tr class="border-b"><th class="p-2">Date</th><th class="p-2">Course</th><th class="p-2">Attendees</th><th class="p-2">Calculation</th><th class="p-2 text-right">Earnings</th></tr></thead>
+                    <thead>
+                        <tr class="border-b">
+                            <th class="p-2 sortable cursor-pointer" data-sort-key="date">Date<span class="sort-icon"></span></th>
+                            <th class="p-2 sortable cursor-pointer" data-sort-key="sportTypeName">Course<span class="sort-icon"></span></th>
+                            <th class="p-2 sortable cursor-pointer" data-sort-key="attendeesCount">Attendees<span class="sort-icon"></span></th>
+                            <th class="p-2 sortable cursor-pointer" data-sort-key="calculation">Calculation<span class="sort-icon"></span></th>
+                            <th class="p-2 text-right sortable cursor-pointer" data-sort-key="earnings">Earnings<span class="sort-icon"></span></th>
+                        </tr>
+                    </thead>
                     <tbody>
                         ${courseDetails.map(c => `
                             <tr class="border-b border-slate-100">
@@ -3134,6 +3204,29 @@ Thank you for your understanding.
                     </tbody>
                 </table></div>
             </div>`;
+
+            const sortState = appState.salarySort;
+
+            container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
+                icon.className = 'sort-icon';
+            });
+            const activeHeader = container.querySelector(`th[data-sort-key="${sortState.key}"] .sort-icon`);
+            if (activeHeader) {
+                activeHeader.classList.add(sortState.direction);
+            }
+
+            container.querySelectorAll('th.sortable').forEach(header => {
+                header.onclick = () => {
+                    const newKey = header.dataset.sortKey;
+                    if (sortState.key === newKey) {
+                        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortState.key = newKey;
+                        sortState.direction = 'asc';
+                    }
+                    renderSalaryDetails(allCourses); // Re-render with new sort order
+                };
+            });
     }
     
     function renderStatisticsPage(container) {
@@ -3387,11 +3480,11 @@ Thank you for your understanding.
                         <thead>
                             <tr class="border-b">
                                 <th class="p-2 w-12">#</th>
-                                <th class="p-2">Date/Time</th>
+                                <th class="p-2 sortable cursor-pointer" data-sort-key="date">Date/Time<span class="sort-icon"></span></th>
                                 <th class="p-2">Course</th>
                                 <th class="p-2">Tutor</th>
-                                <th class="p-2">Credits</th>
-                                <th class="p-2">Attendees</th>
+                                <th class="p-2 sortable cursor-pointer" data-sort-key="credits">Credits<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer" data-sort-key="attendees">Attendees<span class="sort-icon"></span></th>
                                 <th class="p-2"></th>
                             </tr>
                         </thead>
@@ -3456,11 +3549,37 @@ Thank you for your understanding.
 
             coursesCountEl.textContent = `(${filteredCourses.length} added)`;
 
+            const { key, direction } = appState.coursesSort;
             filteredCourses.sort((a, b) => {
-                const dateA = new Date(`${a.date}T${a.time}`);
-                const dateB = new Date(`${b.date}T${b.time}`);
-                return dateA - dateB;
+                let valA, valB;
+
+                switch (key) {
+                    case 'date':
+                        valA = new Date(`${a.date}T${a.time}`).getTime();
+                        valB = new Date(`${b.date}T${b.time}`).getTime();
+                        break;
+                    case 'attendees':
+                        valA = a.bookedBy ? Object.keys(a.bookedBy).length : 0;
+                        valB = b.bookedBy ? Object.keys(b.bookedBy).length : 0;
+                        break;
+                    default: // handles 'credits'
+                        valA = a[key];
+                        valB = b[key];
+                }
+                
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
             });
+            
+            // --- ADD THIS RIGHT AFTER THE NEW SORTING BLOCK ---
+            container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
+                icon.className = 'sort-icon';
+            });
+            const activeHeader = container.querySelector(`th[data-sort-key="${key}"] .sort-icon`);
+            if (activeHeader) {
+                activeHeader.classList.add(direction);
+            }
             
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
@@ -3537,6 +3656,22 @@ Thank you for your understanding.
             openCourseModal(defaultDateForNewCourse);
         };
         
+        // --- START: ADD THE NEW CODE BLOCK HERE ---
+        container.querySelectorAll('th.sortable').forEach(header => {
+            header.onclick = () => {
+                const newKey = header.dataset.sortKey;
+                const currentSort = appState.coursesSort;
+                if (currentSort.key === newKey) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.key = newKey;
+                    currentSort.direction = 'asc';
+                }
+                updateCoursesTable(); // Re-render the table body with new sort order
+            };
+        });
+        // --- END: ADD THE NEW CODE BLOCK HERE ---
+
         const tableContainer = container.querySelector('.table-swipe-container');
         let isDown = false, startX, scrollLeft;
         tableContainer.addEventListener('mousedown', (e) => { isDown = true; tableContainer.classList.add('swiping'); startX = e.pageX - tableContainer.offsetLeft; scrollLeft = tableContainer.scrollLeft; });
@@ -3594,6 +3729,7 @@ Thank you for your understanding.
                             <p class="font-bold text-slate-800">${sportType?.name || 'Unknown Course'}</p>
                             <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
                             <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
+                            <p class="text-xs text-slate-500">${formatBookingAuditText(course.bookedBy[member.id])}</p>
                         </div>
                         ${isAttended 
                             ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
