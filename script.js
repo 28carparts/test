@@ -560,6 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pageElement) return;
         pageElement.classList.remove('hidden');
 
+        // --- START: On-Demand Loading Logic ---
         if (pageIdToRender === 'schedule') {
             if (isOwner) {
                 renderOwnerSchedule(pageElement);
@@ -569,15 +570,55 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (pageIdToRender === 'account') {
             renderAccountPage(pageElement);
         } else if (pageIdToRender === 'admin') {
-            renderAdminPage(pageElement);
+            // Check if studioSettings are loaded. If not, fetch them.
+            if (!appState.studioSettings.courseDefaults.time) { // A simple check to see if settings are default or loaded
+                pageElement.innerHTML = `<p class="text-center p-8">Loading admin settings...</p>`;
+                database.ref('/studioSettings').once('value').then(snapshot => {
+                    if (snapshot.exists()) {
+                        appState.studioSettings = { ...appState.studioSettings, ...snapshot.val() };
+                    }
+                    renderAdminPage(pageElement); // Now render the page with data
+                });
+            } else {
+                renderAdminPage(pageElement);
+            }
         } else if (pageIdToRender === 'members') {
-            renderMembersPage(pageElement);
+            // Check if the full user list is loaded. appState.users will be empty initially for the owner.
+            if (appState.users.length === 0) {
+                pageElement.innerHTML = `<p class="text-center p-8">Loading member list...</p>`;
+                database.ref('/users').once('value').then(snapshot => {
+                    appState.users = firebaseObjectToArray(snapshot.val());
+                    renderMembersPage(pageElement); // Now render the page with data
+                });
+            } else {
+                renderMembersPage(pageElement);
+            }
         } else if (pageIdToRender === 'salary') {
-            renderSalaryPage(pageElement);
-        } else if (pageIdToRender === 'statistics') {
-            renderStatisticsPage(pageElement);
-        } else if (pageIdToRender === 'courses') {
-            renderCoursesPage(pageElement);
+            // The salary page already fetches data on-demand, which is great!
+            // We just need to ensure the full user list is available for revenue calculations.
+            if (appState.users.length === 0) {
+                pageElement.innerHTML = `<p class="text-center p-8">Loading required member data...</p>`;
+                database.ref('/users').once('value').then(snapshot => {
+                    appState.users = firebaseObjectToArray(snapshot.val());
+                    renderSalaryPage(pageElement);
+                });
+            } else {
+                renderSalaryPage(pageElement);
+            }
+        } else if (pageIdToRender === 'statistics' || pageIdToRender === 'courses') {
+            // These pages also need the full user list for revenue calculations.
+            if (appState.users.length === 0) {
+                pageElement.innerHTML = `<p class="text-center p-8">Loading required member data...</p>`;
+                database.ref('/users').once('value').then(snapshot => {
+                    appState.users = firebaseObjectToArray(snapshot.val());
+                    // Now call the appropriate renderer after data is fetched
+                    if (pageIdToRender === 'statistics') renderStatisticsPage(pageElement);
+                    if (pageIdToRender === 'courses') renderCoursesPage(pageElement);
+                });
+            } else {
+                if (pageIdToRender === 'statistics') renderStatisticsPage(pageElement);
+                if (pageIdToRender === 'courses') renderCoursesPage(pageElement);
+            }
         }
     };
 
@@ -785,6 +826,12 @@ Thank you for your understanding.
     // --- Course, Booking, and Member List Modals (Refactored) ---
     async function openJoinedMembersModal(course) {
         if (appState.copyMode.active) return;
+
+        if (appState.users.length === 0) {
+        showMessageBox('Loading member data...', 'info', 1500);
+        const usersSnapshot = await database.ref('/users').once('value');
+        appState.users = firebaseObjectToArray(usersSnapshot.val());
+        }
         
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
 
@@ -3798,8 +3845,8 @@ Thank you for your understanding.
         let initialDataLoaded = {};
         // 'allCourses' is removed. We will query data on-demand instead.
         const requiredKeys = isOwner 
-            ? ['courses', 'tutors', 'sportTypes', 'users', 'currentUser', 'studioSettings']
-            : ['courses', 'tutors', 'sportTypes', 'currentUser'];
+        ? ['courses', 'tutors', 'sportTypes', 'currentUser'] // <-- REMOVED 'users' and 'studioSettings'
+        : ['courses', 'tutors', 'sportTypes', 'currentUser'];
         requiredKeys.forEach(k => initialDataLoaded[k] = false);
 
         let allDataLoaded = false;
@@ -3813,57 +3860,87 @@ Thank you for your understanding.
         };
 
         const ownerCourseListener = (snapshot) => {
-            const val = snapshot.val();
-            const previousCourses = [...appState.courses];
-            const newCourses = firebaseObjectToArray(val);
+        const val = snapshot.val();
+        // It's critical to get a fresh copy of previous courses for comparison.
+        const previousCourses = [...appState.courses]; 
+        const newCourses = firebaseObjectToArray(val);
 
-            // --- Notification Logic ---
-            // It now compares the live schedule data to detect new bookings.
-            if (previousCourses.length > 0) {
-                newCourses.forEach(newCourse => {
-                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                    if (oldCourse) {
-                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                        if (newBookedIds.length > oldBookedIds.length) {
-                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                            if (newMemberId) {
-                                const member = appState.users.find(u => u.id === newMemberId);
-                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                                if (member && sportType) {
-                                    // Set a flag in the app state to trigger the animation on the next render
-                                    appState.pulseAnimationCourseId = newCourse.id;
-                                    
-                                    // Show the text notification (the DOM manipulation part is now removed from this function)
-                                    showBookingNotification({
-                                        memberName: member.name,
-                                        courseName: sportType.name,
-                                        courseTime: newCourse.time,
-                                        duration: newCourse.duration
-                                    });
+        // Always update the application state with the latest data first.
+        appState.courses = newCourses;
 
-                                    // Clear the flag after the animation would have finished, so it doesn't pulse again on other updates
-                                    setTimeout(() => {
-                                        appState.pulseAnimationCourseId = null;
-                                    }, 2000);
+        // --- Start Detection Logic ---
+        // Only run this logic if the page is already loaded and the user is on the schedule.
+        if (previousCourses.length > 0 && appState.activePage === 'schedule') {
+            let aNewBookingWasHandled = false;
+
+            newCourses.forEach(newCourse => {
+                const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                if (oldCourse) {
+                    const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                    const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                    
+                    if (newBookedIds.length > oldBookedIds.length) {
+                        const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                        if (newMemberId) {
+                            aNewBookingWasHandled = true; // Mark that we've handled this special case.
+                            const member = appState.users.find(u => u.id === newMemberId);
+                            const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                            
+                            if (member && sportType) {
+                                // 1. Show the text notification.
+                                showBookingNotification({
+                                    memberName: member.name,
+                                    courseName: sportType.name,
+                                    courseTime: newCourse.time,
+                                    duration: newCourse.duration
+                                });
+
+                                // 2. Find the existing course element in the DOM.
+                                const courseElement = document.getElementById(newCourse.id);
+                                if (courseElement) {
+                                    const counterElement = courseElement.querySelector('.participant-counter');
+                                    if (counterElement) {
+                                        // 3. Directly update the counter's text content.
+                                        const currentBookings = newBookedIds.length;
+                                        counterElement.textContent = `${currentBookings}/${newCourse.maxParticipants}`;
+                                        counterElement.title = `${currentBookings} of ${newCourse.maxParticipants} spots filled`;
+                                        
+                                        // 4. Add the class to trigger the CSS animation.
+                                        counterElement.classList.add('new-booking-pulse');
+                                        
+                                        // 5. Remove the class after the animation is done to allow it to be re-triggered later.
+                                        setTimeout(() => {
+                                            counterElement.classList.remove('new-booking-pulse');
+                                        }, 2000); 
+                                    }
                                 }
                             }
                         }
                     }
-                });
+                }
+            });
+
+            // --- This is the most critical part of the fix ---
+            // If we handled a new booking via direct DOM manipulation, we must
+            // stop the function here to prevent a full, unnecessary re-render.
+            if (aNewBookingWasHandled) {
+                return; 
             }
-            
-            // This listener now ONLY updates appState.courses for the schedule view
-            appState.courses = newCourses;
-            
-            if (!initialDataLoaded.courses){
-                initialDataLoaded.courses = true;
-                checkAllDataLoaded();
-            } else {
-                 if (appState.activePage === 'schedule') { saveSchedulePosition(); }
-                 renderCurrentPage();
+        }
+        
+        // If this is the very first data load, render the UI.
+        if (!initialDataLoaded.courses){
+            initialDataLoaded.courses = true;
+            checkAllDataLoaded();
+        } else {
+            // For any other data change that was NOT a new booking (e.g., an owner edits
+            // a course time, cancels a class, etc.), we will proceed with a full re-render
+            // to ensure the entire UI is in sync.
+            if (appState.activePage === 'schedule') {
+                 renderCurrentPage(); 
             }
-        };
+        }
+    };
 
         const memberCourseFetcher = async () => {
             try {
