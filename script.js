@@ -1210,6 +1210,26 @@ Thank you for your understanding.
         });
     }
 
+    function createParticipantCounter(current, max, shouldPulse = false) {
+        const fillRate = max > 0 ? current / max : 0;
+        
+        let statusClass = 'status-low';
+        if (fillRate >= 1) {
+            statusClass = 'status-full';
+        } else if (fillRate >= 0.9) {
+            statusClass = 'status-high';
+        } else if (fillRate >= 0.5) {
+            statusClass = 'status-medium';
+        }
+
+        // Add the 'new-booking-pulse' class conditionally based on the new argument.
+        return `
+            <div class="participant-counter ${statusClass} ${shouldPulse ? 'new-booking-pulse' : ''}" title="${current} of ${max} spots filled">
+                ${current}/${max}
+            </div>
+        `;
+    }
+
     // --- Main Rendering Functions ---
     function createCourseElement(course) {
         const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
@@ -1261,6 +1281,8 @@ Thank you for your understanding.
             memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
 
+        const participantCounterHTML = createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId);
+
         el.innerHTML = `
             <div>
                 <p class="font-bold text-lg leading-tight pr-6">${sportType?.name || 'Unknown Type'}</p>
@@ -1271,10 +1293,7 @@ Thank you for your understanding.
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
                     ${tutor?.name || 'Unknown'}
                 </span>
-                <span class="flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v-1h8v1zM10 12a5 5 0 00-5 5v1a2 2 0 002 2h6a2 2 0 002-2v-1a5 5 0 00-5-5z" /></svg>
-                    ${currentBookings}/${course.maxParticipants}
-                </span>
+                ${participantCounterHTML}
             </div>
             <div class="mt-2 flex justify-between items-center">
                 ${isOwner
@@ -1738,9 +1757,7 @@ Thank you for your understanding.
                         <div class="space-y-4 text-left">
                             ${member.monthlyPlan 
                                 ? `
-                                   {/* START: Add this block */}
                                    <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
-                                   {/* END: Add this block */}
                                    <div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
                                    <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(calculateNextRenewalDate(member.planStartDate))}</p></div>`
                                 : `
@@ -3814,12 +3831,21 @@ Thank you for your understanding.
                                 const member = appState.users.find(u => u.id === newMemberId);
                                 const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
                                 if (member && sportType) {
+                                    // Set a flag in the app state to trigger the animation on the next render
+                                    appState.pulseAnimationCourseId = newCourse.id;
+                                    
+                                    // Show the text notification (the DOM manipulation part is now removed from this function)
                                     showBookingNotification({
                                         memberName: member.name,
                                         courseName: sportType.name,
                                         courseTime: newCourse.time,
                                         duration: newCourse.duration
                                     });
+
+                                    // Clear the flag after the animation would have finished, so it doesn't pulse again on other updates
+                                    setTimeout(() => {
+                                        appState.pulseAnimationCourseId = null;
+                                    }, 2000);
                                 }
                             }
                         }
