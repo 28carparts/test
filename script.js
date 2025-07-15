@@ -192,10 +192,8 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     // --- END: Add this new function here ---
 
-    // --- PLACE THE NEW FUNCTION HERE ---
     function calculateCourseRevenueAndPayout(course, allUsers, allTutors, allCourses) {
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
-        const tutor = allTutors.find(t => t.id === course.tutorId);
         let tutorPayout = 0;
         
         // This part requires a full set of courses to trace member purchase history
@@ -218,21 +216,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const { revenueByCourseId } = calculateRevenueForBookings(allBookingsByTheseMembers);
         const grossRevenue = revenueByCourseId.get(course.id) || 0;
 
-        const skill = tutor?.skills.find(s => s.sportTypeId === course.sportTypeId);
-        if (skill) {
-            if (skill.salaryType === 'perCourse') {
-                tutorPayout = skill.salaryValue;
-            } else if (skill.salaryType === 'percentage') {
-                tutorPayout = grossRevenue * (skill.salaryValue / 100);
-            } else if (skill.salaryType === 'perHeadcount') {
-                tutorPayout = bookedMemberIds.length * skill.salaryValue;
+        // --- START: SIMPLIFIED PAYOUT CALCULATION ---
+        // We now assume `payoutDetails` always exists and remove the legacy fallback.
+        if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
+            const { salaryType, salaryValue } = course.payoutDetails;
+            if (salaryType === 'perCourse') {
+                tutorPayout = salaryValue;
+            } else if (salaryType === 'percentage') {
+                tutorPayout = grossRevenue * (salaryValue / 100);
+            } else if (salaryType === 'perHeadcount') {
+                tutorPayout = bookedMemberIds.length * salaryValue;
             }
         }
+        // --- END: SIMPLIFIED PAYOUT CALCULATION ---
         
         const netRevenue = grossRevenue - tutorPayout;
         return { grossRevenue, tutorPayout, netRevenue };
     }
-    // --- END OF NEW FUNCTION ---
 
     const formatShortDateWithYear = (isoString) => {
         if (!isoString) return 'N/A';
@@ -248,23 +248,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return `${day} ${month}, ${year}`;
     };
-    
-    const calculateNextRenewalDate = (planStartDateStr) => {
-        if (!planStartDateStr) return 'N/A';
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
 
-        // This is a more reliable way to parse a "YYYY-MM-DD" string into a local date
-        const parts = planStartDateStr.split('-').map(Number);
-        const nextRenewal = new Date(parts[0], parts[1] - 1, parts[2]); // month is 0-indexed
-
-        // Add months until the renewal date is in the future
-        while (nextRenewal <= today) {
-            nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+    const getOrdinalSuffix = (day) => {
+        const j = day % 10,
+              k = day % 100;
+        if (j == 1 && k != 11) {
+            return "st";
         }
-        
-        return nextRenewal;
+        if (j == 2 && k != 12) {
+            return "nd";
+        }
+        if (j == 3 && k != 13) {
+            return "rd";
+        }
+        return "th";
     };
     
     const formatDateWithWeekday = (isoString) => {
@@ -1096,10 +1093,24 @@ Thank you for your understanding.
                 updates[`/memberBookings/${memberId}/${course.id}`] = null; // New index
                 return database.ref().update(updates);
             }).then(() => {
+                // --- START: MODIFICATION FOR REAL-TIME UI UPDATE ---
+                // If an owner is cancelling, the modal will be re-opened, which fetches fresh data.
                 if (memberIdToUpdate) {
                     const updatedMember = appState.users.find(u => u.id === memberIdToUpdate);
                     if (updatedMember) openMemberBookingHistoryModal(updatedMember);
+                } 
+                // If a member is cancelling for themselves, update local state and re-render.
+                else {
+                    // Manually update the local app state to reflect the cancellation.
+                    const courseIndex = appState.courses.findIndex(c => c.id === course.id);
+                    if (courseIndex > -1 && appState.courses[courseIndex].bookedBy) {
+                        delete appState.courses[courseIndex].bookedBy[appState.currentUser.id];
+                    }
+                    // Re-render the current page (e.g., Account page) with the updated state.
+                    renderCurrentPage();
                 }
+                // --- END: MODIFICATION FOR REAL-TIME UI UPDATE ---
+
                 showMessageBox('Booking cancelled.', 'info');
             }).catch(error => {
                 showMessageBox(`Cancellation failed: ${error.message}`, 'error');
@@ -1237,6 +1248,20 @@ Thank you for your understanding.
             maxParticipants: parseInt(form.querySelector('#courseMaxParticipants').value),
             date: form.querySelector('#courseDate').value,
         };
+
+        // --- START: New logic to "freeze" payout details ---
+        const tutor = appState.tutors.find(t => t.id === courseData.tutorId);
+        if (tutor) {
+            const skill = tutor.skills.find(s => s.sportTypeId === courseData.sportTypeId);
+            if (skill) {
+                // If the tutor is an employee, their payout is 0, otherwise store the skill's salary.
+                courseData.payoutDetails = {
+                    salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                    salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
+                };
+            }
+        }
+        // --- END: New logic to "freeze" payout details ---
 
         let promise;
         if (courseId) {
@@ -1721,7 +1746,6 @@ Thank you for your understanding.
     }
 
     function performCopy(type, sourceData, targetDate) {
-        // --- FIX: The save operation is now guaranteed to happen first. ---
         saveSchedulePosition();
 
         if (type === 'day') {
@@ -1729,12 +1753,33 @@ Thank you for your understanding.
             const coursesToCopy = appState.courses.filter(c => c.date === sourceDate);
             if (coursesToCopy.length === 0) {
                 showMessageBox('Source day has no classes to copy.', 'error');
-                cancelCopy(); // Cancel if there's nothing to do
-                return;       // Exit the function
+                cancelCopy();
+                return;
             } else {
                 const copyPromises = coursesToCopy.map(course => {
-                    const { id, bookedBy, attendedBy, ...restOfCourse } = course;
-                    const newCourse = { ...restOfCourse, date: targetDate, bookedBy: {}, attendedBy: {} };
+                    // --- START: FIX ---
+                    // 1. Exclude the old payoutDetails from the spread operator.
+                    const { id, bookedBy, attendedBy, payoutDetails, ...restOfCourse } = course;
+                    const newCourse = {
+                        ...restOfCourse,
+                        date: targetDate,
+                        bookedBy: {},
+                        attendedBy: {}
+                    };
+
+                    // 2. Generate new payoutDetails based on the tutor's CURRENT salary.
+                    const tutor = appState.tutors.find(t => t.id === newCourse.tutorId);
+                    if (tutor) {
+                        const skill = tutor.skills.find(s => s.sportTypeId === newCourse.sportTypeId);
+                        if (skill) {
+                            newCourse.payoutDetails = {
+                                salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                                salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
+                            };
+                        }
+                    }
+                    // --- END: FIX ---
+
                     return database.ref('/courses').push(newCourse);
                 });
                 Promise.all(copyPromises).then(() => {
@@ -1742,15 +1787,35 @@ Thank you for your understanding.
                 });
             }
         } else if (type === 'class') {
-            const { id, bookedBy, attendedBy, ...restOfCourse } = sourceData;
-            const newCourse = { ...restOfCourse, date: targetDate, bookedBy: {}, attendedBy: {} };
+            // --- START: FIX ---
+            // 1. Exclude the old payoutDetails from the spread operator.
+            const { id, bookedBy, attendedBy, payoutDetails, ...restOfCourse } = sourceData;
+            const newCourse = {
+                ...restOfCourse,
+                date: targetDate,
+                bookedBy: {},
+                attendedBy: {}
+            };
+
+            // 2. Generate new payoutDetails based on the tutor's CURRENT salary.
+            const tutor = appState.tutors.find(t => t.id === newCourse.tutorId);
+            if (tutor) {
+                const skill = tutor.skills.find(s => s.sportTypeId === newCourse.sportTypeId);
+                if (skill) {
+                    newCourse.payoutDetails = {
+                        salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                        salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
+                    };
+                }
+            }
+            // --- END: FIX ---
+
             database.ref('/courses').push(newCourse).then(() => {
                 const sportTypeName = appState.sportTypes.find(st => st.id === newCourse.sportTypeId).name;
                 showMessageBox(`Copied "${sportTypeName}" to ${formatDateWithWeekday(targetDate)}.`, 'success');
             });
         }
         
-        // This runs after the copy action has been initiated.
         cancelCopy();
     }
 
@@ -1813,7 +1878,7 @@ Thank you for your understanding.
                                 ? `
                                    <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
                                    <div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
-                                   <div><p class="text-sm text-slate-500">Renews On</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(calculateNextRenewalDate(member.planStartDate))}</p></div>`
+                                   <div><p class="text-sm text-slate-500">Renews every month</p><p class="font-bold text-lg text-slate-800">${member.planStartDate ? `on the ${parseInt(member.planStartDate.split('-')[2])}${getOrdinalSuffix(parseInt(member.planStartDate.split('-')[2]))}` : 'N/A'}</p></div>`
                                 : `
                                    <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
                                    <div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
@@ -2530,13 +2595,46 @@ Thank you for your understanding.
         openModal(DOMElements.memberModal);
     }
 
-    function handleMemberFormSubmit(e, originalMember) {
+    async function handleMemberFormSubmit(e, originalMember) {
         e.preventDefault();
         const form = e.target;
         const id = form.querySelector('#memberModalId').value;
         if (!id) return;
 
+        // --- START: NEW VALIDATION LOGIC ---
+        // Fetch the latest member data to ensure validation is always on the most current state.
+        const latestMemberSnapshot = await database.ref(`/users/${id}`).once('value');
+        const latestMember = latestMemberSnapshot.val();
+
+        if (!latestMember) {
+            showMessageBox('Error: Could not find member to update.', 'error');
+            return;
+        }
+
         const isMonthly = form.querySelector('#monthlyPlan').checked;
+
+        // Validation for Monthly Plan
+        if (isMonthly) {
+            const monthlyAmount = parseFloat(form.querySelector('#monthlyPlanAmount').value) || 0;
+            const creditValue = parseFloat(form.querySelector('#monthlyCreditValue').value) || 0;
+
+            if (monthlyAmount > 0 && creditValue <= 0) {
+                showMessageBox('A Credit Value is required when a Monthly Amount is set.', 'error');
+                return; // Abort the save operation.
+            }
+        } 
+        // Validation for Pay-as-you-go Plan
+        else {
+            const hasCredits = (latestMember.credits > 0 || latestMember.initialCredits > 0);
+            const expiryDate = form.querySelector('#expiryDate').value;
+
+            if (hasCredits && !expiryDate) {
+                showMessageBox('An Credit Expiry Date is required for members with a credit balance.', 'error');
+                return; // Abort the save operation.
+            }
+        }
+        // --- END: NEW VALIDATION LOGIC ---
+
         const countryCode = form.querySelector('#memberCountryCode').value.trim();
         const phoneNumber = form.querySelector('#memberPhone').value;
         const fullPhoneNumber = constructPhoneNumber(countryCode, phoneNumber);
@@ -2584,13 +2682,17 @@ Thank you for your understanding.
                 continue;
             }
 
+            // --- START: THE FIX IS HERE ---
+            // We must filter out 'deleted' purchase entries before sorting for FIFO.
             const purchasePool = firebaseObjectToArray(member.purchaseHistory)
+                .filter(p => p.status !== 'deleted') // <-- ADD THIS LINE
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(p => ({
                     ...p,
                     costPerCredit: p.costPerCredit !== undefined ? p.costPerCredit : 0,
                     remainingCredits: p.credits,
                 }));
+            // --- END: THE FIX IS HERE ---
             
             for (const course of memberCourses) {
                 let creditsToDeduct = course.credits;
@@ -3072,6 +3174,20 @@ Thank you for your understanding.
             });
         });
 
+        // --- START: New validation logic for duplicate skills ---
+        const uniqueSkills = new Set();
+        for (const skill of skills) {
+            if (uniqueSkills.has(skill.sportTypeId)) {
+                // A duplicate was found.
+                const duplicateSportType = appState.sportTypes.find(st => st.id === skill.sportTypeId);
+                const sportName = duplicateSportType ? duplicateSportType.name : 'A skill';
+                showMessageBox(`Cannot save. ${sportName} is assigned more than once. Please remove the duplicate skill.`, 'error');
+                return; // Abort the save operation.
+            }
+            uniqueSkills.add(skill.sportTypeId);
+        }
+        // --- END: New validation logic for duplicate skills ---
+
         const countryCode = form.querySelector('#tutorCountryCode').value.trim();
         const phoneNumber = form.querySelector('#tutorPhone').value;
         const fullPhoneNumber = constructPhoneNumber(countryCode, phoneNumber);
@@ -3081,26 +3197,20 @@ Thank you for your understanding.
             email: form.querySelector('#tutorEmail').value,
             phone: fullPhoneNumber,
             skills,
-            isEmployee: form.querySelector('#isEmployeeCheckbox').checked // Add this line
+            isEmployee: form.querySelector('#isEmployeeCheckbox').checked
         };
 
         let promise;
         if (id) {
-            // This is an EDIT operation, no change in pagination needed.
             promise = database.ref('/tutors/' + id).update(tutorData);
         } else {
-            // --- START: NEW LOGIC FOR ADDING ---
-            // Clear any search filters to show the full list.
             appState.searchTerms.tutors = '';
 
-            // Calculate which page the new item will be on.
             const totalItemsAfterAdd = appState.tutors.length + 1;
             const itemsPerPage = appState.itemsPerPage.tutors;
             const lastPage = Math.ceil(totalItemsAfterAdd / itemsPerPage);
 
-            // Update the state to navigate to the last page.
             appState.pagination.tutors.page = lastPage;
-            // --- END: NEW LOGIC FOR ADDING ---
 
             promise = database.ref('/tutors').push(tutorData);
         }
@@ -3171,7 +3281,6 @@ Thank you for your understanding.
         }
 
         const tutor = appState.tutors.find(t => t.id === tutorId);
-        // Use the pre-fetched course data instead of a global state
         const coursesInPeriod = allCourses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
 
         const memberIdsInPeriod = new Set();
@@ -3201,30 +3310,33 @@ Thank you for your understanding.
         
         let totalEarnings = 0;
         const courseDetails = coursesInPeriod.map(course => {
-        const skill = tutor.skills.find(s => s.sportTypeId === course.sportTypeId);
-        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-        let earnings = 0;
-        let calculation = "N/A";
-        const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-        
-        if (skill) {
+            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            let earnings = 0;
+            let calculation = "N/A";
+            const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
             const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
-            if (skill.salaryType === 'perCourse') {
-                earnings = skill.salaryValue;
-                calculation = `${formatCurrency(skill.salaryValue)} (fixed)`;
-            } else if (skill.salaryType === 'percentage') {
-                earnings = courseGrossRevenue * (skill.salaryValue / 100);
-                calculation = `${formatCurrency(courseGrossRevenue)} x ${skill.salaryValue}%`;
-            } else if (skill.salaryType === 'perHeadcount') {
-                earnings = attendeesCount * skill.salaryValue;
-                calculation = `${formatCurrency(skill.salaryValue)}`;
+            
+            if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
+                const { salaryType, salaryValue } = course.payoutDetails;
+                if (salaryType === 'perCourse') {
+                    earnings = salaryValue;
+                    calculation = `${formatCurrency(salaryValue)} (fixed)`;
+                } else if (salaryType === 'percentage') {
+                    earnings = courseGrossRevenue * (salaryValue / 100);
+                    calculation = `${formatCurrency(courseGrossRevenue)} x ${salaryValue}%`;
+                } else if (salaryType === 'perHeadcount') {
+                    earnings = attendeesCount * salaryValue;
+                    // --- START: MODIFIED LINE ---
+                    // Display the full calculation for per-attendee rates.
+                    calculation = `${attendeesCount} ${attendeesCount === 1 ? 'attendee' : 'attendees'} x ${formatCurrency(salaryValue)}`;
+                    // --- END: MODIFIED LINE ---
+                }
             }
-        }
-        totalEarnings += earnings;
-        return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
+
+            totalEarnings += earnings;
+            return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
         });
 
-        // --- START: New dynamic sorting logic ---
         const { key, direction } = appState.salarySort;
         courseDetails.sort((a, b) => {
             let valA = a[key];
@@ -3295,12 +3407,12 @@ Thank you for your understanding.
                         sortState.key = newKey;
                         sortState.direction = 'asc';
                     }
-                    renderSalaryDetails(allCourses); // Re-render with new sort order
+                    renderSalaryDetails(allCourses);
                 };
             });
     }
     
-    function renderStatisticsPage(container) {
+    async function renderStatisticsPage(container) {
         container.innerHTML = `
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
@@ -3324,7 +3436,6 @@ Thank you for your understanding.
             const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
             const startDateIso = getIsoDate(startDate);
             
-            // Query only the courses within the selected date range
             const coursesSnapshot = await database.ref('/courses').orderByChild('date').startAt(startDateIso).once('value');
             const filteredCourses = firebaseObjectToArray(coursesSnapshot.val());
 
@@ -3333,7 +3444,6 @@ Thank you for your understanding.
                  return;
             }
 
-            // For revenue, we still need the full history of members who booked in this period.
             const memberIdsInPeriod = new Set();
             filteredCourses.forEach(course => {
                 if (course.bookedBy) {
@@ -3343,7 +3453,6 @@ Thank you for your understanding.
 
             const allRelevantBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                // Fetch all courses just for this calculation
                 const allCoursesSnapshot = await database.ref('/courses').once('value');
                 const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
 
@@ -3370,20 +3479,22 @@ Thank you for your understanding.
                 const courseRevenue = revenueByCourseId.get(course.id) || 0;
                 grossRevenue += courseRevenue;
 
+                // --- START: RESTORED LOGIC ---
+                // These lines were accidentally removed and are now restored.
                 const bookedIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
                 const attendedIds = course.attendedBy ? Object.keys(course.attendedBy) : [];
                 totalBookings += bookedIds.length;
                 totalAttendees += attendedIds.length;
+                // --- END: RESTORED LOGIC ---
                 
-                const tutor = appState.tutors.find(t => t.id === course.tutorId);
-                const skill = tutor?.skills.find(s => s.sportTypeId === course.sportTypeId);
-                if (skill) {
-                    if (skill.salaryType === 'perCourse') {
-                        totalTutorPayout += skill.salaryValue;
-                    } else if (skill.salaryType === 'perHeadcount') {
-                        totalTutorPayout += bookedIds.length * skill.salaryValue;
-                    } else if (skill.salaryType === 'percentage') {
-                        totalTutorPayout += courseRevenue * (skill.salaryValue / 100);
+                if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
+                    const { salaryType, salaryValue } = course.payoutDetails;
+                    if (salaryType === 'perCourse') {
+                        totalTutorPayout += salaryValue;
+                    } else if (salaryType === 'perHeadcount') {
+                        totalTutorPayout += bookedIds.length * salaryValue;
+                    } else if (salaryType === 'percentage') {
+                        totalTutorPayout += courseRevenue * (salaryValue / 100);
                     }
                 }
             });
