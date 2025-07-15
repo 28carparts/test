@@ -965,7 +965,9 @@ Thank you for your understanding.
                 const updates = {};
                 updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
                     bookedAt: new Date().toISOString(),
-                    bookedBy: appState.currentUser.name // The currently logged-in owner's name
+                    bookedBy: appState.currentUser.name, // The currently logged-in owner's name
+                    // --- NEW: Freeze the credit value for the walk-in booking ---
+                    monthlyCreditValue: memberToAdd.monthlyCreditValue || 0
                 };
                 updates[`/memberBookings/${memberId}/${course.id}`] = true;
                 database.ref().update(updates).then(() => {
@@ -1029,7 +1031,9 @@ Thank you for your understanding.
                     const updates = {};
                     updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
                         bookedAt: new Date().toISOString(),
-                        bookedBy: 'member' // Flag for self-booking
+                        bookedBy: 'member', // Flag for self-booking
+                        // --- NEW: Freeze the credit value at the time of booking ---
+                        monthlyCreditValue: currentUser.monthlyCreditValue || 0
                     };
                     updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
@@ -2103,6 +2107,13 @@ Thank you for your understanding.
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-slate-800">Manage Members</h2>
+                    <div class="w-full mt-4 p-4 bg-slate-50 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h4 class="font-semibold text-slate-800">Auto-Adjust Monthly Plans</h4>
+                            <p class="text-sm text-slate-600">Recalculate estimated courses and credit values for all monthly members based on the last 30 days of attendance.</p>
+                        </div>
+                        <button id="recalculatePlansBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto flex-shrink-0">Recalculate All</button>
+                    </div>
                     <div class="relative w-64">
                         <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-full pr-10">
                         <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
@@ -2243,6 +2254,14 @@ Thank you for your understanding.
         };
 
         updateTable();
+
+        container.querySelector('#recalculatePlansBtn').onclick = () => {
+            showConfirmation(
+                'Recalculate Monthly Plans?',
+                'This will analyze the last 30 days of attendance for all monthly members and update their estimated course counts and credit values. This action cannot be undone.',
+                recalculateMonthlyPlans // We will create this function next
+            );
+        };
     }
 
     function handleMemberDeletion(member) {
@@ -2416,10 +2435,23 @@ Thank you for your understanding.
                             </div>
                         </div>
                         <div id="monthlyPlanFields" class="hidden space-y-4">
-                            <div><label for="planStartDate" class="block text-slate-600 text-sm font-semibold mb-2">Plan Start Date</label><input type="date" id="planStartDate" class="form-input"></div>
+                            <div>
+                                <label for="planStartDate" class="block text-slate-600 text-sm font-semibold mb-2">Plan Start Date</label>
+                                <input type="date" id="planStartDate" class="form-input">
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label for="monthlyPlanAmount" class="block text-slate-600 text-sm font-semibold mb-2">Monthly Amount ($)</label><input type="number" id="monthlyPlanAmount" class="form-input" min="0"></div>
-                                <div><label for="monthlyCreditValue" class="block text-slate-600 text-sm font-semibold mb-2">Credit Value ($)</label><input type="number" id="monthlyCreditValue" class="form-input" min="0"></div>
+                                <div>
+                                    <label for="monthlyPlanAmount" class="block text-slate-600 text-sm font-semibold mb-2">Monthly Amount ($)</label>
+                                    <input type="number" id="monthlyPlanAmount" class="form-input" min="0">
+                                </div>
+                                <div>
+                                    <label for="monthlyPlanEstimatedAttendance" class="block text-slate-600 text-sm font-semibold mb-2">Est. Monthly Attendance</label>
+                                    <input type="number" id="monthlyPlanEstimatedAttendance" class="form-input" min="1" step="1" placeholder="e.g., 10">
+                                </div>
+                            </div>
+                            <div id="calculatedCreditValueContainer" class="bg-slate-100 p-3 rounded-lg text-center hidden">
+                                <p class="text-sm text-slate-500">Calculated Credit Value</p>
+                                <p id="calculatedCreditValueDisplay" class="text-xl font-bold text-indigo-600"></p>
                             </div>
                         </div>
                     </div>
@@ -2564,9 +2596,35 @@ Thank you for your understanding.
         
         form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
         expiryDateInput.value = memberToEdit.expiryDate;
-        form.querySelector('#monthlyPlanAmount').value = memberToEdit.monthlyPlanAmount;
-        planStartDateInput.value = memberToEdit.planStartDate;
-        form.querySelector('#monthlyCreditValue').value = memberToEdit.monthlyCreditValue;
+
+        const monthlyPlanAmountInput = form.querySelector('#monthlyPlanAmount');
+        const estimatedAttendanceInput = form.querySelector('#monthlyPlanEstimatedAttendance');
+        const calculatedCreditValueContainer = form.querySelector('#calculatedCreditValueContainer');
+        const calculatedCreditValueDisplay = form.querySelector('#calculatedCreditValueDisplay');
+
+        const updateCalculatedValue = () => {
+            const amount = parseFloat(monthlyPlanAmountInput.value) || 0;
+            const attendance = parseInt(estimatedAttendanceInput.value) || 0;
+
+            if (amount > 0 && attendance > 0) {
+                const value = amount / attendance;
+                calculatedCreditValueDisplay.textContent = `${formatCurrency(value)} per credit`;
+                calculatedCreditValueContainer.classList.remove('hidden');
+            } else {
+                calculatedCreditValueContainer.classList.add('hidden');
+            }
+        };
+        
+        monthlyPlanAmountInput.oninput = updateCalculatedValue;
+        estimatedAttendanceInput.oninput = updateCalculatedValue;
+        
+        // Populate the form with existing member data
+        monthlyPlanAmountInput.value = memberToEdit.monthlyPlanAmount || '';
+        planStartDateInput.value = memberToEdit.planStartDate || '';
+        estimatedAttendanceInput.value = memberToEdit.monthlyPlanEstimatedAttendance || '';
+
+        // Trigger the calculation display on initial load
+        updateCalculatedValue();
         
         _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
         
@@ -2613,14 +2671,22 @@ Thank you for your understanding.
 
         const isMonthly = form.querySelector('#monthlyPlan').checked;
 
+        let monthlyPlanAmount = 0;
+        let estimatedAttendance = 0;
+        let calculatedCreditValue = 0;
+
         // Validation for Monthly Plan
         if (isMonthly) {
-            const monthlyAmount = parseFloat(form.querySelector('#monthlyPlanAmount').value) || 0;
-            const creditValue = parseFloat(form.querySelector('#monthlyCreditValue').value) || 0;
+            monthlyPlanAmount = parseFloat(form.querySelector('#monthlyPlanAmount').value) || 0;
+            estimatedAttendance = parseInt(form.querySelector('#monthlyPlanEstimatedAttendance').value) || 0;
 
-            if (monthlyAmount > 0 && creditValue <= 0) {
-                showMessageBox('A Credit Value is required when a Monthly Amount is set.', 'error');
+            if (monthlyPlanAmount > 0 && estimatedAttendance <= 0) {
+                showMessageBox('Estimated Monthly Attendance must be greater than 0 when a Monthly Amount is set.', 'error');
                 return; // Abort the save operation.
+            }
+
+            if (estimatedAttendance > 0) {
+                calculatedCreditValue = monthlyPlanAmount / estimatedAttendance;
             }
         } 
         // Validation for Pay-as-you-go Plan
@@ -2633,7 +2699,6 @@ Thank you for your understanding.
                 return; // Abort the save operation.
             }
         }
-        // --- END: NEW VALIDATION LOGIC ---
 
         const countryCode = form.querySelector('#memberCountryCode').value.trim();
         const phoneNumber = form.querySelector('#memberPhone').value;
@@ -2643,9 +2708,12 @@ Thank you for your understanding.
         updates[`/users/${id}/name`] = form.querySelector('#memberName').value;
         updates[`/users/${id}/phone`] = fullPhoneNumber;
         updates[`/users/${id}/monthlyPlan`] = isMonthly;
-        updates[`/users/${id}/monthlyPlanAmount`] = isMonthly ? parseFloat(form.querySelector('#monthlyPlanAmount').value) || 0 : null;
+
+        // Update monthly or credit-based fields
+        updates[`/users/${id}/monthlyPlanAmount`] = isMonthly ? monthlyPlanAmount : null;
         updates[`/users/${id}/planStartDate`] = isMonthly ? form.querySelector('#planStartDate').value : null;
-        updates[`/users/${id}/monthlyCreditValue`] = isMonthly ? parseFloat(form.querySelector('#monthlyCreditValue').value) || 0 : null;
+        updates[`/users/${id}/monthlyPlanEstimatedAttendance`] = isMonthly ? estimatedAttendance : null;
+        updates[`/users/${id}/monthlyCreditValue`] = isMonthly ? calculatedCreditValue : null;
         updates[`/users/${id}/expiryDate`] = !isMonthly ? form.querySelector('#expiryDate').value || null : null;
         
         database.ref().update(updates).then(() => {
@@ -2654,6 +2722,67 @@ Thank you for your understanding.
         }).catch(error => showMessageBox(error.message, 'error'));
     }
     
+    async function recalculateMonthlyPlans() {
+        showMessageBox('Starting recalculation... This may take a moment.', 'info', 5000);
+
+        try {
+            const usersSnapshotPromise = database.ref('/users').once('value');
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const coursesSnapshotPromise = database.ref('/courses').orderByChild('date').startAt(getIsoDate(thirtyDaysAgo)).once('value');
+            
+            const [usersSnapshot, coursesSnapshot] = await Promise.all([usersSnapshotPromise, coursesSnapshotPromise]);
+
+            const allUsers = firebaseObjectToArray(usersSnapshot.val());
+            const recentCourses = firebaseObjectToArray(coursesSnapshot.val());
+            const today = new Date();
+            const monthlyMembers = allUsers.filter(u => u.role === 'member' && u.monthlyPlan && !u.isDeleted);
+            
+            if (monthlyMembers.length === 0) {
+                showMessageBox('No active monthly members found to recalculate.', 'info');
+                return;
+            }
+
+            const updates = {};
+            let updatedCount = 0;
+
+            for (const member of monthlyMembers) {
+                const attendedCoursesCount = recentCourses.filter(course => {
+                    const courseDate = new Date(course.date);
+                    return courseDate >= thirtyDaysAgo && courseDate <= today &&
+                           course.attendedBy && course.attendedBy[member.id];
+                }).length;
+
+                const previousEstimate = member.monthlyPlanEstimatedAttendance || attendedCoursesCount;
+                
+                const newEstimatedAttendance = Math.round((previousEstimate + attendedCoursesCount) / 2);
+
+                if (newEstimatedAttendance !== member.monthlyPlanEstimatedAttendance) {
+                    updatedCount++;
+                    const monthlyAmount = member.monthlyPlanAmount || 0;
+                    let newCreditValue = 0;
+                    if (monthlyAmount > 0 && newEstimatedAttendance > 0) {
+                        newCreditValue = monthlyAmount / newEstimatedAttendance;
+                    }
+
+                    updates[`/users/${member.id}/monthlyPlanEstimatedAttendance`] = newEstimatedAttendance;
+                    updates[`/users/${member.id}/monthlyCreditValue`] = newCreditValue;
+                }
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await database.ref().update(updates);
+                showMessageBox(`Recalculation complete! ${updatedCount} member plan(s) were updated.`, 'success');
+            } else {
+                showMessageBox('Recalculation complete. No plan estimates required an update.', 'info');
+            }
+
+        } catch (error) {
+            console.error('Error during plan recalculation:', error);
+            showMessageBox('An error occurred during recalculation. Please check the console.', 'error');
+        }
+    }
+
     function calculateRevenueForBookings(bookings) {
         const bookingsByMember = bookings.reduce((acc, booking) => {
             const memberId = booking.member.id;
@@ -2675,7 +2804,15 @@ Thank you for your understanding.
 
             if (member.monthlyPlan) {
                 for (const course of memberCourses) {
-                    const revenue = (course.credits || 0) * (member.monthlyCreditValue || 0);
+                    const bookingInfo = course.bookedBy[member.id];
+                    
+                    // --- MODIFIED: Use the frozen value from the booking object ---
+                    // It checks for the new object format first, with a fallback for any old data.
+                    const creditValueForThisBooking = (typeof bookingInfo === 'object' && bookingInfo.monthlyCreditValue)
+                        ? bookingInfo.monthlyCreditValue
+                        : (member.monthlyCreditValue || 0); // Fallback for legacy bookings
+                    
+                    const revenue = (course.credits || 0) * creditValueForThisBooking;
                     totalGrossRevenue += revenue;
                     revenueByCourseId.set(course.id, (revenueByCourseId.get(course.id) || 0) + revenue);
                 }
