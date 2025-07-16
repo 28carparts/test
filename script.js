@@ -1928,7 +1928,8 @@ Thank you for your understanding.
                                 ? `
                                    <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
                                    <div><p class="text-sm text-slate-500">Plan</p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
-                                   <div><p class="text-sm text-slate-500">Renews every month</p><p class="font-bold text-lg text-slate-800">${member.planStartDate ? `on the ${parseInt(member.planStartDate.split('-')[2])}${getOrdinalSuffix(parseInt(member.planStartDate.split('-')[2]))}` : 'N/A'}</p></div>`
+                                   <div><p class="text-sm text-slate-500">Renews every month</p><p class="font-bold text-lg text-slate-800">${member.planStartDate ? `on the ${parseInt(member.planStartDate.split('-')[2])}${getOrdinalSuffix(parseInt(member.planStartDate.split('-')[2]))}` : 'N/A'}</p></div>
+                                   <div><p class="text-sm text-slate-500">Next Payment Due</p><p class="font-bold text-lg text-slate-800">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</p></div>`
                                 : `
                                    <div><p class="text-sm text-slate-500">Join Date</p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
                                    <div><p class="text-sm text-slate-500">Credits Remaining</p><p class="font-bold text-3xl text-indigo-600">
@@ -2166,19 +2167,19 @@ Thank you for your understanding.
                                 Export
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                             </button>
-                            <div id="exportMembersDropdown" class="absolute right-0 mt-2 w-64 origin-top-right rounded-md bg-white shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-20 hidden" role="menu" aria-orientation="vertical" aria-labelledby="exportMembersBtn">
+                            <div id="exportMembersDropdown" class="absolute right-0 mt-2 w-72 origin-top-right rounded-md bg-white shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-20 hidden" role="menu" aria-orientation="vertical" aria-labelledby="exportMembersBtn">
                                 <div class="p-1" role="none">
                                     <a href="#" id="exportSummaryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                         <span class="font-medium">Export Member Summary</span>
                                     </a>
-                                    <a href="#" id="exportFullHistoryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span class="font-medium">Export Full History (Slow)</span>
+                                    <a href="#" id="exportBookingHistoryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <span class="font-medium">Export Full Booking History</span>
+                                    </a>
+                                    <a href="#" id="exportFinancialHistoryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                        <span class="font-medium">Export Full Financial History</span>
                                     </a>
                                 </div>
                             </div>
@@ -2200,7 +2201,7 @@ Thank you for your understanding.
                                 <th class="p-2">Contact</th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="joinDate">Join<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="credits">Credits/Plan<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="expiryDate">Credit Expiry<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer" data-sort-key="expiryDate">Credit Expiry / Due Date<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="lastBooking">Last Active<span class="sort-icon"></span></th>
                                 <th class="p-2"></th>
                             </tr>
@@ -2245,6 +2246,10 @@ Thank you for your understanding.
                     if (b.monthlyPlan) valB = Infinity;
                 }
                 if (key === 'expiryDate' || key === 'lastBooking' || key === 'joinDate') {
+                    if (key === 'expiryDate') {
+                        valA = a.monthlyPlan ? a.paymentDueDate : a.expiryDate;
+                        valB = b.monthlyPlan ? b.paymentDueDate : b.expiryDate;
+                    }
                     valA = valA ? new Date(valA).getTime() : -Infinity;
                     valB = valB ? new Date(valB).getTime() : -Infinity;
                 }
@@ -2259,7 +2264,12 @@ Thank you for your understanding.
                 u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (u.phone && u.phone.includes(searchTerm)))
             );
-            tableBody.innerHTML = filteredUsers.map(member => `
+            tableBody.innerHTML = filteredUsers.map(member => {
+                const expiryOrDueDate = member.monthlyPlan 
+                    ? (member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A')
+                    : (member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A');
+
+                return `
                 <tr class="border-b border-slate-100">
                     <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
                     <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
@@ -2268,14 +2278,14 @@ Thank you for your understanding.
                         ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
                         : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || 'N/A'}</span>`}
                     </td>
-                    <td class="p-2 text-sm">${member.expiryDate ? formatShortDateWithYear(member.expiryDate) : 'N/A'}</td>
+                    <td class="p-2 text-sm">${expiryOrDueDate}</td>
                     <td class="p-2 text-sm">${member.lastBooking ? formatShortDateWithYear(member.lastBooking) : 'N/A'}</td>
                     <td class="p-2 text-right space-x-2">
                         <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">Edit</button>
                         <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">Delete</button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
             tableBody.querySelectorAll('.edit-member-btn').forEach(btn => {
                 btn.onclick = () => openMemberModal(appState.users.find(u => u.id === btn.dataset.id));
             });
@@ -2341,10 +2351,7 @@ Thank you for your understanding.
                 (u.phone && u.phone.includes(searchTerm)))
             );
 
-            // --- START: FIX ---
-            // Sort the filtered users alphabetically by name (ascending) before exporting.
             filteredUsers.sort((a, b) => a.name.localeCompare(b.name));
-            // --- END: FIX ---
 
             const exportData = filteredUsers.map(member => ({
                 Name: member.name,
@@ -2353,18 +2360,19 @@ Thank you for your understanding.
                 JoinDate: member.joinDate ? member.joinDate.slice(0, 10) : '',
                 PlanType: member.monthlyPlan ? 'Monthly' : 'Credits',
                 MonthlyPlanAmount: member.monthlyPlanAmount || 0,
+                PaymentDueDate: member.monthlyPlan ? (member.paymentDueDate || '') : 'N/A',
                 CreditsRemaining: member.monthlyPlan ? 'N/A' : (member.credits || 0),
                 CreditsInitial: member.monthlyPlan ? 'N/A' : (member.initialCredits || 0),
-                CreditExpiryDate: member.expiryDate || '',
+                CreditExpiryDate: member.monthlyPlan ? 'N/A' : (member.expiryDate || ''),
                 LastActiveDate: member.lastBooking ? member.lastBooking.slice(0, 10) : ''
             }));
             exportToCsv('member-summary', exportData);
         };
 
-        container.querySelector('#exportFullHistoryBtn').onclick = async (e) => {
+        container.querySelector('#exportBookingHistoryBtn').onclick = async (e) => {
             e.preventDefault();
             exportDropdown.classList.add('hidden');
-            showMessageBox('Generating full history... This may take a moment.', 'info', 5000);
+            showMessageBox('Generating booking history... This may take a moment.', 'info', 5000);
             try {
                 const usersSnapshot = await database.ref('/users').once('value');
                 const coursesSnapshot = await database.ref('/courses').once('value');
@@ -2393,7 +2401,6 @@ Thank you for your understanding.
                     });
                 });
                 
-                // --- FIX: Sort by Member Name first, then by Booking Date ---
                 exportData.sort((a, b) => {
                     const nameComparison = a.MemberName.localeCompare(b.MemberName);
                     if (nameComparison !== 0) {
@@ -2404,8 +2411,69 @@ Thank you for your understanding.
                 
                 exportToCsv('member-full-booking-history', exportData);
             } catch (error) {
-                console.error("Error generating full history export:", error);
-                showMessageBox('Failed to generate full history. Please try again.', 'error');
+                console.error("Error generating booking history export:", error);
+                showMessageBox('Failed to generate booking history. Please try again.', 'error');
+            }
+        };
+
+        container.querySelector('#exportFinancialHistoryBtn').onclick = async (e) => {
+            e.preventDefault();
+            exportDropdown.classList.add('hidden');
+            showMessageBox('Generating full financial history... This may take a moment.', 'info', 5000);
+            try {
+                const usersSnapshot = await database.ref('/users').once('value');
+                const allUsers = firebaseObjectToArray(usersSnapshot.val());
+                const exportData = [];
+                const members = allUsers.filter(u => u.role === 'member' && !u.isDeleted);
+                
+                members.forEach(member => {
+                    // Process Purchase History (for credit-based members)
+                    if (member.purchaseHistory) {
+                        firebaseObjectToArray(member.purchaseHistory)
+                            .filter(p => p.status !== 'deleted')
+                            .forEach(p => {
+                                exportData.push({
+                                    MemberName: member.name,
+                                    MemberEmail: member.email,
+                                    TransactionDate: p.date ? p.date.slice(0, 10) : '',
+                                    TransactionType: 'Credit Purchase',
+                                    Description: `${p.credits} credits`,
+                                    Amount: p.amount,
+                                    ModifiedBy: p.lastModifiedBy || '',
+                                    ModifiedDate: p.lastModifiedAt ? p.lastModifiedAt.slice(0, 10) : ''
+                                });
+                            });
+                    }
+                    // Process Payment History (for monthly members)
+                    if (member.paymentHistory) {
+                        firebaseObjectToArray(member.paymentHistory)
+                            .filter(p => p.status !== 'deleted')
+                            .forEach(p => {
+                                exportData.push({
+                                    MemberName: member.name,
+                                    MemberEmail: member.email,
+                                    TransactionDate: p.date ? p.date.slice(0, 10) : '',
+                                    TransactionType: 'Monthly Payment',
+                                    Description: `${p.monthsPaid} month(s)`,
+                                    Amount: p.amount,
+                                    ModifiedBy: p.lastModifiedBy || '',
+                                    ModifiedDate: p.lastModifiedAt ? p.lastModifiedAt.slice(0, 10) : ''
+                                });
+                            });
+                    }
+                });
+
+                // Sort data by member name, then by transaction date
+                exportData.sort((a, b) => {
+                    const nameComparison = a.MemberName.localeCompare(b.MemberName);
+                    if (nameComparison !== 0) return nameComparison;
+                    return new Date(a.TransactionDate) - new Date(b.TransactionDate);
+                });
+                
+                exportToCsv('member-financial-history', exportData);
+            } catch (error) {
+                console.error("Error generating financial history export:", error);
+                showMessageBox('Failed to generate financial history. Please try again.', 'error');
             }
         };
 
@@ -2555,6 +2623,91 @@ Thank you for your understanding.
         };
     }
     
+    function _renderMemberPaymentHistory(member, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart) {
+        container.innerHTML = ''; 
+        const paymentHistory = firebaseObjectToArray(member.paymentHistory);
+        
+        if (paymentHistory.length > 0) {
+            const sortedHistory = paymentHistory.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            container.innerHTML = sortedHistory.map(p => {
+                const isDeleted = p.status === 'deleted';
+                
+                let auditMessage = '';
+                if (p.lastModifiedBy) {
+                    const action = isDeleted ? 'Deleted' : (p.date === p.lastModifiedAt ? 'Added' : 'Edited');
+                    auditMessage = `<span class="text-xs text-slate-500 mt-1">${action} by ${p.lastModifiedBy} on ${formatShortDateWithYear(p.lastModifiedAt)}</span>`;
+                }
+
+                return `
+                    <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-md transition ${isDeleted ? 'opacity-50' : ''}" data-history-item-id="${p.id}">
+                        <div class="flex-grow cursor-pointer hover:bg-slate-200 p-1 rounded-md">
+                            <div class="flex flex-col">
+                                <strong class="${isDeleted ? 'line-through' : ''}">${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.monthsPaid} ${p.monthsPaid === 1 ? 'month' : 'months'}
+                                ${auditMessage}
+                            </div>
+                        </div>
+                        <button type="button" class="remove-history-btn text-red-500 hover:text-red-700 font-bold text-lg leading-none ${isDeleted ? 'hidden' : ''}" data-history-id="${p.id}" title="Remove entry">×</button>
+                    </div>`;
+            }).join('');
+        } else {
+             container.innerHTML = '<p class="text-sm text-slate-500 text-center">No payment history.</p>';
+        }
+
+        container.onclick = (e) => {
+            const editTarget = e.target.closest('[data-history-item-id] .flex-grow');
+            const removeTarget = e.target.closest('.remove-history-btn');
+
+            container.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
+            
+            if (removeTarget) {
+                const historyId = removeTarget.dataset.historyId;
+                const entryToUpdate = paymentHistory.find(p => p.id === historyId);
+                const memberId = member.id;
+
+                if (entryToUpdate.status === 'deleted') {
+                    showMessageBox('This entry has already been deleted.', 'info');
+                    return;
+                }
+
+                showConfirmation('Delete Payment Entry', `Are you sure you want to delete this payment entry? This action is for record-keeping and cannot be undone.`, () => {
+                    const updates = {
+                        status: 'deleted',
+                        lastModifiedBy: appState.currentUser.name,
+                        lastModifiedAt: new Date().toISOString()
+                    };
+
+                    database.ref(`/users/${memberId}/paymentHistory/${historyId}`).update(updates)
+                        .then(() => {
+                            // Refresh the modal's list with the updated data
+                            database.ref(`/users/${memberId}`).once('value', snapshot => {
+                                const updatedMember = { id: snapshot.key, ...snapshot.val() };
+                                _renderMemberPaymentHistory(updatedMember, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart);
+                                showMessageBox('Payment entry deleted.', 'info');
+                            });
+                        })
+                        .catch(error => {
+                            showMessageBox(`Error deleting entry: ${error.message}`, 'error');
+                        });
+                });
+            }
+            else if (editTarget) {
+                const parentItem = editTarget.closest('[data-history-item-id]');
+                const id = parentItem.dataset.historyItemId;
+                const historyEntry = paymentHistory.find(p => p.id === id);
+                if (historyEntry) {
+                    monthsPaidInput.value = historyEntry.monthsPaid;
+                    // The paymentAmount is derived from monthsPaid, so let's trigger the input event to calculate it
+                    monthsPaidInput.dispatchEvent(new Event('input'));
+                    historyIdInput.value = id;
+                    parentItem.classList.add('history-entry-highlighted');
+                    showMessageBox(`Editing payment from ${formatShortDateWithYear(historyEntry.date)}.`, 'info');
+                    onEditStart();
+                }
+            }
+        };
+    }
+
     function openMemberModal(memberToEdit) {
         DOMElements.memberModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
@@ -2563,6 +2716,7 @@ Thank you for your understanding.
                 <form id="memberForm" class="space-y-4">
                     <input type="hidden" id="memberModalId">
                     <input type="hidden" id="purchaseHistoryId">
+                    <input type="hidden" id="paymentHistoryId">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label for="memberName" class="block text-slate-600 text-sm font-semibold mb-2">Member Name</label><input type="text" id="memberName" required class="form-input"></div>
                         <div><label for="memberEmail" class="block text-slate-600 text-sm font-semibold mb-2">Email Address</label><input type="email" id="memberEmail" required class="form-input" disabled></div>
@@ -2591,21 +2745,51 @@ Thank you for your understanding.
                             </div>
                         </div>
                         <div id="monthlyPlanFields" class="hidden space-y-4">
-                            <div>
-                                <label for="planStartDate" class="block text-slate-600 text-sm font-semibold mb-2">Plan Start Date</label>
-                                <input type="date" id="planStartDate" class="form-input">
-                            </div>
+                            <!-- Row 1: Plan Start Date & Monthly Amount -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="planStartDate" class="block text-slate-600 text-sm font-semibold mb-2">Plan Start Date</label>
+                                    <input type="date" id="planStartDate" class="form-input">
+                                </div>
                                 <div>
                                     <label for="monthlyPlanAmount" class="block text-slate-600 text-sm font-semibold mb-2">Monthly Amount ($)</label>
                                     <input type="number" id="monthlyPlanAmount" class="form-input" min="0">
                                 </div>
+                            </div>
+                            <!-- Row 2: Payment History Section -->
+                            <div class="pt-4 border-t border-slate-200">
+                                <div class="flex items-end gap-2">
+                                    <div class="flex-grow">
+                                        <label for="monthsPaid" class="block text-slate-600 text-sm font-semibold mb-1">Months Paid</label>
+                                        <input type="number" id="monthsPaid" class="form-input" min="1" step="1">
+                                    </div>
+                                    <div class="flex-grow">
+                                        <label for="paymentAmount" class="block text-slate-600 text-sm font-semibold mb-1">Payment Amount ($)</label>
+                                        <input type="text" id="paymentAmount" class="form-input bg-slate-100" readonly>
+                                    </div>
+                                    <button type="button" id="paymentActionBtn" class="font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white"></button>
+                                </div>
+                                <div id="paymentHistoryContainer" class="space-y-2 max-h-32 overflow-y-auto p-1 mt-2"></div>
+                            </div>
+                             <!-- Row 3: Due Date Quick Set Buttons -->
+                            <div class="flex gap-2">
+                                <button type="button" data-months="3" class="due-date-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">3 Months</button>
+                                <button type="button" data-months="6" class="due-date-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">6 Months</button>
+                                <button type="button" data-months="12" class="due-date-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">1 Year</button>
+                            </div>
+                            <!-- Row 4: Payment Due Date & Est. Attendance -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="paymentDueDate" class="block text-slate-600 text-sm font-semibold mb-2">Payment Due Date</label>
+                                    <input type="date" id="paymentDueDate" class="form-input">
+                                </div>
                                 <div>
                                     <label for="monthlyPlanEstimatedAttendance" class="block text-slate-600 text-sm font-semibold mb-2">Est. Monthly Attendance</label>
-                                    <input type="number" id="monthlyPlanEstimatedAttendance" class="form-input" min="1" step="1" placeholder="e.g., 10">
+                                    <input type="number" id="monthlyPlanEstimatedAttendance" class="form-input" min="1" step="1" placeholder="e.g., 8">
                                 </div>
                             </div>
-                            <div id="calculatedCreditValueContainer" class="bg-slate-100 p-3 rounded-lg text-center hidden">
+                            <!-- Bottom: Calculated Value -->
+                            <div id="calculatedCreditValueContainer" class="bg-slate-100 p-3 rounded-lg text-center mt-4">
                                 <p class="text-sm text-slate-500">Calculated Credit Value</p>
                                 <p id="calculatedCreditValueDisplay" class="text-xl font-bold text-indigo-600"></p>
                             </div>
@@ -2623,35 +2807,56 @@ Thank you for your understanding.
         const memberPhoneInput = form.querySelector('#memberPhone');
         const expiryDateInput = form.querySelector('#expiryDate');
         const planStartDateInput = form.querySelector('#planStartDate');
+        const paymentDueDateInput = form.querySelector('#paymentDueDate');
         const historyContainer = form.querySelector('#purchaseHistoryContainer');
         const historyIdInput = form.querySelector('#purchaseHistoryId');
         const creditActionBtn = form.querySelector('#creditActionBtn');
 
-        // --- START: RESTORED CODE FOR EXPIRY DATE BUTTONS ---
+        const paymentHistoryContainer = form.querySelector('#paymentHistoryContainer');
+        const paymentHistoryIdInput = form.querySelector('#paymentHistoryId');
+        const monthsPaidInput = form.querySelector('#monthsPaid');
+        const paymentAmountInput = form.querySelector('#paymentAmount');
+        const paymentActionBtn = form.querySelector('#paymentActionBtn');
+        const monthlyPlanAmountInput = form.querySelector('#monthlyPlanAmount');
+        
         form.querySelectorAll('.expiry-quick-select-btn').forEach(btn => {
             btn.onclick = () => {
                 const yearsToAdd = parseInt(btn.dataset.years);
                 if (!isNaN(yearsToAdd)) {
                     const today = new Date();
                     today.setFullYear(today.getFullYear() + yearsToAdd);
-                    
-                    const year = today.getFullYear();
-                    const month = String(today.getMonth() + 1).padStart(2, '0');
-                    const day = String(today.getDate()).padStart(2, '0');
-                    
-                    expiryDateInput.value = `${year}-${month}-${day}`;
+                    expiryDateInput.value = getIsoDate(today);
                 }
             };
         });
-        // --- END: RESTORED CODE FOR EXPIRY DATE BUTTONS ---
+
+        form.querySelectorAll('.due-date-quick-select-btn').forEach(btn => {
+            btn.onclick = () => {
+                const startDateString = planStartDateInput.value;
+                if (!startDateString) {
+                    showMessageBox('Please set a Plan Start Date first.', 'info');
+                    return;
+                }
+                const startDate = new Date(startDateString + 'T12:00:00Z');
+                if (isNaN(startDate.getTime())) {
+                    showMessageBox('Invalid Plan Start Date.', 'error');
+                    return;
+                }
+                const monthsToAdd = parseInt(btn.dataset.months);
+                if (!isNaN(monthsToAdd)) {
+                    const newDueDate = new Date(startDate.getUTCFullYear(), startDate.getUTCMonth() + monthsToAdd, startDate.getUTCDate());
+                    paymentDueDateInput.value = getIsoDate(newDueDate);
+                }
+            };
+        });
         
         const plusIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>`;
         const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>`;
 
-        const setButtonToAddMode = () => {
+        // --- Credit History Button Logic ---
+        const setCreditButtonToAddMode = () => {
             creditActionBtn.innerHTML = plusIconSVG;
             creditActionBtn.title = 'Add new credit entry';
-            // --- FIX IS HERE ---
             creditActionBtn.className = 'creditActionBtn bg-green-500 hover:bg-green-600 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
             purchaseAmountInput.value = '';
             creditsInput.value = '';
@@ -2659,89 +2864,95 @@ Thank you for your understanding.
             historyContainer.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
         };
 
-        const setButtonToEditMode = () => {
+        const setCreditButtonToEditMode = () => {
             creditActionBtn.innerHTML = checkIconSVG;
             creditActionBtn.title = 'Save this entry';
-            // --- FIX IS HERE ---
             creditActionBtn.className = 'creditActionBtn bg-indigo-600 hover:bg-indigo-700 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
         };
-
-        setButtonToAddMode(); // Set initial state
+        setCreditButtonToAddMode(); 
 
         creditActionBtn.onclick = () => {
             const historyId = historyIdInput.value;
-            let memberId = memberToEdit.id; // Use `let` so it can be reassigned
+            let memberId = memberToEdit.id; 
             const amount = parseFloat(purchaseAmountInput.value);
             const credits = parseFloat(creditsInput.value);
-
-            if (historyId) { // --- UPDATE MODE ---
-                if (isNaN(amount) || isNaN(credits) || amount < 0 || credits < 0) {
-                    showMessageBox('Please enter a valid amount and credits.', 'error'); return;
-                }
+            if (historyId) {
+                 if (isNaN(amount) || isNaN(credits) || amount < 0 || credits < 0) { showMessageBox('Please enter a valid amount and credits.', 'error'); return; }
                 const originalEntry = firebaseObjectToArray(memberToEdit.purchaseHistory).find(p => p.id === historyId);
-                if (!originalEntry) {
-                    showMessageBox('Could not find original entry.', 'error'); return;
-                }
-
+                if (!originalEntry) { showMessageBox('Could not find original entry.', 'error'); return; }
                 const creditDifference = credits - originalEntry.credits;
-                const entryUpdate = { 
-                    amount, 
-                    credits, 
-                    costPerCredit: amount / credits,
-                    // --- START: Add these lines ---
-                    lastModifiedBy: appState.currentUser.name,
-                    lastModifiedAt: new Date().toISOString()
-                    // --- END: Add these lines ---
-                };
-                
-                database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate).then(() => {
-                    return database.ref(`/users/${memberId}`).transaction(user => {
-                        if (user) {
-                            user.credits = (user.credits || 0) + creditDifference;
-                            user.initialCredits = (user.initialCredits || 0) + creditDifference;
-                        }
-                        return user;
-                    });
-                }).then(() => {
+                const entryUpdate = { amount, credits, costPerCredit: amount / credits, lastModifiedBy: appState.currentUser.name, lastModifiedAt: new Date().toISOString() };
+                database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate).then(() => database.ref(`/users/${memberId}`).transaction(user => {
+                    if (user) { user.credits = (user.credits || 0) + creditDifference; user.initialCredits = (user.initialCredits || 0) + creditDifference; } return user;
+                })).then(() => {
                     showMessageBox('Purchase entry updated!', 'success');
-                    database.ref(`/users/${memberId}`).once('value', snapshot => {
-                        memberToEdit = { id: snapshot.key, ...snapshot.val() }; // Update stale member data
-                        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
-                        setButtonToAddMode();
-                    });
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode); setCreditButtonToAddMode(); });
                 }).catch(error => showMessageBox(`Update failed: ${error.message}`, 'error'));
-            } else { // --- ADD MODE ---
-                if (isNaN(amount) || isNaN(credits) || amount <= 0 || credits <= 0) {
-                    showMessageBox('Please enter a valid amount and credits to add.', 'error'); return;
-                }
-
+            } else {
+                if (isNaN(amount) || isNaN(credits) || amount <= 0 || credits <= 0) { showMessageBox('Please enter a valid amount and credits to add.', 'error'); return; }
                 const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
-                const newPurchase = { 
-                    date: new Date().toISOString(), 
-                    amount, 
-                    credits, 
-                    costPerCredit: amount / credits,
-                    // --- START: Add these lines ---
-                    status: 'active',
-                    lastModifiedBy: appState.currentUser.name,
-                    lastModifiedAt: new Date().toISOString()
-                    // --- END: Add these lines ---
-                };
-                
-                database.ref(`/users/${memberId}`).transaction(user => {
-                    if (user) { user.credits = (user.credits || 0) + credits; user.initialCredits = (user.initialCredits || 0) + credits; }
-                    return user;
+                const newPurchase = { date: new Date().toISOString(), amount, credits, costPerCredit: amount / credits, status: 'active', lastModifiedBy: appState.currentUser.name, lastModifiedAt: new Date().toISOString() };
+                database.ref(`/users/${memberId}`).transaction(user => { if (user) { user.credits = (user.credits || 0) + credits; user.initialCredits = (user.initialCredits || 0) + credits; } return user;
                 }).then(() => newPurchaseRef.set(newPurchase)).then(() => {
                     showMessageBox('New credit entry added!', 'success');
-                     database.ref(`/users/${memberId}`).once('value', snapshot => {
-                        memberToEdit = { id: snapshot.key, ...snapshot.val() }; // Update stale member data
-                        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
-                        setButtonToAddMode();
-                    });
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode); setCreditButtonToAddMode(); });
                 }).catch(error => showMessageBox(`Error adding credits: ${error.message}`, 'error'));
             }
         };
 
+        // --- Payment History Logic ---
+        const autoCalculatePayment = () => {
+            const months = parseInt(monthsPaidInput.value) || 0;
+            const monthlyAmount = parseFloat(monthlyPlanAmountInput.value) || 0;
+            paymentAmountInput.value = (months * monthlyAmount).toFixed(2);
+        };
+        monthsPaidInput.oninput = autoCalculatePayment;
+        monthlyPlanAmountInput.addEventListener('input', autoCalculatePayment);
+
+        const setPaymentButtonToAddMode = () => {
+            paymentActionBtn.innerHTML = plusIconSVG;
+            paymentActionBtn.title = 'Add new payment entry';
+            paymentActionBtn.className = 'paymentActionBtn bg-green-500 hover:bg-green-600 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
+            monthsPaidInput.value = '';
+            paymentAmountInput.value = '';
+            paymentHistoryIdInput.value = '';
+            paymentHistoryContainer.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
+        };
+
+        const setPaymentButtonToEditMode = () => {
+            paymentActionBtn.innerHTML = checkIconSVG;
+            paymentActionBtn.title = 'Save this payment entry';
+            paymentActionBtn.className = 'paymentActionBtn bg-indigo-600 hover:bg-indigo-700 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
+        };
+
+        setPaymentButtonToAddMode();
+
+        paymentActionBtn.onclick = () => {
+            const historyId = paymentHistoryIdInput.value;
+            const memberId = memberToEdit.id;
+            const monthsPaid = parseInt(monthsPaidInput.value);
+            const amount = parseFloat(paymentAmountInput.value);
+
+            if (isNaN(monthsPaid) || monthsPaid <= 0) { showMessageBox('Please enter a valid number of months paid.', 'error'); return; }
+            if ((parseFloat(monthlyPlanAmountInput.value) || 0) <= 0) { showMessageBox('A Monthly Amount must be set to log a payment.', 'error'); return; }
+
+            if (historyId) { // Update
+                const entryUpdate = { monthsPaid, amount, lastModifiedBy: appState.currentUser.name, lastModifiedAt: new Date().toISOString() };
+                database.ref(`/users/${memberId}/paymentHistory/${historyId}`).update(entryUpdate).then(() => {
+                    showMessageBox('Payment entry updated!', 'success');
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode); setPaymentButtonToAddMode(); });
+                }).catch(error => showMessageBox(`Update failed: ${error.message}`, 'error'));
+            } else { // Add
+                const newPaymentRef = database.ref(`/users/${memberId}/paymentHistory`).push();
+                const newPayment = { date: new Date().toISOString(), monthsPaid, amount, status: 'active', lastModifiedBy: appState.currentUser.name, lastModifiedAt: new Date().toISOString() };
+                newPaymentRef.set(newPayment).then(() => {
+                    showMessageBox('New payment entry added!', 'success');
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode); setPaymentButtonToAddMode(); });
+                }).catch(error => showMessageBox(`Error adding payment: ${error.message}`, 'error'));
+            }
+        };
+
+        // --- Form Population and Setup ---
         form.querySelector('#memberModalId').value = memberToEdit.id;
         form.querySelector('#memberName').value = memberToEdit.name;
         form.querySelector('#memberEmail').value = memberToEdit.email;
@@ -2752,8 +2963,8 @@ Thank you for your understanding.
         
         form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
         expiryDateInput.value = memberToEdit.expiryDate;
+        paymentDueDateInput.value = memberToEdit.paymentDueDate || '';
 
-        const monthlyPlanAmountInput = form.querySelector('#monthlyPlanAmount');
         const estimatedAttendanceInput = form.querySelector('#monthlyPlanEstimatedAttendance');
         const calculatedCreditValueContainer = form.querySelector('#calculatedCreditValueContainer');
         const calculatedCreditValueDisplay = form.querySelector('#calculatedCreditValueDisplay');
@@ -2761,10 +2972,8 @@ Thank you for your understanding.
         const updateCalculatedValue = () => {
             const amount = parseFloat(monthlyPlanAmountInput.value) || 0;
             const attendance = parseInt(estimatedAttendanceInput.value) || 0;
-
             if (amount > 0 && attendance > 0) {
-                const value = amount / attendance;
-                calculatedCreditValueDisplay.textContent = `${formatCurrency(value)} per credit`;
+                calculatedCreditValueDisplay.textContent = `${formatCurrency(amount / attendance)} per credit`;
                 calculatedCreditValueContainer.classList.remove('hidden');
             } else {
                 calculatedCreditValueContainer.classList.add('hidden');
@@ -2774,15 +2983,13 @@ Thank you for your understanding.
         monthlyPlanAmountInput.oninput = updateCalculatedValue;
         estimatedAttendanceInput.oninput = updateCalculatedValue;
         
-        // Populate the form with existing member data
         monthlyPlanAmountInput.value = memberToEdit.monthlyPlanAmount || '';
         planStartDateInput.value = memberToEdit.planStartDate || '';
         estimatedAttendanceInput.value = memberToEdit.monthlyPlanEstimatedAttendance || '';
-
-        // Trigger the calculation display on initial load
         updateCalculatedValue();
         
-        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setButtonToEditMode);
+        _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode);
+        _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode);
         
         form.querySelector('#resetPasswordBtn').onclick = () => {
             auth.sendPasswordResetEmail(memberToEdit.email)
@@ -2797,7 +3004,6 @@ Thank you for your understanding.
             const isMonthly = monthlyPlanCheckbox.checked;
             creditFieldsContainer.style.display = isMonthly ? 'none' : 'block';
             monthlyPlanFieldsContainer.style.display = isMonthly ? 'block' : 'none';
-            // If monthly plan is checked and the start date is empty, set it to today
             if (isMonthly && !planStartDateInput.value) {
                 planStartDateInput.value = getIsoDate(new Date());
             }
@@ -2815,8 +3021,6 @@ Thank you for your understanding.
         const id = form.querySelector('#memberModalId').value;
         if (!id) return;
 
-        // --- START: NEW VALIDATION LOGIC ---
-        // Fetch the latest member data to ensure validation is always on the most current state.
         const latestMemberSnapshot = await database.ref(`/users/${id}`).once('value');
         const latestMember = latestMemberSnapshot.val();
 
@@ -2831,28 +3035,26 @@ Thank you for your understanding.
         let estimatedAttendance = 0;
         let calculatedCreditValue = 0;
 
-        // Validation for Monthly Plan
         if (isMonthly) {
             monthlyPlanAmount = parseFloat(form.querySelector('#monthlyPlanAmount').value) || 0;
             estimatedAttendance = parseInt(form.querySelector('#monthlyPlanEstimatedAttendance').value) || 0;
 
             if (monthlyPlanAmount > 0 && estimatedAttendance <= 0) {
                 showMessageBox('Estimated Monthly Attendance must be greater than 0 when a Monthly Amount is set.', 'error');
-                return; // Abort the save operation.
+                return; 
             }
 
             if (estimatedAttendance > 0) {
                 calculatedCreditValue = monthlyPlanAmount / estimatedAttendance;
             }
         } 
-        // Validation for Pay-as-you-go Plan
         else {
             const hasCredits = (latestMember.credits > 0 || latestMember.initialCredits > 0);
             const expiryDate = form.querySelector('#expiryDate').value;
 
             if (hasCredits && !expiryDate) {
                 showMessageBox('An Credit Expiry Date is required for members with a credit balance.', 'error');
-                return; // Abort the save operation.
+                return; 
             }
         }
 
@@ -2865,9 +3067,9 @@ Thank you for your understanding.
         updates[`/users/${id}/phone`] = fullPhoneNumber;
         updates[`/users/${id}/monthlyPlan`] = isMonthly;
 
-        // Update monthly or credit-based fields
         updates[`/users/${id}/monthlyPlanAmount`] = isMonthly ? monthlyPlanAmount : null;
         updates[`/users/${id}/planStartDate`] = isMonthly ? form.querySelector('#planStartDate').value : null;
+        updates[`/users/${id}/paymentDueDate`] = isMonthly ? form.querySelector('#paymentDueDate').value || null : null;
         updates[`/users/${id}/monthlyPlanEstimatedAttendance`] = isMonthly ? estimatedAttendance : null;
         updates[`/users/${id}/monthlyCreditValue`] = isMonthly ? calculatedCreditValue : null;
         updates[`/users/${id}/expiryDate`] = !isMonthly ? form.querySelector('#expiryDate').value || null : null;
