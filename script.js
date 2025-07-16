@@ -2153,7 +2153,7 @@ Thank you for your understanding.
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-slate-800">Manage Members</h2>
-                    <div class="flex items-center gap-4">
+                    <div class="flex flex-wrap items-center justify-end gap-4">
                         <div class="relative w-64">
                             <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-full pr-10">
                             <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
