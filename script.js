@@ -263,7 +263,47 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return "th";
     };
-    
+
+    const exportToCsv = (filename, rows) => {
+        if (!rows || rows.length === 0) {
+            showMessageBox('No data available to export.', 'info');
+            return;
+        }
+
+        // 1. Get headers from the first data object's keys
+        const headers = Object.keys(rows[0]);
+
+        // 2. Convert the array of objects into a CSV string
+        const csvContent = [
+            headers.join(','), // Header row
+            ...rows.map(row => headers.map(header => {
+                let cell = row[header];
+                cell = cell === null || cell === undefined ? '' : String(cell);
+
+                // To handle values containing commas, quotes, or newlines, we wrap them in double quotes.
+                // Any existing double quotes inside the value must be escaped by doubling them.
+                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                    cell = `"${cell.replace(/"/g, '""')}"`;
+                }
+                return cell;
+            }).join(','))
+        ].join('\n');
+
+        // 3. Create a Blob and trigger the download
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' }); // \uFEFF is the BOM for Excel
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${filename}_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showMessageBox('Export started successfully!', 'success');
+    }
+
     const formatDateWithWeekday = (isoString) => {
         if (!isoString) return 'N/A';
         const date = new Date(isoString + 'T12:00:00Z');
@@ -672,6 +712,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 database.ref('/courses/' + course.id).remove().then(() => {
                     closeModal(DOMElements.courseModal);
                     showMessageBox('Course deleted.', 'info');
+                    if (appState.activePage === 'courses') {
+                        renderCurrentPage();
+                    }
                 });
             });
         }
@@ -766,6 +809,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     closeModal(modal);
                     closeModal(DOMElements.courseModal);
                     showMessageBox('Course deleted and members notified.', 'success');
+                    if (appState.activePage === 'courses') {
+                        renderCurrentPage();
+                    }
                 });
             });
         };
@@ -2107,19 +2153,44 @@ Thank you for your understanding.
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-slate-800">Manage Members</h2>
-                    <div class="w-full mt-4 p-4 bg-slate-50 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div>
-                            <h4 class="font-semibold text-slate-800">Auto-Adjust Monthly Plans</h4>
-                            <p class="text-sm text-slate-600">Recalculate estimated courses and credit values for all monthly members based on the last 30 days of attendance.</p>
+                    <div class="flex items-center gap-4">
+                        <div class="relative w-64">
+                            <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-full pr-10">
+                            <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
                         </div>
-                        <button id="recalculatePlansBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto flex-shrink-0">Recalculate All</button>
+                        <div class="relative" id="exportMenuContainer">
+                            <button id="exportMembersBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                Export
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <div id="exportMembersDropdown" class="absolute right-0 mt-2 w-64 origin-top-right rounded-md bg-white shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-20 hidden" role="menu" aria-orientation="vertical" aria-labelledby="exportMembersBtn">
+                                <div class="p-1" role="none">
+                                    <a href="#" id="exportSummaryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span class="font-medium">Export Member Summary</span>
+                                    </a>
+                                    <a href="#" id="exportFullHistoryBtn" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900 transition-colors duration-150" role="menuitem">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span class="font-medium">Export Full History (Slow)</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="relative w-64">
-                        <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-full pr-10">
-                        <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                </div>
+                 <div class="w-full mt-4 mb-6 p-4 bg-slate-50 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h4 class="font-semibold text-slate-800">Auto-Adjust Monthly Plans</h4>
+                        <p class="text-sm text-slate-600">Recalculate estimated courses and credit values for all monthly members based on the last 30 days of attendance.</p>
                     </div>
+                    <button id="recalculatePlansBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto flex-shrink-0">Recalculate All</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
@@ -2143,9 +2214,21 @@ Thank you for your understanding.
         const clearBtn = container.querySelector('#clearSearchBtn');
         const tableBody = container.querySelector('#membersTableBody');
 
+        const exportMenuContainer = container.querySelector('#exportMenuContainer');
+        const exportBtn = container.querySelector('#exportMembersBtn');
+        const exportDropdown = container.querySelector('#exportMembersDropdown');
+        exportBtn.onclick = (e) => {
+            e.stopPropagation();
+            exportDropdown.classList.toggle('hidden');
+        };
+        document.addEventListener('click', (e) => {
+            if (exportMenuContainer && !exportMenuContainer.contains(e.target)) {
+                exportDropdown.classList.add('hidden');
+            }
+        }, { once: true });
+
         const updateTable = (searchTerm = '') => {
             const { key, direction } = appState.membersSort;
-
             container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
                 icon.className = 'sort-icon';
             });
@@ -2153,13 +2236,10 @@ Thank you for your understanding.
             if (activeHeader) {
                 activeHeader.classList.add(direction);
             }
-
             const sortedUsers = [...appState.users].sort((a, b) => {
                 if (a.role === 'owner' || b.role === 'owner') return 0;
-
                 let valA = a[key];
                 let valB = b[key];
-
                 if (key === 'credits') {
                     if (a.monthlyPlan) valA = Infinity;
                     if (b.monthlyPlan) valB = Infinity;
@@ -2168,20 +2248,17 @@ Thank you for your understanding.
                     valA = valA ? new Date(valA).getTime() : -Infinity;
                     valB = valB ? new Date(valB).getTime() : -Infinity;
                 }
-
                 if (valA < valB) return direction === 'asc' ? -1 : 1;
                 if (valA > valB) return direction === 'asc' ? 1 : -1;
                 return 0;
             });
-
             const filteredUsers = sortedUsers.filter(u => 
-                u.role !== 'owner' && !u.isDeleted && ( // <<< ADD !u.isDeleted HERE
+                u.role !== 'owner' && !u.isDeleted && (
                 !searchTerm ||
                 u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (u.phone && u.phone.includes(searchTerm)))
             );
-
             tableBody.innerHTML = filteredUsers.map(member => `
                 <tr class="border-b border-slate-100">
                     <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
@@ -2207,12 +2284,10 @@ Thank you for your understanding.
                     const memberId = btn.dataset.id;
                     const memberName = btn.dataset.name;
                     const memberToDelete = appState.users.find(u => u.id === memberId);
-                    
                     if (!memberToDelete) {
                         showMessageBox('Could not find member to delete.', 'error');
                         return;
                     }
-
                     showConfirmation('Anonymize Member', `This will cancel all of <strong>${memberName}</strong>'s upcoming bookings and anonymize their record. Attended course history and revenue will be preserved. This cannot be undone.`, () => {
                         handleMemberDeletion(memberToDelete);
                     });
@@ -2253,13 +2328,94 @@ Thank you for your understanding.
             searchInput.focus();
         };
 
+        container.querySelector('#exportSummaryBtn').onclick = (e) => {
+            e.preventDefault();
+            exportDropdown.classList.add('hidden');
+            showMessageBox('Generating member summary...', 'info', 2000);
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredUsers = appState.users.filter(u => 
+                u.role !== 'owner' && !u.isDeleted && (
+                !searchTerm ||
+                u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (u.phone && u.phone.includes(searchTerm)))
+            );
+
+            // --- START: FIX ---
+            // Sort the filtered users alphabetically by name (ascending) before exporting.
+            filteredUsers.sort((a, b) => a.name.localeCompare(b.name));
+            // --- END: FIX ---
+
+            const exportData = filteredUsers.map(member => ({
+                Name: member.name,
+                Email: member.email,
+                Phone: member.phone,
+                JoinDate: member.joinDate ? member.joinDate.slice(0, 10) : '',
+                PlanType: member.monthlyPlan ? 'Monthly' : 'Credits',
+                MonthlyPlanAmount: member.monthlyPlanAmount || 0,
+                CreditsRemaining: member.monthlyPlan ? 'N/A' : (member.credits || 0),
+                CreditsInitial: member.monthlyPlan ? 'N/A' : (member.initialCredits || 0),
+                CreditExpiryDate: member.expiryDate || '',
+                LastActiveDate: member.lastBooking ? member.lastBooking.slice(0, 10) : ''
+            }));
+            exportToCsv('member-summary', exportData);
+        };
+
+        container.querySelector('#exportFullHistoryBtn').onclick = async (e) => {
+            e.preventDefault();
+            exportDropdown.classList.add('hidden');
+            showMessageBox('Generating full history... This may take a moment.', 'info', 5000);
+            try {
+                const usersSnapshot = await database.ref('/users').once('value');
+                const coursesSnapshot = await database.ref('/courses').once('value');
+                const allUsers = firebaseObjectToArray(usersSnapshot.val());
+                const allCourses = firebaseObjectToArray(coursesSnapshot.val());
+                const exportData = [];
+                const members = allUsers.filter(u => u.role === 'member' && !u.isDeleted);
+                members.forEach(member => {
+                    allCourses.forEach(course => {
+                        if (course.bookedBy && course.bookedBy[member.id]) {
+                            const bookingInfo = course.bookedBy[member.id];
+                            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                            const tutor = appState.tutors.find(t => t.id === course.tutorId);
+                            exportData.push({
+                                MemberName: member.name,
+                                MemberEmail: member.email,
+                                BookingDate: course.date,
+                                CourseName: sportType?.name || 'Unknown',
+                                TutorName: tutor?.name || 'Unknown',
+                                CreditsUsed: course.credits,
+                                WasAttended: (course.attendedBy && course.attendedBy[member.id]) ? 'Yes' : 'No',
+                                BookingMadeOn: bookingInfo.bookedAt ? bookingInfo.bookedAt.slice(0, 10) : '',
+                                BookingMadeBy: bookingInfo.bookedBy || 'Unknown'
+                            });
+                        }
+                    });
+                });
+                
+                // --- FIX: Sort by Member Name first, then by Booking Date ---
+                exportData.sort((a, b) => {
+                    const nameComparison = a.MemberName.localeCompare(b.MemberName);
+                    if (nameComparison !== 0) {
+                        return nameComparison;
+                    }
+                    return a.BookingDate.localeCompare(b.BookingDate);
+                });
+                
+                exportToCsv('member-full-booking-history', exportData);
+            } catch (error) {
+                console.error("Error generating full history export:", error);
+                showMessageBox('Failed to generate full history. Please try again.', 'error');
+            }
+        };
+
         updateTable();
 
         container.querySelector('#recalculatePlansBtn').onclick = () => {
             showConfirmation(
                 'Recalculate Monthly Plans?',
                 'This will analyze the last 30 days of attendance for all monthly members and update their estimated course counts and credit values. This action cannot be undone.',
-                recalculateMonthlyPlans // We will create this function next
+                recalculateMonthlyPlans
             );
         };
     }
@@ -2727,36 +2883,65 @@ Thank you for your understanding.
 
         try {
             const usersSnapshotPromise = database.ref('/users').once('value');
+            
+            // --- START OF FIX ---
+            // 1. Normalize "today" to the start of the day (midnight).
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); 
+            // --- END OF FIX ---
+
             const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            thirtyDaysAgo.setHours(0, 0, 0, 0); // Also normalize the 30-day mark
+
             const coursesSnapshotPromise = database.ref('/courses').orderByChild('date').startAt(getIsoDate(thirtyDaysAgo)).once('value');
             
             const [usersSnapshot, coursesSnapshot] = await Promise.all([usersSnapshotPromise, coursesSnapshotPromise]);
 
             const allUsers = firebaseObjectToArray(usersSnapshot.val());
             const recentCourses = firebaseObjectToArray(coursesSnapshot.val());
-            const today = new Date();
-            const monthlyMembers = allUsers.filter(u => u.role === 'member' && u.monthlyPlan && !u.isDeleted);
+            const monthlyMembers = allUsers.filter(u => u.role === 'member' && u.monthlyPlan && !u.isDeleted && u.planStartDate);
             
             if (monthlyMembers.length === 0) {
-                showMessageBox('No active monthly members found to recalculate.', 'info');
+                showMessageBox('No active monthly members with a plan start date found to recalculate.', 'info');
                 return;
             }
 
             const updates = {};
             let updatedCount = 0;
+            const MINIMUM_ACTIVE_DAYS_FOR_RECALC = 7; 
 
             for (const member of monthlyMembers) {
+                const planStartDate = new Date(member.planStartDate);
+                planStartDate.setHours(0, 0, 0, 0); // Normalize the member's start date
+
+                if (isNaN(planStartDate.getTime())) continue; // Skip if date is invalid
+
+                const observationStartDate = planStartDate > thirtyDaysAgo ? planStartDate : thirtyDaysAgo;
+
+                // --- START OF FIX ---
+                // 2. Calculate the difference and add 1 for an inclusive day count.
+                const dayDifference = (today - observationStartDate) / (1000 * 60 * 60 * 24);
+                const activeDays = Math.max(1, Math.round(dayDifference) + 1);
+                // --- END OF FIX ---
+
+                if (activeDays < MINIMUM_ACTIVE_DAYS_FOR_RECALC) {
+                    continue;
+                }
+
                 const attendedCoursesCount = recentCourses.filter(course => {
                     const courseDate = new Date(course.date);
-                    return courseDate >= thirtyDaysAgo && courseDate <= today &&
-                           course.attendedBy && course.attendedBy[member.id];
+                    return course.attendedBy && course.attendedBy[member.id] &&
+                           courseDate >= observationStartDate && courseDate <= today;
                 }).length;
 
-                const previousEstimate = member.monthlyPlanEstimatedAttendance || attendedCoursesCount;
-                
-                const newEstimatedAttendance = Math.round((previousEstimate + attendedCoursesCount) / 2);
+                const dailyAttendanceRate = attendedCoursesCount / activeDays;
+                const projectedMonthlyAttendance = dailyAttendanceRate * 30;
 
+                const previousEstimate = member.monthlyPlanEstimatedAttendance || projectedMonthlyAttendance;
+                
+                const newEstimatedAttendance = Math.round((previousEstimate + projectedMonthlyAttendance) / 2);
+                
                 if (newEstimatedAttendance !== member.monthlyPlanEstimatedAttendance) {
                     updatedCount++;
                     const monthlyAmount = member.monthlyPlanAmount || 0;
@@ -2774,7 +2959,7 @@ Thank you for your understanding.
                 await database.ref().update(updates);
                 showMessageBox(`Recalculation complete! ${updatedCount} member plan(s) were updated.`, 'success');
             } else {
-                showMessageBox('Recalculation complete. No plan estimates required an update.', 'info');
+                showMessageBox('Recalculation complete. No plan estimates required an update at this time.', 'info');
             }
 
         } catch (error) {
@@ -3359,9 +3544,13 @@ Thank you for your understanding.
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-slate-800">Tutor Salary Overview</h2>
-                    <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                    <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
                         <select id="salaryTutorSelect" class="form-select w-full sm:w-48"></select>
                         <select id="salaryPeriodSelect" class="form-select w-full sm:w-48"></select>
+                        <button id="exportSalaryBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2 w-full sm:w-auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Export
+                        </button>
                     </div>
                 </div>
                 <div id="salaryDetailsContainer"><p class="text-center text-slate-500 p-8">Loading available months...</p></div>
@@ -3369,13 +3558,13 @@ Thank you for your understanding.
         
         const tutorSelect = container.querySelector('#salaryTutorSelect');
         const periodSelect = container.querySelector('#salaryPeriodSelect');
+        const exportBtn = container.querySelector('#exportSalaryBtn');
         
         populateDropdown(tutorSelect, appState.tutors);
         if (appState.selectedFilters.salaryTutorId) {
             tutorSelect.value = appState.selectedFilters.salaryTutorId;
         }
 
-        // Fetch all courses just to populate the month dropdown
         const allCoursesSnapshot = await database.ref('/courses').once('value');
         const allCoursesForPeriods = firebaseObjectToArray(allCoursesSnapshot.val());
         
@@ -3397,13 +3586,95 @@ Thank you for your understanding.
         const onFilterChange = () => {
             appState.selectedFilters.salaryTutorId = tutorSelect.value;
             appState.selectedFilters.salaryPeriod = periodSelect.value;
-            renderSalaryDetails(allCoursesForPeriods); // Pass the already-fetched data
+            renderSalaryDetails(allCoursesForPeriods);
         };
 
         tutorSelect.onchange = onFilterChange;
         periodSelect.onchange = onFilterChange;
-        
-        // Initial render
+
+        exportBtn.onclick = () => {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = 'Exporting...';
+
+            const tutorId = tutorSelect.value;
+            const period = periodSelect.value;
+            const tutor = appState.tutors.find(t => t.id === tutorId);
+
+            if (!tutorId || !period || !tutor) {
+                showMessageBox('Please select a valid tutor and period.', 'error');
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `<svg ... > Export`; // Restore button text
+                return;
+            }
+
+            const coursesInPeriod = allCoursesForPeriods.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+            
+            // --- FIX: Sort the courses by date before processing ---
+            const sortedCoursesInPeriod = [...coursesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
+
+            const memberIdsInPeriod = new Set();
+            sortedCoursesInPeriod.forEach(course => { // Use sorted array
+                if (course.bookedBy) {
+                    Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
+                }
+            });
+
+            const allMemberBookings = [];
+            if (memberIdsInPeriod.size > 0) {
+                allCoursesForPeriods.forEach(course => {
+                    if (course.bookedBy) {
+                        for (const memberId of Object.keys(course.bookedBy)) {
+                            if (memberIdsInPeriod.has(memberId)) {
+                                const member = appState.users.find(u => u.id === memberId);
+                                if (member) allMemberBookings.push({ member, course });
+                            }
+                        }
+                    }
+                });
+            }
+            
+            const { revenueByCourseId } = calculateRevenueForBookings(allMemberBookings);
+            
+            const courseDetails = sortedCoursesInPeriod.map(course => { // Use sorted array
+                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                let earnings = 0;
+                let calculation = "N/A";
+                const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+                const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
+                
+                if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
+                    const { salaryType, salaryValue } = course.payoutDetails;
+                    if (salaryType === 'perCourse') {
+                        earnings = salaryValue;
+                        calculation = `${formatCurrency(salaryValue)} (fixed)`;
+                    } else if (salaryType === 'percentage') {
+                        earnings = courseGrossRevenue * (salaryValue / 100);
+                        calculation = `${formatCurrency(courseGrossRevenue)} x ${salaryValue}%`;
+                    } else if (salaryType === 'perHeadcount') {
+                        earnings = attendeesCount * salaryValue;
+                        calculation = `${attendeesCount} attendees x ${formatCurrency(salaryValue)}`;
+                    }
+                }
+                return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
+            });
+            
+            const exportData = courseDetails.map(c => ({
+                Date: c.date,
+                Course: c.sportTypeName,
+                Attendees_Capacity: `${c.attendeesCount}/${c.maxParticipants}`,
+                Calculation: c.calculation,
+                // --- FIX: Format earnings to 2 decimal places ---
+                Earnings: c.earnings.toFixed(2)
+            }));
+
+            const tutorName = tutor.name.replace(/ /g, '_');
+            const fileName = `salary-report_${tutorName}_${period}`;
+            exportToCsv(fileName, exportData);
+
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
+        };
+
         renderSalaryDetails(allCoursesForPeriods);
     }
 
@@ -3556,6 +3827,10 @@ Thank you for your understanding.
                     <h2 class="text-3xl font-bold text-slate-800">Studio Statistics</h2>
                      <div class="flex gap-4">
                         <select id="statsPeriodSelect" class="form-select w-48"></select>
+                        <button id="exportStatsBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Export
+                        </button>
                      </div>
                 </div>
                 <div id="statisticsContainer" class="space-y-8"><p class="text-center text-slate-500 p-8">Calculating statistics...</p></div>
@@ -3563,9 +3838,13 @@ Thank you for your understanding.
         
         const periodSelect = container.querySelector('#statsPeriodSelect');
         const statsContainer = container.querySelector('#statisticsContainer');
+        const exportBtn = container.querySelector('#exportStatsBtn');
         const periods = { 'Last 7 Days': 7, 'Last 30 Days': 30, 'Last 90 Days': 90, 'All Time': Infinity };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
         
+        // This object will store the calculated stats to be used by the export function.
+        let currentStatsForExport = {};
+
         const renderFilteredStats = async () => {
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Calculating statistics...</p>`;
             const days = parseInt(periodSelect.value);
@@ -3578,6 +3857,7 @@ Thank you for your understanding.
 
             if (filteredCourses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500">No data available for the selected period.</p>`;
+                 currentStatsForExport = {}; // Clear stats if no data
                  return;
             }
 
@@ -3607,32 +3887,21 @@ Thank you for your understanding.
             
             const { revenueByCourseId } = calculateRevenueForBookings(allRelevantBookings);
             
-            let grossRevenue = 0;
-            let totalTutorPayout = 0;
-            let totalBookings = 0;
-            let totalAttendees = 0;
+            let grossRevenue = 0, totalTutorPayout = 0, totalBookings = 0, totalAttendees = 0;
 
             filteredCourses.forEach(course => {
                 const courseRevenue = revenueByCourseId.get(course.id) || 0;
                 grossRevenue += courseRevenue;
-
-                // --- START: RESTORED LOGIC ---
-                // These lines were accidentally removed and are now restored.
                 const bookedIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
                 const attendedIds = course.attendedBy ? Object.keys(course.attendedBy) : [];
                 totalBookings += bookedIds.length;
                 totalAttendees += attendedIds.length;
-                // --- END: RESTORED LOGIC ---
                 
                 if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
                     const { salaryType, salaryValue } = course.payoutDetails;
-                    if (salaryType === 'perCourse') {
-                        totalTutorPayout += salaryValue;
-                    } else if (salaryType === 'perHeadcount') {
-                        totalTutorPayout += bookedIds.length * salaryValue;
-                    } else if (salaryType === 'percentage') {
-                        totalTutorPayout += courseRevenue * (salaryValue / 100);
-                    }
+                    if (salaryType === 'perCourse') totalTutorPayout += salaryValue;
+                    else if (salaryType === 'perHeadcount') totalTutorPayout += bookedIds.length * salaryValue;
+                    else if (salaryType === 'percentage') totalTutorPayout += courseRevenue * (salaryValue / 100);
                 }
             });
 
@@ -3649,10 +3918,9 @@ Thank you for your understanding.
                 const hour = c.time.split(':')[0];
                 const day = new Date(c.date + 'T12:00:00Z').toLocaleString('en-US', { weekday: 'long', timeZone: 'UTC' });
                 const slot = `${day}, ${hour}:00 - ${String(parseInt(hour)+1).padStart(2,'0')}:00`;
-                const bookingsCount = c.bookedBy ? Object.keys(c.bookedBy).length : 0;
-                timeSlots[slot] = (timeSlots[slot] || 0) + bookingsCount;
+                timeSlots[slot] = (timeSlots[slot] || 0) + (c.bookedBy ? Object.keys(c.bookedBy).length : 0);
             });
-            const peakTimes = Object.entries(timeSlots).sort((a,b) => b[1] - a[1]).slice(0,5);
+            const peakTimes = Object.entries(timeSlots).sort((a,b) => b[1] - a[1]).slice(0,5).map(([name, value]) => ({ name, value }));
             
             const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
@@ -3667,8 +3935,64 @@ Thank you for your understanding.
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', true)}
                     ${createRankingCard('Top Performing Tutors', tutorPopularity, 'Enrollments')}
-                    ${createRankingCard('Peak Time Slots', peakTimes.map(([name, value])=>({name, value})), 'Enrollments')}
+                    ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments')}
                 </div>`;
+
+            // Store the calculated data for the export function to use
+            currentStatsForExport = {
+                summary: [
+                    { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
+                    { Metric: 'Gross Revenue', Value: grossRevenue },
+                    { Metric: 'Net Revenue', Value: totalNetRevenue },
+                    { Metric: 'Total Enrollments', Value: totalBookings },
+                    { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
+                    { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
+                ],
+                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course', Name: item.name, Enrollments: item.value })),
+                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor', Name: item.name, Enrollments: item.value })),
+                peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time', Name: item.name, Enrollments: item.value }))
+            };
+        };
+
+        exportBtn.onclick = () => {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = 'Exporting...';
+
+            const { summary, coursePopularity, tutorPopularity, peakTimes } = currentStatsForExport;
+
+            if (!summary || summary.length === 0) {
+                showMessageBox('No statistics data to export.', 'info');
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
+                return;
+            }
+
+            // Combine all data into a single array, with blank rows for spacing.
+            const exportData = [
+                ...summary,
+                { Metric: '', Value: '' }, // Blank row
+                ...coursePopularity,
+                { Metric: '', Value: '' }, // Blank row
+                ...tutorPopularity,
+                { Metric: '', Value: '' }, // Blank row
+                ...peakTimes
+            ];
+
+            // The headers will be taken from the first object, so we manually set them
+            // to be generic to accommodate all sections.
+            const formattedExportData = exportData.map(item => ({
+                Category: item.Metric || item.Ranking || '',
+                Name: item.Value !== undefined ? item.Value : item.Name || '',
+                Value: item.Enrollments !== undefined ? item.Enrollments : ''
+            }));
+            
+            const periodText = periodSelect.options[periodSelect.selectedIndex].text.replace(/ /g, '-');
+            const fileName = `statistics-report_${periodText}`;
+            
+            exportToCsv(fileName, formattedExportData);
+
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
         };
 
         periodSelect.onchange = renderFilteredStats;
@@ -3791,6 +4115,10 @@ Thank you for your understanding.
                         <select id="coursesMonthFilter" class="form-select w-48"></select>
                         <select id="coursesSportTypeFilter" class="form-select w-48"></select>
                         <select id="coursesTutorFilter" class="form-select w-48"></select>
+                        <button id="exportCoursesBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Export
+                        </button>
                         <button id="addCourseBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
                     </div>
                 </div>
@@ -3819,7 +4147,6 @@ Thank you for your understanding.
         const addCourseBtn = container.querySelector('#addCourseBtn');
         const coursesTableBody = container.querySelector('#coursesTableBody');
 
-        // Fetch all courses ONCE to populate the month dropdown
         coursesTableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading available months...</td></tr>`;
         const allCoursesSnapshot = await database.ref('/courses').once('value');
         const allCourses = firebaseObjectToArray(allCoursesSnapshot.val());
@@ -3833,7 +4160,6 @@ Thank you for your understanding.
         
         populateSportTypeFilter(sportTypeFilter);
         
-        // Set initial filter values from app state or defaults
         if (appState.selectedFilters.coursesPeriod && periods.includes(appState.selectedFilters.coursesPeriod)) {
             monthFilter.value = appState.selectedFilters.coursesPeriod;
         } else if (periods.length > 0) {
@@ -3851,27 +4177,20 @@ Thank you for your understanding.
         const updateCoursesTable = () => {
             const coursesPaginationContainer = container.querySelector('#coursesPagination');
             const coursesCountEl = container.querySelector('#coursesCount');
-
             const selectedMonth = monthFilter.value;
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
-
-            // Filter the pre-fetched `allCourses` array instead of querying again
             let filteredCourses = allCourses.filter(c => c.date.startsWith(selectedMonth));
-            
             if (selectedSportType !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
             }
             if (selectedTutor !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.tutorId === selectedTutor);
             }
-
             coursesCountEl.textContent = `(${filteredCourses.length} added)`;
-
             const { key, direction } = appState.coursesSort;
             filteredCourses.sort((a, b) => {
                 let valA, valB;
-
                 switch (key) {
                     case 'date':
                         valA = new Date(`${a.date}T${a.time}`).getTime();
@@ -3881,17 +4200,14 @@ Thank you for your understanding.
                         valA = a.bookedBy ? Object.keys(a.bookedBy).length : 0;
                         valB = b.bookedBy ? Object.keys(b.bookedBy).length : 0;
                         break;
-                    default: // handles 'credits'
+                    default:
                         valA = a[key];
                         valB = b[key];
                 }
-                
                 if (valA < valB) return direction === 'asc' ? -1 : 1;
                 if (valA > valB) return direction === 'asc' ? 1 : -1;
                 return 0;
             });
-            
-            // --- ADD THIS RIGHT AFTER THE NEW SORTING BLOCK ---
             container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
                 icon.className = 'sort-icon';
             });
@@ -3899,14 +4215,11 @@ Thank you for your understanding.
             if (activeHeader) {
                 activeHeader.classList.add(direction);
             }
-            
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
             let page = appState.pagination.courses.page;
             if (page > totalPages) page = totalPages;
-
             const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage.courses, page * itemsPerPage.courses);
-
             let lastDate = null;
             coursesTableBody.innerHTML = paginatedCourses.map((course, index) => {
                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
@@ -3915,7 +4228,6 @@ Thank you for your understanding.
                 const bookingsCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
                 const isNewDay = course.date !== lastDate;
                 lastDate = course.date;
-
                 return `
                     <tr class="border-b border-slate-100 ${isNewDay && index > 0 ? 'day-divider' : ''}">
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
@@ -3931,19 +4243,16 @@ Thank you for your understanding.
                     </tr>
                 `;
             }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
-        
             renderPaginationControls(coursesPaginationContainer, page, totalPages, filteredCourses.length, itemsPerPage.courses, (newPage) => {
                 appState.pagination.courses.page = newPage;
                 updateCoursesTable();
             });
-
             coursesTableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
                 btn.onclick = () => {
                     const courseToEdit = allCourses.find(c => c.id === btn.dataset.id);
                     openCourseModal(courseToEdit.date, courseToEdit);
                 };
             });
-
             coursesTableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
                 btn.onclick = () => {
                     const courseId = btn.dataset.id;
@@ -3958,7 +4267,7 @@ Thank you for your understanding.
             appState.selectedFilters.coursesPeriod = monthFilter.value;
             appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
-            tutorFilter.value = 'all'; // Reset tutor filter when sport type changes
+            tutorFilter.value = 'all';
             appState.selectedFilters.coursesTutorId = 'all';
             updateCoursesTable();
         };
@@ -3975,7 +4284,48 @@ Thank you for your understanding.
             openCourseModal(defaultDateForNewCourse);
         };
         
-        // --- START: ADD THE NEW CODE BLOCK HERE ---
+        const exportBtn = container.querySelector('#exportCoursesBtn');
+        exportBtn.onclick = async () => {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = 'Exporting...';
+            const selectedMonth = monthFilter.value;
+            const selectedSportType = sportTypeFilter.value;
+            const selectedTutor = tutorFilter.value;
+            let coursesToExport = allCourses.filter(c => c.date.startsWith(selectedMonth));
+            if (selectedSportType !== 'all') {
+                coursesToExport = coursesToExport.filter(c => c.sportTypeId === selectedSportType);
+            }
+            if (selectedTutor !== 'all') {
+                coursesToExport = coursesToExport.filter(c => c.tutorId === selectedTutor);
+            }
+
+            // --- FIX: Sort the data before exporting ---
+            coursesToExport.sort((a, b) => {
+                const dateComparison = a.date.localeCompare(b.date);
+                if (dateComparison !== 0) return dateComparison;
+                return a.time.localeCompare(b.time);
+            });
+
+            const exportData = coursesToExport.map(course => {
+                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+                const tutor = appState.tutors.find(t => t.id === course.tutorId);
+                const timeRange = getTimeRange(course.time, course.duration).split(' - ');
+                return {
+                    Date: course.date,
+                    StartTime: timeRange[0] || '',
+                    EndTime: timeRange[1] || '',
+                    CourseName: sportType?.name || 'Unknown',
+                    TutorName: tutor?.name || 'Unknown',
+                    Credits: course.credits,
+                    BookedCount: course.bookedBy ? Object.keys(course.bookedBy).length : 0,
+                    Capacity: course.maxParticipants
+                };
+            });
+            exportToCsv('courses-export', exportData);
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
+        };
+
         container.querySelectorAll('th.sortable').forEach(header => {
             header.onclick = () => {
                 const newKey = header.dataset.sortKey;
@@ -3986,10 +4336,9 @@ Thank you for your understanding.
                     currentSort.key = newKey;
                     currentSort.direction = 'asc';
                 }
-                updateCoursesTable(); // Re-render the table body with new sort order
+                updateCoursesTable();
             };
         });
-        // --- END: ADD THE NEW CODE BLOCK HERE ---
 
         const tableContainer = container.querySelector('.table-swipe-container');
         let isDown = false, startX, scrollLeft;
@@ -3998,7 +4347,6 @@ Thank you for your understanding.
         tableContainer.addEventListener('mouseup', () => { isDown = false; tableContainer.classList.remove('swiping'); });
         tableContainer.addEventListener('mousemove', (e) => { if(!isDown) return; e.preventDefault(); const x = e.pageX - tableContainer.offsetLeft; const walk = (x - startX) * 2; tableContainer.scrollLeft = scrollLeft - walk; });
 
-        // Initial table render
         updateCoursesTable();
     }
 
