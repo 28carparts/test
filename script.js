@@ -1915,6 +1915,7 @@ Thank you for your understanding.
         
         const memberBookings = appState.courses.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => new Date(b.date) - new Date(a.date));
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
+        const paymentHistory = firebaseObjectToArray(member.paymentHistory);
 
         container.innerHTML = `
             <div class="w-full max-w-screen-lg mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -1943,16 +1944,41 @@ Thank you for your understanding.
                             <button id="changePasswordBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-lg transition">Change Password</button>
                         </div>
                     </div>
-                     ${!member.monthlyPlan ? `
+
+                    <!-- START: Conditional History Cards -->
+                    ${member.monthlyPlan ? `
                     <div class="card p-6 mt-8">
-                         <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Purchase History</h4>
+                        <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Payment History</h4>
+                        <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
+                            ${paymentHistory.length > 0
+                                ? paymentHistory
+                                    .filter(p => p.status !== 'deleted')
+                                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                                    .map(p => {
+                                        let auditMessage = '';
+                                        if (p.lastModifiedBy) {
+                                            const action = (p.date === p.lastModifiedAt ? 'Added' : 'Edited');
+                                            auditMessage = `<span class="text-xs text-slate-500 mt-1">${action} by ${p.lastModifiedBy} on ${formatShortDateWithYear(p.lastModifiedAt)}</span>`;
+                                        }
+                                        return `
+                                            <div class="text-slate-600 bg-slate-50 p-2 rounded-md">
+                                                <div><strong>${formatShortDateWithYear(p.date)}:</strong> ${formatCurrency(p.amount)} for ${p.monthsPaid} ${p.monthsPaid === 1 ? 'month' : 'months'}</div>
+                                                ${auditMessage}
+                                            </div>
+                                        `;
+                                    }).join('')
+                                : '<p class="text-sm text-slate-500 text-center">No payment history.</p>'
+                            }
+                        </div>
+                    </div>` : `
+                    <div class="card p-6 mt-8">
+                        <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Purchase History</h4>
                         <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
                             ${purchaseHistory.length > 0 
                                 ? purchaseHistory
-                                    .filter(p => p.status !== 'deleted') // <-- Filter out deleted items
+                                    .filter(p => p.status !== 'deleted')
                                     .sort((a,b) => new Date(b.date) - new Date(a.date))
                                     .map(p => {
-                                        // --- START: New rendering logic for member view ---
                                         let auditMessage = '';
                                         if (p.lastModifiedBy) {
                                             const action = (p.date === p.lastModifiedAt ? 'Added' : 'Edited');
@@ -1964,12 +1990,12 @@ Thank you for your understanding.
                                                 ${auditMessage}
                                             </div>
                                         `;
-                                        // --- END: New rendering logic for member view ---
                                     }).join('') 
                                 : '<p class="text-sm text-slate-500 text-center">No purchase history.</p>'
                             }
                         </div>
-                    </div>` : ''}
+                    </div>`}
+                    <!-- END: Conditional History Cards -->
                 </div>
                 <div class="md:col-span-2">
                     <div class="card p-6">
@@ -2005,20 +2031,16 @@ Thank you for your understanding.
             };
         });
 
-        // --- START: New logic for scrolling to booking ---
         if (appState.highlightBookingId) {
             const elementToScrollTo = container.querySelector(`[data-course-id="${appState.highlightBookingId}"]`);
             if (elementToScrollTo) {
-                // This scrolls the element to the vertical center of the scrollable area
                 elementToScrollTo.scrollIntoView({
                     behavior: 'smooth',
                     block: 'center'
                 });
             }
-            // Reset the state so it doesn't scroll again on refresh
             appState.highlightBookingId = null;
         }
-        // --- END: New logic for scrolling to booking ---
 
         container.querySelector('#editProfileBtn').onclick = () => openEditMemberAccountModal(member);
         container.querySelector('#changePasswordBtn').onclick = () => openChangePasswordModal();
