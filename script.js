@@ -1283,19 +1283,15 @@ Thank you for your understanding.
     }
 
     function openNumericDialModal(title, currentValue, min, max, onConfirm) {
-        // Find the placeholder in the DOM, now added to the cache
         const modalContainer = DOMElements.numericDialModal;
         if (!modalContainer) return;
 
-        // 1. Generate the list of number options
         let optionsHTML = '';
         for (let i = min; i <= max; i++) {
             const isSelected = (i === currentValue);
             optionsHTML += `<div class="dial-option ${isSelected ? 'selected' : ''}" data-value="${i}">${i}</div>`;
         }
 
-        // 2. Build the modal's inner HTML
-        // --- THE FIX IS HERE: We've added the "modal-content" class ---
         modalContainer.innerHTML = `
             <div class="numeric-dial-modal-content modal-content">
                 <div class="dial-header">
@@ -1308,25 +1304,57 @@ Thank you for your understanding.
                 </div>
             </div>`;
             
-        const modalContent = modalContainer.querySelector('.numeric-dial-modal-content');
         const optionsContainer = modalContainer.querySelector('.dial-options-container');
         let selectedValue = currentValue;
+        let debounceTimer;
 
-        // 3. Handle clicks on number options
+        // --- START: NEW SCROLL-BASED SELECTION LOGIC ---
+        optionsContainer.addEventListener('scroll', () => {
+            // Clear the previous timer
+            clearTimeout(debounceTimer);
+
+            // Set a new timer to run the logic after scrolling has stopped
+            debounceTimer = setTimeout(() => {
+                const containerRect = optionsContainer.getBoundingClientRect();
+                const containerCenter = containerRect.top + (containerRect.height / 2);
+
+                let closestElement = null;
+                let minDistance = Infinity;
+
+                // Find the option element closest to the container's center
+                optionsContainer.querySelectorAll('.dial-option').forEach(option => {
+                    const optionRect = option.getBoundingClientRect();
+                    const optionCenter = optionRect.top + (optionRect.height / 2);
+                    const distance = Math.abs(containerCenter - optionCenter);
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestElement = option;
+                    }
+                });
+
+                // If we found a closest element, select it
+                if (closestElement) {
+                    selectedValue = parseInt(closestElement.dataset.value);
+                    if (!closestElement.classList.contains('selected')) {
+                        optionsContainer.querySelector('.selected')?.classList.remove('selected');
+                        closestElement.classList.add('selected');
+                        // Smoothly snap the selected item to the center
+                        closestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }, 150); // 150ms delay is a good balance
+        });
+        // --- END: NEW SCROLL-BASED SELECTION LOGIC ---
+
+        // The user can still tap an option for a quick jump
         optionsContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.dial-option');
-            if (!target) return;
-
-            // Update the visual selection
-            optionsContainer.querySelector('.selected')?.classList.remove('selected');
-            target.classList.add('selected');
-            selectedValue = parseInt(target.dataset.value);
-            
-            // Scroll the newly selected item into view
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         });
 
-        // 4. Handle Done/Cancel buttons
         modalContainer.querySelector('.confirm-btn').onclick = () => {
             onConfirm(selectedValue);
             closeModal(modalContainer);
@@ -1335,7 +1363,6 @@ Thank you for your understanding.
             closeModal(modalContainer);
         };
 
-        // 5. Open the modal and scroll to the initial value
         openModal(modalContainer);
         const initialSelected = optionsContainer.querySelector('.selected');
         if (initialSelected) {
