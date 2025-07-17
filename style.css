@@ -395,3 +395,45 @@ th.sortable:hover .sort-icon {
     -webkit-appearance: none;
     margin: 0;
 }
+
+/* --- Custom Numeric Dial Modal --- */
+.numeric-dial-modal-content {
+    background-color: #f8fafc; /* slate-50 */
+    width: 100%;
+    max-height: 50vh; /* Limit height to 50% of viewport */
+    border-top-left-radius: 1.5rem; /* 24px */
+    border-top-right-radius: 1.5rem;
+    box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    /* Start off-screen */
+    transform: translateY(100%);
+}
+.numeric-dial-modal-content.open {
+    /* Slide into view */
+    transform: translateY(0);
+}
+.dial-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dial-options-container {
+    overflow-y: scroll;
+    padding: 0.5rem 0;
+    -webkit-overflow-scrolling: touch; /* For smooth momentum scrolling on iOS */
+}
+.dial-option {
+    padding: 0.75rem 1.5rem;
+    text-align: center;
+    font-size: 1.25rem; /* 20px */
+    color: #475569; /* slate-600 */
+    cursor: pointer;
+}
+.dial-option.selected {
+    color: #4f46e5; /* indigo-600 */
+    font-weight: 700;
+}
