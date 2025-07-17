@@ -1498,9 +1498,11 @@ Thank you for your understanding.
             memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
         
-        // --- MODIFIED: The HTML generation no longer uses window.matchMedia. It renders a single, consistent structure. ---
         const participantCounterHTML = isOwner
-            ? createParticipantCounter(currentBookings, course.maxParticipants, false, true) // Always render the editable version
+            ? (window.matchMedia('(any-pointer: fine)').matches
+                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
+                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}</div>`
+            )
             : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
 
         el.innerHTML = `
@@ -1517,8 +1519,13 @@ Thank you for your understanding.
             </div>
             <div class="mt-2 flex justify-between items-center">
                 ${isOwner
-                    // MODIFIED: Always render the editable <p> tag for owners. The event listener will handle the logic.
-                    ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot-editable">${getTimeRange(course.time, course.duration)}</p>`
+                    ? (window.matchMedia('(any-pointer: fine)').matches
+                        ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot time-slot-editable">${getTimeRange(course.time, course.duration)}</p>`
+                        : `<div class="relative inline-block">
+                               <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md">${getTimeRange(course.time, course.duration)}</p>
+                               <input type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${course.time}" />
+                           </div>`
+                    )
                     : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
                 }
                 ${isOwner 
@@ -1530,8 +1537,7 @@ Thank you for your understanding.
             </div>`;
 
         el.addEventListener('click', (e) => {
-            // --- MODIFIED: Simplified the condition by removing dial-trigger ---
-            if (!e.target.closest('button') && !e.target.closest('.time-slot-editable') && !e.target.closest('.participant-counter-editable')) {
+            if (!e.target.closest('button') && !e.target.closest('.time-slot-editable') && !e.target.closest('.participant-counter-editable') && !e.target.closest('.participant-dial-trigger')) {
                 mainAction();
             }
         });
@@ -1542,55 +1548,18 @@ Thank you for your understanding.
                 openCourseModal(course.date, course);
             };
             
-            // --- START OF NEW LOGIC FOR SMART EVENT HANDLING ---
             const timeSlotEl = el.querySelector('.time-slot-editable');
             if (timeSlotEl) {
                 let localCourseTime = course.time;
                 
-                // This is the new "smart" click listener.
                 timeSlotEl.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    
-                    // Check the pointer type that initiated the event.
-                    if (e.pointerType === 'mouse') {
-                        // MOUSE-CLICK: Activate inline wheel-editing mode.
-                        document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => {
-                            if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
-                        });
-                        timeSlotEl.classList.toggle('editing');
-                    } else {
-                        // TOUCH/PEN/OTHER: Programmatically create and open the native time picker.
-                        const timeInput = document.createElement('input');
-                        timeInput.type = 'time';
-                        timeInput.value = course.time;
-                        timeInput.style.position = 'absolute';
-                        timeInput.style.left = '-9999px'; // Hide it off-screen
-                        document.body.appendChild(timeInput);
-
-                        timeInput.addEventListener('change', () => {
-                            saveSchedulePosition();
-                            database.ref(`/courses/${course.id}/time`).set(timeInput.value);
-                            document.body.removeChild(timeInput); // Clean up
-                        });
-                        
-                        timeInput.addEventListener('blur', () => {
-                            // Clean up if the user cancels the picker by tapping away.
-                           if (document.body.contains(timeInput)) {
-                               document.body.removeChild(timeInput);
-                           }
-                        });
-
-                        // Modern way to open the picker programmatically.
-                        if (typeof timeInput.showPicker === 'function') {
-                            timeInput.showPicker();
-                        } else {
-                            // Fallback for older browsers.
-                            timeInput.click();
-                        }
-                    }
+                    document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => {
+                        if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
+                    });
+                    timeSlotEl.classList.toggle('editing');
                 });
 
-                // The wheel listener remains, but it only works if the element has the 'editing' class.
                 let timeChangeDebounce;
                 timeSlotEl.addEventListener('wheel', (e) => {
                     if (!timeSlotEl.classList.contains('editing')) return;
@@ -1611,31 +1580,23 @@ Thank you for your understanding.
                 });
             }
 
+            const timeInput = el.querySelector('input[type="time"]');
+            if (timeInput) {
+                timeInput.addEventListener('click', (e) => e.stopPropagation());
+                timeInput.addEventListener('change', () => {
+                    let timeChangeDebounce;
+                    clearTimeout(timeChangeDebounce);
+                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/time`).set(timeInput.value); }, 1500);
+                });
+            }
+
             const participantCounterEl = el.querySelector('.participant-counter-editable');
             if (participantCounterEl) {
-                // New "smart" click listener for the participant counter.
                 participantCounterEl.addEventListener('click', (e) => {
                     e.stopPropagation();
-
-                    if (e.pointerType === 'mouse') {
-                        // MOUSE-CLICK: Activate inline wheel-editing mode.
-                        document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => { if (otherEl !== participantCounterEl) otherEl.classList.remove('editing'); });
-                        participantCounterEl.classList.toggle('editing');
-                    } else {
-                        // TOUCH/PEN/OTHER: Open the custom numeric dial modal.
-                        openNumericDialModal(
-                            'Set Max Participants',
-                            course.maxParticipants,
-                            1, 100,
-                            (newMax) => {
-                                saveSchedulePosition();
-                                database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
-                            }
-                        );
-                    }
+                    document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => { if (otherEl !== participantCounterEl) otherEl.classList.remove('editing'); });
+                    participantCounterEl.classList.toggle('editing');
                 });
-
-                // The wheel listener remains, only firing when 'editing'.
                 let maxPartChangeDebounce;
                 participantCounterEl.addEventListener('wheel', (e) => {
                     if (!participantCounterEl.classList.contains('editing')) return;
@@ -1647,7 +1608,22 @@ Thank you for your understanding.
                     maxPartChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/maxParticipants`).set(localMaxParticipants); }, 1500);
                 });
             }
-            // --- END OF NEW LOGIC FOR SMART EVENT HANDLING ---
+
+            const participantDialTrigger = el.querySelector('.participant-dial-trigger');
+            if (participantDialTrigger) {
+                participantDialTrigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openNumericDialModal(
+                        'Set Max Participants',
+                        course.maxParticipants,
+                        1, 100,
+                        (newMax) => {
+                            saveSchedulePosition();
+                            database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
+                        }
+                    );
+                });
+            }
 
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
             const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
