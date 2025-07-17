@@ -1332,7 +1332,7 @@ Thank you for your understanding.
         });
     }
 
-    function createParticipantCounter(current, max, shouldPulse = false) {
+    function createParticipantCounter(current, max, shouldPulse = false, isEditable = false) {
         const fillRate = max > 0 ? current / max : 0;
         
         let statusClass = 'status-low';
@@ -1343,10 +1343,11 @@ Thank you for your understanding.
         } else if (fillRate >= 0.5) {
             statusClass = 'status-medium';
         }
+        
+        const editableClass = isEditable ? 'participant-counter-editable' : '';
 
-        // Add the 'new-booking-pulse' class conditionally based on the new argument.
         return `
-            <div class="participant-counter ${statusClass} ${shouldPulse ? 'new-booking-pulse' : ''}" title="${current} of ${max} spots filled">
+            <div class="participant-counter ${statusClass} ${editableClass} ${shouldPulse ? 'new-booking-pulse' : ''}" title="${current} of ${max} spots filled">
                 ${current}/${max}
             </div>
         `;
@@ -1384,8 +1385,6 @@ Thank you for your understanding.
             actionButton = `<button class="edit-course-btn absolute top-2 right-2 opacity-60 hover:opacity-100 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
             mainAction = () => { 
                 if (!appState.copyMode.active) {
-                    // Instead of using the 'course' object from the closure (which might be stale),
-                    // find the latest version of the course from our always-up-to-date appState.
                     const freshCourseData = appState.courses.find(c => c.id === course.id);
                     openJoinedMembersModal(freshCourseData);
                 } 
@@ -1410,7 +1409,15 @@ Thank you for your understanding.
             memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
 
-        const participantCounterHTML = createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId);
+        const participantCounterHTML = isOwner
+            ? (window.matchMedia('(any-pointer: fine)').matches
+                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
+                : `<div class="relative inline-block">
+                       ${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}
+                       <input type="number" class="participant-input-overlay" value="${course.maxParticipants}" min="1" max="100" />
+                   </div>`
+            )
+            : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
 
         el.innerHTML = `
             <div>
@@ -1427,15 +1434,12 @@ Thank you for your understanding.
             <div class="mt-2 flex justify-between items-center">
                 ${isOwner
                     ? (window.matchMedia('(any-pointer: fine)').matches
-                        // Desktop: Render the div for mouse wheel interaction
                         ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot time-slot-editable">${getTimeRange(course.time, course.duration)}</p>`
-                        // Mobile: Render a wrapper with a transparent input overlay
                         : `<div class="relative inline-block">
                                <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md">${getTimeRange(course.time, course.duration)}</p>
                                <input type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${course.time}" />
                            </div>`
                     )
-                    // Not owner: Just display the time range text
                     : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
                 }
                 ${isOwner 
@@ -1447,7 +1451,7 @@ Thank you for your understanding.
             </div>`;
 
         el.addEventListener('click', (e) => {
-            if (!e.target.closest('button') && !e.target.classList.contains('time-slot-editable')) {
+            if (!e.target.closest('button') && !e.target.closest('.time-slot-editable') && !e.target.closest('.participant-counter-editable')) {
                 mainAction();
             }
         });
@@ -1458,14 +1462,13 @@ Thank you for your understanding.
                 openCourseModal(course.date, course);
             };
             
-            // --- Attach listener for DESKTOP mouse wheel editing ---
             const timeSlotEl = el.querySelector('.time-slot-editable');
             if (timeSlotEl) {
                 let localCourseTime = course.time;
                 
                 timeSlotEl.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.time-slot-editable.editing').forEach(otherEl => {
+                    document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => {
                         if (otherEl !== timeSlotEl) otherEl.classList.remove('editing');
                     });
                     timeSlotEl.classList.toggle('editing');
@@ -1479,6 +1482,7 @@ Thank you for your understanding.
                     const [hours, minutes] = localCourseTime.split(':').map(Number);
                     let totalMinutes = hours * 60 + minutes;
                     
+                    // --- CORRECTED LOGIC: Adjust by 15-minute increments ---
                     if (e.deltaY < 0) totalMinutes -= 15;
                     else totalMinutes += 15;
 
@@ -1499,19 +1503,12 @@ Thank you for your understanding.
                 });
             }
 
-            // --- Attach listener for MOBILE native time input ---
             const timeInput = el.querySelector('input[type="time"]');
             if (timeInput) {
-                let timeChangeDebounce; // A timer for this specific course block
-
-                // Prevent the click from bubbling up to the main course block, which opens the modal.
                 timeInput.addEventListener('click', (e) => e.stopPropagation());
-
                 timeInput.addEventListener('change', () => {
-                    // Clear any previous timer to reset the delay
+                    let timeChangeDebounce;
                     clearTimeout(timeChangeDebounce);
-
-                    // Set a new timer to save the changes after a 2-second pause
                     timeChangeDebounce = setTimeout(() => {
                         saveSchedulePosition();
                         database.ref(`/courses/${course.id}/time`).set(timeInput.value);
@@ -1519,14 +1516,54 @@ Thank you for your understanding.
                 });
             }
 
+            const participantCounterEl = el.querySelector('.participant-counter-editable');
+            if (participantCounterEl) {
+                participantCounterEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => { if (otherEl !== participantCounterEl) otherEl.classList.remove('editing'); });
+                    participantCounterEl.classList.toggle('editing');
+                });
+
+                let maxPartChangeDebounce;
+                participantCounterEl.addEventListener('wheel', (e) => {
+                    if (!participantCounterEl.classList.contains('editing')) return;
+                    e.preventDefault();
+                    
+                    let localMaxParticipants = parseInt(participantCounterEl.textContent.split('/')[1]);
+                    
+                    if (e.deltaY < 0) {
+                        localMaxParticipants++;
+                    } else {
+                        localMaxParticipants = Math.max(1, localMaxParticipants - 1);
+                    }
+
+                    participantCounterEl.textContent = `${currentBookings}/${localMaxParticipants}`;
+                    
+                    clearTimeout(maxPartChangeDebounce);
+                    maxPartChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        database.ref(`/courses/${course.id}/maxParticipants`).set(localMaxParticipants);
+                    }, 1500);
+                });
+            }
+
+            const participantInput = el.querySelector('.participant-input-overlay');
+            if (participantInput) {
+                participantInput.addEventListener('click', (e) => e.stopPropagation());
+                let maxPartChangeDebounce;
+                participantInput.addEventListener('change', () => {
+                    clearTimeout(maxPartChangeDebounce);
+                    const newMax = Math.max(1, parseInt(participantInput.value) || 1);
+                    maxPartChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
+                    }, 1500);
+                });
+            }
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
             const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
             if (cancelButton) {
-                cancelButton.onclick = (e) => {
-                    e.stopPropagation();
-                    saveSchedulePosition();
-                    handleCancelBooking(course);
-                };
+                cancelButton.onclick = (e) => { e.stopPropagation(); saveSchedulePosition(); handleCancelBooking(course); };
                 cancelButton.onmouseenter = () => cancelButton.textContent = cancelButton.dataset.cancelText;
                 cancelButton.onmouseleave = () => cancelButton.textContent = cancelButton.dataset.bookedText;
             }
@@ -2787,7 +2824,7 @@ Thank you for your understanding.
                                     </div>
                                     <div class="flex-grow">
                                         <label for="paymentAmount" class="block text-slate-600 text-sm font-semibold mb-1">Payment Amount ($)</label>
-                                        <input type="text" id="paymentAmount" class="form-input bg-slate-100" readonly>
+                                        <input type="number" id="paymentAmount" class="form-input" min="0" step="0.01">
                                     </div>
                                     <button type="button" id="paymentActionBtn" class="font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white"></button>
                                 </div>
@@ -2854,19 +2891,23 @@ Thank you for your understanding.
 
         form.querySelectorAll('.due-date-quick-select-btn').forEach(btn => {
             btn.onclick = () => {
-                const startDateString = planStartDateInput.value;
-                if (!startDateString) {
+                const planStartDateString = planStartDateInput.value;
+                const baseDateString = memberToEdit.paymentDueDate || planStartDateString;
+
+                if (!baseDateString) {
                     showMessageBox('Please set a Plan Start Date first.', 'info');
                     return;
                 }
-                const startDate = new Date(startDateString + 'T12:00:00Z');
-                if (isNaN(startDate.getTime())) {
-                    showMessageBox('Invalid Plan Start Date.', 'error');
+
+                const baseDate = new Date(baseDateString + 'T12:00:00Z');
+                if (isNaN(baseDate.getTime())) {
+                    showMessageBox('Invalid base date for calculation.', 'error');
                     return;
                 }
+
                 const monthsToAdd = parseInt(btn.dataset.months);
                 if (!isNaN(monthsToAdd)) {
-                    const newDueDate = new Date(startDate.getUTCFullYear(), startDate.getUTCMonth() + monthsToAdd, startDate.getUTCDate());
+                    const newDueDate = new Date(baseDate.getUTCFullYear(), baseDate.getUTCMonth() + monthsToAdd, baseDate.getUTCDate());
                     paymentDueDateInput.value = getIsoDate(newDueDate);
                 }
             };
@@ -2928,6 +2969,7 @@ Thank you for your understanding.
             const monthlyAmount = parseFloat(monthlyPlanAmountInput.value) || 0;
             paymentAmountInput.value = (months * monthlyAmount).toFixed(2);
         };
+        // CRITICAL FIX: Attach the listener to both inputs to ensure real-time calculation.
         monthsPaidInput.oninput = autoCalculatePayment;
         monthlyPlanAmountInput.addEventListener('input', autoCalculatePayment);
 
@@ -2957,6 +2999,8 @@ Thank you for your understanding.
 
             if (isNaN(monthsPaid) || monthsPaid <= 0) { showMessageBox('Please enter a valid number of months paid.', 'error'); return; }
             if ((parseFloat(monthlyPlanAmountInput.value) || 0) <= 0) { showMessageBox('A Monthly Amount must be set to log a payment.', 'error'); return; }
+            if (isNaN(amount) || amount < 0) { showMessageBox('Please enter a valid payment amount.', 'error'); return; }
+
 
             if (historyId) { // Update
                 const entryUpdate = { monthsPaid, amount, lastModifiedBy: appState.currentUser.name, lastModifiedAt: new Date().toISOString() };
