@@ -4275,9 +4275,9 @@ Thank you for your understanding.
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#4f46e5', true)}
+                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#6366f1', true)}
                     ${createRankingCard('Top Earning Courses', topCoursesByRevenue, 'Revenue', '#22c55e', true)}
-                    ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#4f46e5')}
+                    ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#6366f1')}
                     ${createRankingCard('Top Tutors by Revenue', topTutorsByRevenue, 'Revenue', '#22c55e')}
                     ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments', '#f97316')}
                     ${createRankingCard('Low Time Slots', lowTimes, 'Enrollments', '#f97316')}
