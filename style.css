@@ -403,16 +403,29 @@ th.sortable:hover .sort-icon {
     max-height: 50vh;
     border-top-left-radius: 1.5rem;
     border-top-right-radius: 1.5rem;
-    border-bottom-left-radius: 1.5rem; /* Add this line */
-    border-bottom-right-radius: 1.5rem; /* Add this line */
+    border-bottom-left-radius: 1.5rem;
+    border-bottom-right-radius: 1.5rem;
     box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    /*transform: translateY(100%);*/
-    overflow: hidden; /* This is important to ensure the child elements respect the rounded corners */
+    overflow: hidden;
+    
+    /* --- START: Pop-up Animation Properties --- */
+    
+    /* 1. This makes the animation smooth and slow. 0.4s is a nice, gentle speed. */
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+    /* 2. This is the INITIAL (hidden) state. */
+    opacity: 0;
+    transform: scale(0.95);
+
+    /* --- END: Pop-up Animation Properties --- */
 }
+
 .numeric-dial-modal-content.open {
-    transform: translateY(0);
+     /* This is the FINAL (visible) state. */
+     opacity: 1;
+     transform: scale(1);
 }
 .dial-header {
     padding: 1rem 1.5rem;
