@@ -403,10 +403,13 @@ th.sortable:hover .sort-icon {
     max-height: 50vh;
     border-top-left-radius: 1.5rem;
     border-top-right-radius: 1.5rem;
+    border-bottom-left-radius: 1.5rem; /* Add this line */
+    border-bottom-right-radius: 1.5rem; /* Add this line */
     box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
     transform: translateY(100%);
+    overflow: hidden; /* This is important to ensure the child elements respect the rounded corners */
 }
 .numeric-dial-modal-content.open {
     transform: translateY(0);
