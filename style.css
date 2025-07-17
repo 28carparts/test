@@ -413,7 +413,7 @@ th.sortable:hover .sort-icon {
     /* --- START: Pop-up Animation Properties --- */
     
     /* 1. This makes the animation smooth and slow. 0.4s is a nice, gentle speed. */
-    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
 
     /* 2. This is the INITIAL (hidden) state. */
     opacity: 0;
