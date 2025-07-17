@@ -108,6 +108,7 @@ document.addEventListener('DOMContentLoaded', function() {
         memberBookingHistoryModal: document.getElementById('memberBookingHistoryModal'),
         deleteCourseNotifyModal: document.getElementById('deleteCourseNotifyModal'),
         filterModal: document.getElementById('filterModal'),
+        numericDialModal: document.getElementById('numericDialModal'),
         cancelCopyBtn: document.getElementById('cancelCopyBtn')
     };
 
@@ -1281,6 +1282,66 @@ Thank you for your understanding.
         openModal(modal);
     }
 
+    function openNumericDialModal(title, currentValue, min, max, onConfirm) {
+        // Find the placeholder in the DOM, now added to the cache
+        const modalContainer = DOMElements.numericDialModal;
+        if (!modalContainer) return;
+
+        // 1. Generate the list of number options
+        let optionsHTML = '';
+        for (let i = min; i <= max; i++) {
+            const isSelected = (i === currentValue);
+            optionsHTML += `<div class="dial-option ${isSelected ? 'selected' : ''}" data-value="${i}">${i}</div>`;
+        }
+
+        // 2. Build the modal's inner HTML
+        modalContainer.innerHTML = `
+            <div class="numeric-dial-modal-content scale-95 opacity-0">
+                <div class="dial-header">
+                    <button type="button" class="cancel-btn text-lg text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
+                    <h3 class="text-lg font-bold text-slate-800">${title}</h3>
+                    <button type="button" class="confirm-btn text-lg text-indigo-600 hover:text-indigo-800 font-bold">Done</button>
+                </div>
+                <div class="dial-options-container">
+                    ${optionsHTML}
+                </div>
+            </div>`;
+            
+        const modalContent = modalContainer.querySelector('.numeric-dial-modal-content');
+        const optionsContainer = modalContainer.querySelector('.dial-options-container');
+        let selectedValue = currentValue;
+
+        // 3. Handle clicks on number options
+        optionsContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('.dial-option');
+            if (!target) return;
+
+            // Update the visual selection
+            optionsContainer.querySelector('.selected')?.classList.remove('selected');
+            target.classList.add('selected');
+            selectedValue = parseInt(target.dataset.value);
+            
+            // Scroll the newly selected item into view
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        // 4. Handle Done/Cancel buttons
+        modalContainer.querySelector('.confirm-btn').onclick = () => {
+            onConfirm(selectedValue);
+            closeModal(modalContainer);
+        };
+        modalContainer.querySelector('.cancel-btn').onclick = () => {
+            closeModal(modalContainer);
+        };
+
+        // 5. Open the modal and scroll to the initial value
+        openModal(modalContainer);
+        const initialSelected = optionsContainer.querySelector('.selected');
+        if (initialSelected) {
+            initialSelected.scrollIntoView({ block: 'center' });
+        }
+    }
+
     function handleCourseFormSubmit(e) {
         e.preventDefault();
         saveSchedulePosition();
@@ -1409,11 +1470,10 @@ Thank you for your understanding.
             memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
         
-        // On mobile, the participant counter is now a div that we will attach a click listener to.
         const participantCounterHTML = isOwner
             ? (window.matchMedia('(any-pointer: fine)').matches
-                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true) // Desktop editable div
-                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}</div>` // Mobile trigger div
+                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
+                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}</div>`
             )
             : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
 
@@ -1521,57 +1581,21 @@ Thank you for your understanding.
                 });
             }
 
-            // --- START: NEW DIAL PICKER LOGIC FOR MOBILE ---
             const participantDialTrigger = el.querySelector('.participant-dial-trigger');
             if (participantDialTrigger) {
                 participantDialTrigger.addEventListener('click', (e) => {
                     e.stopPropagation();
-
-                    // 1. Create a temporary, invisible <select> element
-                    const selectEl = document.createElement('select');
-                    selectEl.style.position = 'absolute';
-                    selectEl.style.opacity = '0';
-                    selectEl.style.width = '1px';
-                    selectEl.style.height = '1px';
-
-                    // 2. Populate it with options (e.g., 1 to 100)
-                    for (let i = 1; i <= 100; i++) {
-                        const option = document.createElement('option');
-                        option.value = i;
-                        option.textContent = i;
-                        if (i === course.maxParticipants) {
-                            option.selected = true;
-                        }
-                        selectEl.appendChild(option);
-                    }
-
-                    // 3. Append to the body and listen for changes
-                    document.body.appendChild(selectEl);
-                    
-                    selectEl.addEventListener('change', () => {
-                        const newMax = parseInt(selectEl.value);
-                        if (!isNaN(newMax)) {
+                    openNumericDialModal(
+                        'Set Max Participants',
+                        course.maxParticipants,
+                        1, 100,
+                        (newMax) => {
                             saveSchedulePosition();
                             database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
                         }
-                        // 6. Clean up by removing the element
-                        document.body.removeChild(selectEl);
-                    });
-
-                    // This event fires if the user cancels the picker without choosing
-                    selectEl.addEventListener('blur', () => {
-                         if(document.body.contains(selectEl)) {
-                            document.body.removeChild(selectEl);
-                         }
-                    });
-
-                    // 4. Programmatically "click" the select to open the native dial
-                    // We use `dispatchEvent` for better cross-browser compatibility
-                    const clickEvent = new MouseEvent('mousedown');
-                    selectEl.dispatchEvent(clickEvent);
+                    );
                 });
             }
-            // --- END: NEW DIAL PICKER LOGIC FOR MOBILE ---
 
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
             const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
