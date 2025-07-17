@@ -1412,10 +1412,12 @@ Thank you for your understanding.
         const participantCounterHTML = isOwner
             ? (window.matchMedia('(any-pointer: fine)').matches
                 ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
+                // --- START: MODIFICATION FOR NUMERIC KEYPAD ---
                 : `<div class="relative inline-block">
                        ${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}
-                       <input type="number" class="participant-input-overlay" value="${course.maxParticipants}" min="1" max="100" />
+                       <input type="number" inputmode="numeric" pattern="[0-9]*" class="participant-input-overlay" value="${course.maxParticipants}" min="1" max="100" />
                    </div>`
+                // --- END: MODIFICATION FOR NUMERIC KEYPAD ---
             )
             : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
 
@@ -1482,7 +1484,6 @@ Thank you for your understanding.
                     const [hours, minutes] = localCourseTime.split(':').map(Number);
                     let totalMinutes = hours * 60 + minutes;
                     
-                    // --- CORRECTED LOGIC: Adjust by 15-minute increments ---
                     if (e.deltaY < 0) totalMinutes -= 15;
                     else totalMinutes += 15;
 
