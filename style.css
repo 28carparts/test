@@ -400,22 +400,20 @@ th.sortable:hover .sort-icon {
 .numeric-dial-modal-content {
     background-color: #f8fafc; /* slate-50 */
     width: 100%;
-    max-height: 50vh; /* Limit height to 50% of viewport */
-    border-top-left-radius: 1.5rem; /* 24px */
+    max-height: 50vh;
+    border-top-left-radius: 1.5rem;
     border-top-right-radius: 1.5rem;
     box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    /* Start off-screen */
     transform: translateY(100%);
 }
 .numeric-dial-modal-content.open {
-    /* Slide into view */
     transform: translateY(0);
 }
 .dial-header {
     padding: 1rem 1.5rem;
-    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+    border-bottom: 1px solid #e2e8f0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -424,54 +422,34 @@ th.sortable:hover .sort-icon {
 .dial-options-container {
     overflow-y: scroll;
     padding: 0.5rem 0;
-    -webkit-overflow-scrolling: touch; /* For smooth momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
 }
 .dial-option {
     padding: 0.75rem 1.5rem;
     text-align: center;
     font-size: 1.25rem; /* 20px */
-    color: #475569; /* slate-600 */
+    color: #94a3b8; /* slate-400 */
+    font-weight: 500;
     cursor: pointer;
+    transition: all 0.2s ease-in-out;
 }
 .dial-option.selected {
     color: #4f46e5; /* indigo-600 */
     font-weight: 700;
+    font-size: 1.875rem; /* 30px, makes the selected number larger */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-/* --- Visual Indicator for Custom Dial --- */
-.numeric-dial-modal-content {
-    /* This establishes the positioning context for our indicators */
-    position: relative;
-}
-
-/* Create the < and > indicators using pseudo-elements */
-.numeric-dial-modal-content::before,
-.numeric-dial-modal-content::after {
-    /* This is what creates the > and < characters */
+/* Add the indicators to the selected item itself */
+.dial-option.selected::before,
+.dial-option.selected::after {
     content: '<';
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 2rem; /* 32px */
+    font-size: 1.5rem; /* 24px */
     font-weight: 700;
-    color: #4f46e5; /* indigo-600 */
-    opacity: 0.5;
-    z-index: 10; /* Ensure indicators are on top of the scrolling numbers */
-    pointer-events: none; /* Make them unclickable so they don't interfere with scrolling */
+    color: #818cf8; /* indigo-400 */
+    margin: 0 0.75rem; /* 12px margin on left and right */
 }
-
-/* Position the left indicator (<) */
-.numeric-dial-modal-content::before {
-    left: 1.5rem; /* 24px */
-}
-
-/* Position the right indicator (>) */
-.numeric-dial-modal-content::after {
+.dial-option.selected::after {
     content: '>';
-    right: 1.5rem; /* 24px */
-}
-
-/* Add some horizontal padding to the number list so text doesn't scroll under the indicators */
-.dial-options-container {
-    padding-left: 4.5rem;
-    padding-right: 4.5rem;
 }
