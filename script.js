@@ -1295,8 +1295,9 @@ Thank you for your understanding.
         }
 
         // 2. Build the modal's inner HTML
+        // --- THE FIX IS HERE: We've added the "modal-content" class ---
         modalContainer.innerHTML = `
-            <div class="numeric-dial-modal-content scale-95 opacity-0">
+            <div class="numeric-dial-modal-content modal-content">
                 <div class="dial-header">
                     <button type="button" class="cancel-btn text-lg text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
                     <h3 class="text-lg font-bold text-slate-800">${title}</h3>
