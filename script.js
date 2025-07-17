@@ -4190,7 +4190,6 @@ Thank you for your understanding.
         const periods = { 'Last 7 Days': 7, 'Last 30 Days': 30, 'Last 90 Days': 90, 'All Time': Infinity };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
         
-        // This object will store the calculated stats to be used by the export function.
         let currentStatsForExport = {};
 
         const renderFilteredStats = async () => {
@@ -4204,8 +4203,8 @@ Thank you for your understanding.
             const filteredCourses = firebaseObjectToArray(coursesSnapshot.val());
 
             if (filteredCourses.length === 0) {
-                 statsContainer.innerHTML = `<p class="text-center text-slate-500">No data available for the selected period.</p>`;
-                 currentStatsForExport = {}; // Clear stats if no data
+                 statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">No data available for the selected period.</p>`;
+                 currentStatsForExport = {}; 
                  return;
             }
 
@@ -4260,15 +4259,10 @@ Thank you for your understanding.
             
             const coursePopularity = rankByStat(filteredCourses, 'sportTypeId', 'bookedBy', appState.sportTypes);
             const tutorPopularity = rankByStat(filteredCourses, 'tutorId', 'bookedBy', appState.tutors);
-            
-            const timeSlots = {};
-            filteredCourses.forEach(c => {
-                const hour = c.time.split(':')[0];
-                const day = new Date(c.date + 'T12:00:00Z').toLocaleString('en-US', { weekday: 'long', timeZone: 'UTC' });
-                const slot = `${day}, ${hour}:00 - ${String(parseInt(hour)+1).padStart(2,'0')}:00`;
-                timeSlots[slot] = (timeSlots[slot] || 0) + (c.bookedBy ? Object.keys(c.bookedBy).length : 0);
-            });
-            const peakTimes = Object.entries(timeSlots).sort((a,b) => b[1] - a[1]).slice(0,5).map(([name, value]) => ({ name, value }));
+            const topCoursesByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.sportTypes, 'sportTypeId');
+            const topTutorsByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.tutors, 'tutorId');
+            const peakTimes = rankTimeSlots(filteredCourses, 'desc');
+            const lowTimes = rankTimeSlots(filteredCourses, 'asc');
             
             const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
@@ -4280,25 +4274,30 @@ Thank you for your understanding.
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Attendance Rate</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
                 </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', true)}
-                    ${createRankingCard('Top Performing Tutors', tutorPopularity, 'Enrollments')}
-                    ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments')}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#4f46e5', true)}
+                    ${createRankingCard('Top Earning Courses', topCoursesByRevenue, 'Revenue', '#22c55e', true)}
+                    ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#4f46e5')}
+                    ${createRankingCard('Top Tutors by Revenue', topTutorsByRevenue, 'Revenue', '#22c55e')}
+                    ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments', '#f97316')}
+                    ${createRankingCard('Low Time Slots', lowTimes, 'Enrollments', '#f97316')}
                 </div>`;
-
-            // Store the calculated data for the export function to use
+            
             currentStatsForExport = {
                 summary: [
                     { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
-                    { Metric: 'Gross Revenue', Value: grossRevenue },
-                    { Metric: 'Net Revenue', Value: totalNetRevenue },
+                    { Metric: 'Gross Revenue', Value: formatCurrency(grossRevenue) },
+                    { Metric: 'Net Revenue', Value: formatCurrency(totalNetRevenue) },
                     { Metric: 'Total Enrollments', Value: totalBookings },
                     { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
                     { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
                 ],
-                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course', Name: item.name, Enrollments: item.value })),
-                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor', Name: item.name, Enrollments: item.value })),
-                peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time', Name: item.name, Enrollments: item.value }))
+                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course by Enrollment', Name: item.name, Value: item.value })),
+                topCoursesByRevenue: topCoursesByRevenue.map(item => ({ Ranking: 'Course by Revenue', Name: item.name, Value: formatCurrency(item.value) })),
+                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Enrollment', Name: item.name, Value: item.value })),
+                topTutorsByRevenue: topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', Name: item.name, Value: formatCurrency(item.value) })),
+                peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', Name: item.name, Value: item.value })),
+                lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', Name: item.name, Value: item.value }))
             };
         };
 
@@ -4306,32 +4305,35 @@ Thank you for your understanding.
             exportBtn.disabled = true;
             exportBtn.innerHTML = 'Exporting...';
 
-            const { summary, coursePopularity, tutorPopularity, peakTimes } = currentStatsForExport;
+            const { summary, coursePopularity, topCoursesByRevenue, tutorPopularity, topTutorsByRevenue, peakTimes, lowTimes } = currentStatsForExport;
 
             if (!summary || summary.length === 0) {
                 showMessageBox('No statistics data to export.', 'info');
                 exportBtn.disabled = false;
-                exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
+                exportBtn.innerHTML = `<svg ... > Export`;
                 return;
             }
 
-            // Combine all data into a single array, with blank rows for spacing.
             const exportData = [
                 ...summary,
-                { Metric: '', Value: '' }, // Blank row
+                { Metric: '', Value: '' }, 
                 ...coursePopularity,
-                { Metric: '', Value: '' }, // Blank row
+                { Metric: '', Value: '' }, 
+                ...topCoursesByRevenue,
+                { Metric: '', Value: '' }, 
                 ...tutorPopularity,
-                { Metric: '', Value: '' }, // Blank row
-                ...peakTimes
+                { Metric: '', Value: '' }, 
+                ...topTutorsByRevenue,
+                { Metric: '', Value: '' }, 
+                ...peakTimes,
+                { Metric: '', Value: '' }, 
+                ...lowTimes,
             ];
 
-            // The headers will be taken from the first object, so we manually set them
-            // to be generic to accommodate all sections.
             const formattedExportData = exportData.map(item => ({
                 Category: item.Metric || item.Ranking || '',
-                Name: item.Value !== undefined ? item.Value : item.Name || '',
-                Value: item.Enrollments !== undefined ? item.Enrollments : ''
+                Name: item.Name || '',
+                Value: item.Value !== undefined ? item.Value : ''
             }));
             
             const periodText = periodSelect.options[periodSelect.selectedIndex].text.replace(/ /g, '-');
@@ -4344,7 +4346,7 @@ Thank you for your understanding.
         };
 
         periodSelect.onchange = renderFilteredStats;
-        renderFilteredStats(); // Initial call
+        renderFilteredStats();
     }
 
     function rankByStat(courses, groupByKey, valueKey, lookup) {
@@ -4364,24 +4366,74 @@ Thank you for your understanding.
             .slice(0, 5);
     }
 
-    function createRankingCard(title, data, valueLabel, useColorDot = false) {
-        const max = Math.max(...data.map(d => d.value), 0);
+    function rankByGroupedRevenue(courses, revenueByCourseId, lookupArray, groupingKey) {
+        const revenueByGroup = courses.reduce((acc, course) => {
+            const courseRevenue = revenueByCourseId.get(course.id) || 0;
+            const groupId = course[groupingKey];
+            if (groupId) {
+                acc[groupId] = (acc[groupId] || 0) + courseRevenue;
+            }
+            return acc;
+        }, {});
+
+        return Object.entries(revenueByGroup)
+            .map(([id, value]) => {
+                const item = lookupArray.find(lookupItem => lookupItem.id === id);
+                return {
+                    id,
+                    name: item?.name || 'Unknown',
+                    value: value,
+                    color: item?.color
+                };
+            })
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+    }
+
+    function rankTimeSlots(courses, sortDirection = 'desc') {
+        const timeSlots = {};
+        courses.forEach(c => {
+            const hour = c.time.split(':')[0];
+            // Using a simple 1-hour slot for clarity
+            const slot = `${String(hour).padStart(2, '0')}:00 - ${String(parseInt(hour) + 1).padStart(2, '0')}:00`;
+            const bookings = c.bookedBy ? Object.keys(c.bookedBy).length : 0;
+            timeSlots[slot] = (timeSlots[slot] || 0) + bookings;
+        });
+
+        const sortedSlots = Object.entries(timeSlots).sort(([, aValue], [, bValue]) => {
+            return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
+        });
+
+        // Filter out slots with zero enrollments for the "Low Time Slots" card to make it more meaningful
+        const relevantSlots = sortDirection === 'asc' ? sortedSlots.filter(([, value]) => value > 0) : sortedSlots;
+
+        return relevantSlots.slice(0, 5).map(([name, value]) => ({ name, value }));
+    }
+
+    function createRankingCard(title, data, valueLabel, color = '#6366f1', useColorDot = false) {
+        // Find the maximum value for scaling the bar charts correctly.
+        const max = data.length > 0 ? Math.max(...data.map(d => d.value)) : 0;
+
         return `
-            <div class="p-6">
+            <div class="p-6 bg-slate-50/50 rounded-lg">
                 <h3 class="text-xl font-bold text-slate-700 mb-4">${title}</h3>
                 <div class="space-y-4">
-                ${data.map(item => `
+                ${data.length > 0 ? data.map(item => `
                     <div>
                         <div class="flex justify-between items-center text-sm mb-1">
-                            <span class="font-semibold text-slate-600 flex items-center gap-2">
-                                ${useColorDot ? `<span class="h-3 w-3 rounded-full" style="background-color: ${item.color || '#ccc'}"></span>` : ''}
-                                ${item.name}
+                            <span class="font-semibold text-slate-600 flex items-center gap-2 truncate pr-2">
+                                ${useColorDot ? `<span class="h-3 w-3 rounded-full flex-shrink-0" style="background-color: ${item.color || '#ccc'}"></span>` : ''}
+                                <span class="truncate">${item.name}</span>
                             </span>
-                            <span class="text-slate-500">${item.value} ${valueLabel}</span>
+                            <span class="text-slate-500 font-medium flex-shrink-0">
+                                ${valueLabel === 'Revenue' ? formatCurrency(item.value) : `${item.value} ${valueLabel}`}
+                            </span>
                         </div>
-                        <div class="w-full bg-slate-200 rounded-full h-2.5"><div class="bar-chart-bar h-2.5 bg-indigo-500" style="width: ${max > 0 ? (item.value / max) * 100 : 0}%;"></div></div>
+                        <div class="w-full bg-slate-200 rounded-full h-2.5">
+                            <div class="bar-chart-bar h-2.5 rounded-full" style="width: ${max > 0 ? (item.value / max) * 100 : 0}%; background-color: ${color};"></div>
+                        </div>
                     </div>
-                `).join('') || '<p class="text-slate-500">No data to display.</p>'}
+                `).join('') : '<p class="text-slate-500 text-sm">No data to display for this period.</p>'}
                 </div>
             </div>`;
     }
