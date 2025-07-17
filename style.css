@@ -396,10 +396,6 @@ th.sortable:hover .sort-icon {
     margin: 0;
 }
 
-#numericDialModal.modal-backdrop {
-    align-items: flex-end;
-}
-
 /* --- Custom Numeric Dial Modal --- */
 .numeric-dial-modal-content {
     background-color: #f8fafc; /* slate-50 */
