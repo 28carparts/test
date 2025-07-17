@@ -409,21 +409,12 @@ th.sortable:hover .sort-icon {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    
-    /* --- START: Pop-up Animation Properties --- */
-    
-    /* 1. This makes the animation smooth and slow. 0.4s is a nice, gentle speed. */
-    transition: all 1.8s cubic-bezier(0.25, 0.8, 0.25, 1);
-
-    /* 2. This is the INITIAL (hidden) state. */
+    transition: all 1.5s cubic-bezier(0.25, 0.8, 0.25, 1);
     opacity: 0;
     transform: scale(0.95);
-
-    /* --- END: Pop-up Animation Properties --- */
 }
 
 .numeric-dial-modal-content.open {
-     /* This is the FINAL (visible) state. */
      opacity: 1;
      transform: scale(1);
 }
