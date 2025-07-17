@@ -1408,16 +1408,12 @@ Thank you for your understanding.
         } else {
             memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
-
+        
+        // On mobile, the participant counter is now a div that we will attach a click listener to.
         const participantCounterHTML = isOwner
             ? (window.matchMedia('(any-pointer: fine)').matches
-                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
-                // --- START: MODIFICATION FOR NUMERIC KEYPAD ---
-                : `<div class="relative inline-block">
-                       ${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}
-                       <input type="number" inputmode="numeric" pattern="[0-9]*" class="participant-input-overlay" value="${course.maxParticipants}" min="1" max="100" />
-                   </div>`
-                // --- END: MODIFICATION FOR NUMERIC KEYPAD ---
+                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true) // Desktop editable div
+                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}</div>` // Mobile trigger div
             )
             : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
 
@@ -1453,7 +1449,7 @@ Thank you for your understanding.
             </div>`;
 
         el.addEventListener('click', (e) => {
-            if (!e.target.closest('button') && !e.target.closest('.time-slot-editable') && !e.target.closest('.participant-counter-editable')) {
+            if (!e.target.closest('button') && !e.target.closest('.time-slot-editable') && !e.target.closest('.participant-counter-editable') && !e.target.closest('.participant-dial-trigger')) {
                 mainAction();
             }
         });
@@ -1484,23 +1480,15 @@ Thank you for your understanding.
                     const [hours, minutes] = localCourseTime.split(':').map(Number);
                     let totalMinutes = hours * 60 + minutes;
                     
-                    if (e.deltaY < 0) totalMinutes -= 15;
-                    else totalMinutes += 15;
+                    if (e.deltaY < 0) totalMinutes -= 15; else totalMinutes += 15;
+                    if (totalMinutes < 0) totalMinutes = 24 * 60 - 15; if (totalMinutes >= 24 * 60) totalMinutes = 0;
 
-                    if (totalMinutes < 0) totalMinutes = 24 * 60 - 15;
-                    if (totalMinutes >= 24 * 60) totalMinutes = 0;
-
-                    const newHours = Math.floor(totalMinutes / 60);
-                    const newMinutes = totalMinutes % 60;
-                    
+                    const newHours = Math.floor(totalMinutes / 60); const newMinutes = totalMinutes % 60;
                     localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
                     timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
 
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => {
-                        saveSchedulePosition();
-                        database.ref(`/courses/${course.id}/time`).set(localCourseTime);
-                    }, 1500);
+                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/time`).set(localCourseTime); }, 1500);
                 });
             }
 
@@ -1510,10 +1498,7 @@ Thank you for your understanding.
                 timeInput.addEventListener('change', () => {
                     let timeChangeDebounce;
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => {
-                        saveSchedulePosition();
-                        database.ref(`/courses/${course.id}/time`).set(timeInput.value);
-                    }, 1500);
+                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/time`).set(timeInput.value); }, 1500);
                 });
             }
 
@@ -1524,43 +1509,70 @@ Thank you for your understanding.
                     document.querySelectorAll('.time-slot-editable.editing, .participant-counter-editable.editing').forEach(otherEl => { if (otherEl !== participantCounterEl) otherEl.classList.remove('editing'); });
                     participantCounterEl.classList.toggle('editing');
                 });
-
                 let maxPartChangeDebounce;
                 participantCounterEl.addEventListener('wheel', (e) => {
                     if (!participantCounterEl.classList.contains('editing')) return;
                     e.preventDefault();
-                    
                     let localMaxParticipants = parseInt(participantCounterEl.textContent.split('/')[1]);
-                    
-                    if (e.deltaY < 0) {
-                        localMaxParticipants++;
-                    } else {
-                        localMaxParticipants = Math.max(1, localMaxParticipants - 1);
+                    if (e.deltaY < 0) { localMaxParticipants++; } else { localMaxParticipants = Math.max(1, localMaxParticipants - 1); }
+                    participantCounterEl.textContent = `${currentBookings}/${localMaxParticipants}`;
+                    clearTimeout(maxPartChangeDebounce);
+                    maxPartChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/maxParticipants`).set(localMaxParticipants); }, 1500);
+                });
+            }
+
+            // --- START: NEW DIAL PICKER LOGIC FOR MOBILE ---
+            const participantDialTrigger = el.querySelector('.participant-dial-trigger');
+            if (participantDialTrigger) {
+                participantDialTrigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+
+                    // 1. Create a temporary, invisible <select> element
+                    const selectEl = document.createElement('select');
+                    selectEl.style.position = 'absolute';
+                    selectEl.style.opacity = '0';
+                    selectEl.style.width = '1px';
+                    selectEl.style.height = '1px';
+
+                    // 2. Populate it with options (e.g., 1 to 100)
+                    for (let i = 1; i <= 100; i++) {
+                        const option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = i;
+                        if (i === course.maxParticipants) {
+                            option.selected = true;
+                        }
+                        selectEl.appendChild(option);
                     }
 
-                    participantCounterEl.textContent = `${currentBookings}/${localMaxParticipants}`;
+                    // 3. Append to the body and listen for changes
+                    document.body.appendChild(selectEl);
                     
-                    clearTimeout(maxPartChangeDebounce);
-                    maxPartChangeDebounce = setTimeout(() => {
-                        saveSchedulePosition();
-                        database.ref(`/courses/${course.id}/maxParticipants`).set(localMaxParticipants);
-                    }, 1500);
-                });
-            }
+                    selectEl.addEventListener('change', () => {
+                        const newMax = parseInt(selectEl.value);
+                        if (!isNaN(newMax)) {
+                            saveSchedulePosition();
+                            database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
+                        }
+                        // 6. Clean up by removing the element
+                        document.body.removeChild(selectEl);
+                    });
 
-            const participantInput = el.querySelector('.participant-input-overlay');
-            if (participantInput) {
-                participantInput.addEventListener('click', (e) => e.stopPropagation());
-                let maxPartChangeDebounce;
-                participantInput.addEventListener('change', () => {
-                    clearTimeout(maxPartChangeDebounce);
-                    const newMax = Math.max(1, parseInt(participantInput.value) || 1);
-                    maxPartChangeDebounce = setTimeout(() => {
-                        saveSchedulePosition();
-                        database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
-                    }, 1500);
+                    // This event fires if the user cancels the picker without choosing
+                    selectEl.addEventListener('blur', () => {
+                         if(document.body.contains(selectEl)) {
+                            document.body.removeChild(selectEl);
+                         }
+                    });
+
+                    // 4. Programmatically "click" the select to open the native dial
+                    // We use `dispatchEvent` for better cross-browser compatibility
+                    const clickEvent = new MouseEvent('mousedown');
+                    selectEl.dispatchEvent(clickEvent);
                 });
             }
+            // --- END: NEW DIAL PICKER LOGIC FOR MOBILE ---
+
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
             const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
             if (cancelButton) {
