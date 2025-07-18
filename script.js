@@ -3232,22 +3232,23 @@ Thank you for your understanding.
         try {
             const usersSnapshotPromise = database.ref('/users').once('value');
             
-            // --- START OF FIX ---
-            // 1. Normalize "today" to the start of the day (midnight).
+            // Normalize "today" to the start of the day (midnight) for consistent calculations.
             const today = new Date();
             today.setHours(0, 0, 0, 0); 
-            // --- END OF FIX ---
 
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(today.getDate() - 30);
             thirtyDaysAgo.setHours(0, 0, 0, 0); // Also normalize the 30-day mark
 
+            // Efficiently fetch only the courses from the last 30 days.
             const coursesSnapshotPromise = database.ref('/courses').orderByChild('date').startAt(getIsoDate(thirtyDaysAgo)).once('value');
             
             const [usersSnapshot, coursesSnapshot] = await Promise.all([usersSnapshotPromise, coursesSnapshotPromise]);
 
             const allUsers = firebaseObjectToArray(usersSnapshot.val());
             const recentCourses = firebaseObjectToArray(coursesSnapshot.val());
+            
+            // Filter for the correct target members.
             const monthlyMembers = allUsers.filter(u => u.role === 'member' && u.monthlyPlan && !u.isDeleted && u.planStartDate);
             
             if (monthlyMembers.length === 0) {
@@ -3266,13 +3267,11 @@ Thank you for your understanding.
                 if (isNaN(planStartDate.getTime())) continue; // Skip if date is invalid
 
                 const observationStartDate = planStartDate > thirtyDaysAgo ? planStartDate : thirtyDaysAgo;
-
-                // --- START OF FIX ---
-                // 2. Calculate the difference and add 1 for an inclusive day count.
+                
                 const dayDifference = (today - observationStartDate) / (1000 * 60 * 60 * 24);
                 const activeDays = Math.max(1, Math.round(dayDifference) + 1);
-                // --- END OF FIX ---
-
+                
+                // Safety check: Don't calculate for members with too little data.
                 if (activeDays < MINIMUM_ACTIVE_DAYS_FOR_RECALC) {
                     continue;
                 }
@@ -3286,10 +3285,35 @@ Thank you for your understanding.
                 const dailyAttendanceRate = attendedCoursesCount / activeDays;
                 const projectedMonthlyAttendance = dailyAttendanceRate * 30;
 
+                // --- START: NEW Dynamic Adaptive Smoothing Logic ---
+
+                // Step 1: Calculate member tenure to determine their "veterancy".
+                const now = new Date();
+                const memberTenureInDays = (now - planStartDate) / (1000 * 60 * 60 * 24);
+                const memberTenureInMonths = memberTenureInDays / 30.44; // Avg days in a month
+
+                // Step 2: Determine the dynamic weight (alpha).
+                // Alpha controls how much we trust the NEW data vs. the old historical estimate.
+                let alpha;
+                if (memberTenureInMonths < 3) {
+                    // New Member: Trust recent data more (70%).
+                    alpha = 0.7;
+                } else if (memberTenureInMonths <= 12) {
+                    // Established Member: Balanced approach (50%).
+                    alpha = 0.5;
+                } else { // memberTenureInMonths > 12
+                    // Veteran Member: Trust historical estimate more (30%).
+                    alpha = 0.3;
+                }
+                
+                // Step 3: Apply the new, more accurate formula.
+                // If there's no previous estimate, we use the new projection as the base.
                 const previousEstimate = member.monthlyPlanEstimatedAttendance || projectedMonthlyAttendance;
+                const newEstimatedAttendance = Math.round((alpha * projectedMonthlyAttendance) + ((1 - alpha) * previousEstimate));
+
+                // --- END: NEW Dynamic Adaptive Smoothing Logic ---
                 
-                const newEstimatedAttendance = Math.round((previousEstimate + projectedMonthlyAttendance) / 2);
-                
+                // Only create an update if the value has actually changed.
                 if (newEstimatedAttendance !== member.monthlyPlanEstimatedAttendance) {
                     updatedCount++;
                     const monthlyAmount = member.monthlyPlanAmount || 0;
@@ -3303,6 +3327,7 @@ Thank you for your understanding.
                 }
             }
 
+            // Commit all updates to the database in a single, efficient call.
             if (Object.keys(updates).length > 0) {
                 await database.ref().update(updates);
                 showMessageBox(`Recalculation complete! ${updatedCount} member plan(s) were updated.`, 'success');
