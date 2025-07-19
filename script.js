@@ -871,14 +871,10 @@ Thank you for your understanding.
     async function openJoinedMembersModal(course) {
         if (appState.copyMode.active) return;
 
-        if (appState.users.length === 0) {
-        showMessageBox('Loading member data...', 'info', 1500);
-        const usersSnapshot = await database.ref('/users').once('value');
-        appState.users = firebaseObjectToArray(usersSnapshot.val());
-        }
-        
+        // Immediately get the list of member IDs from the course object. This is fast.
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
 
+        // Render the modal's shell with a loading state first.
         DOMElements.joinedMembersModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -886,7 +882,9 @@ Thank you for your understanding.
                 <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === course.sportTypeId).name} on ${formatShortDateWithYear(course.date)}</p>
                 <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">Calculating revenue...</p></div>
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Booked Members</h3>
-                <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto"></div>
+                <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto">
+                    <p class="text-center text-slate-500 p-4">Loading booked members...</p>
+                </div>
                 
                 <div class="mt-8 border-t pt-6">
                     <h3 class="text-xl font-bold text-slate-700 mb-4">Add Walk-in Member</h3>
@@ -900,11 +898,35 @@ Thank you for your understanding.
 
         const listEl = DOMElements.joinedMembersModal.querySelector('#joinedMembersList');
         const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
+
+        // --- START: NEW High-Performance Data Fetching Logic ---
+        let bookedMembers = [];
+        if (bookedMemberIds.length > 0) {
+            // Create an array of promises, one for each booked member.
+            const memberPromises = bookedMemberIds.map(memberId =>
+                database.ref('/users/' + memberId).once('value')
+            );
+            // Fetch all member profiles concurrently. This is much faster.
+            const memberSnapshots = await Promise.all(memberPromises);
+            
+            // Process the snapshots into a clean array of member objects.
+            bookedMembers = memberSnapshots
+                .map(snap => ({ id: snap.key, ...snap.val() }))
+                .filter(member => member.name); // Filter out any potentially deleted/invalid users.
+        }
         
+        // Non-destructively update the global user cache for other parts of the app
+        // that might need this user data later (like the walk-in search).
+        const usersCache = new Map(appState.users.map(u => [u.id, u]));
+        bookedMembers.forEach(member => usersCache.set(member.id, member));
+        appState.users = Array.from(usersCache.values());
+        // --- END: NEW High-Performance Data Fetching Logic ---
+
+
         // --- Revenue Calculation (On-Demand) ---
+        // This part remains the same, as it needs the full course list for accurate FIFO calculation.
         let grossRevenue = 0, tutorPayout = 0, netRevenue = 0;
         if (bookedMemberIds.length > 0) {
-            // Fetch all course data just for this calculation.
             const allCoursesSnapshot = await database.ref('/courses').once('value');
             const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
 
@@ -922,22 +944,24 @@ Thank you for your understanding.
                 <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
             </div>`;
 
-        if (bookedMemberIds.length === 0) {
+        
+        // Now, render the list of members we just fetched.
+        if (bookedMembers.length === 0) {
             listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this course yet.</p>`;
         } else {
-            listEl.innerHTML = bookedMemberIds.map(memberId => {
-                const member = appState.users.find(u => u.id === memberId);
-                const isAttended = course.attendedBy && course.attendedBy[memberId];
-                return member ? `<div class="bg-slate-100 p-3 rounded-lg flex justify-between items-center">
+            // Use the directly-fetched 'bookedMembers' array.
+            listEl.innerHTML = bookedMembers.map(member => {
+                const isAttended = course.attendedBy && course.attendedBy[member.id];
+                return `<div class="bg-slate-100 p-3 rounded-lg flex justify-between items-center">
                     <div class="flex items-center">
-                       <input type="checkbox" data-member-id="${memberId}" class="h-5 w-5 rounded text-indigo-600 mr-4 attendance-checkbox" ${isAttended ? 'checked' : ''}>
+                       <input type="checkbox" data-member-id="${member.id}" class="h-5 w-5 rounded text-indigo-600 mr-4 attendance-checkbox" ${isAttended ? 'checked' : ''}>
                        <div>
                             <p class="font-semibold text-slate-800">${member.name}</p>
                             <p class="text-sm text-slate-500">${member.email}</p>
                        </div>
                     </div>
                     <p class="text-sm text-slate-600">${formatDisplayPhoneNumber(member.phone)}</p>
-                </div>` : '';
+                </div>`;
             }).join('');
 
             listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
@@ -956,7 +980,16 @@ Thank you for your understanding.
         const addMemberSearchInput = DOMElements.joinedMembersModal.querySelector('#addMemberSearchInput');
         const addMemberSearchResults = DOMElements.joinedMembersModal.querySelector('#addMemberSearchResults');
 
-        addMemberSearchInput.oninput = () => {
+        // --- START: MODIFIED Walk-in Search with Lazy Loading ---
+        addMemberSearchInput.oninput = async () => {
+            // Lazy-load the full user list only when the user starts searching.
+            if (appState.users.length < 50) { // A heuristic to check if the full list is likely loaded.
+                addMemberSearchResults.innerHTML = '<p class="p-3 text-slate-500 text-center">Loading all members for search...</p>';
+                addMemberSearchResults.classList.remove('hidden');
+                const usersSnapshot = await database.ref('/users').once('value');
+                appState.users = firebaseObjectToArray(usersSnapshot.val());
+            }
+
             const searchTerm = addMemberSearchInput.value.toLowerCase().trim();
             if (searchTerm.length < 1) {
                 addMemberSearchResults.innerHTML = '';
@@ -988,6 +1021,7 @@ Thank you for your understanding.
                 addMemberSearchResults.classList.remove('hidden');
             }
         };
+        // --- END: MODIFIED Walk-in Search with Lazy Loading ---
 
         addMemberSearchResults.onclick = (e) => {
             const target = e.target.closest('.add-member-result-item');
@@ -1012,8 +1046,7 @@ Thank you for your understanding.
                 const updates = {};
                 updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
                     bookedAt: new Date().toISOString(),
-                    bookedBy: appState.currentUser.name, // The currently logged-in owner's name
-                    // --- NEW: Freeze the credit value for the walk-in booking ---
+                    bookedBy: appState.currentUser.name,
                     monthlyCreditValue: memberToAdd.monthlyCreditValue || 0
                 };
                 updates[`/memberBookings/${memberId}/${course.id}`] = true;
@@ -1388,28 +1421,38 @@ Thank you for your understanding.
             date: form.querySelector('#courseDate').value,
         };
 
-        // --- START: New logic to "freeze" payout details ---
         const tutor = appState.tutors.find(t => t.id === courseData.tutorId);
         if (tutor) {
             const skill = tutor.skills.find(s => s.sportTypeId === courseData.sportTypeId);
             if (skill) {
-                // If the tutor is an employee, their payout is 0, otherwise store the skill's salary.
                 courseData.payoutDetails = {
                     salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
                     salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
                 };
             }
         }
-        // --- END: New logic to "freeze" payout details ---
+
+        // --- START: NEW Multi-Path Update Logic ---
+        const updates = {};
+        const monthIndexKey = courseData.date.substring(0, 7); // "YYYY-MM"
 
         let promise;
         if (courseId) {
-            promise = database.ref('/courses/' + courseId).update(courseData);
+            // This is an EDIT operation.
+            updates[`/courses/${courseId}`] = courseData;
+            updates[`/courseMonths/${monthIndexKey}`] = true; // Ensure the month index is set
+            promise = database.ref().update(updates);
         } else {
+            // This is a NEW course.
+            const newCourseKey = database.ref('/courses').push().key; // Generate a unique key
             courseData.bookedBy = {};
             courseData.attendedBy = {};
-            promise = database.ref('/courses').push(courseData);
+            
+            updates[`/courses/${newCourseKey}`] = courseData;
+            updates[`/courseMonths/${monthIndexKey}`] = true;
+            promise = database.ref().update(updates);
         }
+        // --- END: NEW Multi-Path Update Logic ---
 
         promise.then(() => {
             showMessageBox(courseId ? 'Course updated!' : 'Course added!', 'success');
@@ -1528,12 +1571,14 @@ Thank you for your understanding.
                     )
                     : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
                 }
-                ${isOwner 
-                    ? (isFull 
-                        ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
-                        : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`) 
-                    : memberActionHTML
-                }
+                <div class="member-action-container">
+                    ${isOwner 
+                        ? (isFull 
+                            ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
+                            : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`) 
+                        : memberActionHTML
+                    }
+                </div>
             </div>`;
 
         el.addEventListener('click', (e) => {
@@ -2101,7 +2146,7 @@ Thank you for your understanding.
                 </div>
                 <div class="md:col-span-2">
                     <div class="card p-6">
-                        <h3 class="text-2xl font-bold text-slate-800 mb-4">My Bookings</h3>
+                        <h3 class="text-2xl font-bold text-slate-800 mb-4">My Bookings (${memberBookings.length})</h3>
                         <div class="space-y-3 max-h-[60vh] overflow-y-auto">
                             ${memberBookings.length === 0 ? '<p class="text-slate-500">You have no upcoming or past bookings.</p>' :
                             memberBookings.map(course => {
@@ -3932,40 +3977,63 @@ Thank you for your understanding.
         const tutorSelect = container.querySelector('#salaryTutorSelect');
         const periodSelect = container.querySelector('#salaryPeriodSelect');
         const exportBtn = container.querySelector('#exportSalaryBtn');
+        const detailsContainer = container.querySelector('#salaryDetailsContainer');
         
+        // --- START: NEW High-Performance Logic ---
+        
+        // Step 1: Populate tutor dropdown (this is already fast).
         populateDropdown(tutorSelect, appState.tutors);
         if (appState.selectedFilters.salaryTutorId) {
             tutorSelect.value = appState.selectedFilters.salaryTutorId;
         }
 
-        const allCoursesSnapshot = await database.ref('/courses').once('value');
-        const allCoursesForPeriods = firebaseObjectToArray(allCoursesSnapshot.val());
+        // Step 2: Fetch the new, lightweight month index.
+        const periodsSnapshot = await database.ref('/courseMonths').once('value');
+        const periods = periodsSnapshot.exists() ? Object.keys(periodsSnapshot.val()).sort().reverse() : [];
         
-        const periods = [...new Set(allCoursesForPeriods.map(c => c.date.substring(0, 7)))].sort().reverse();
-        periodSelect.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
-        
-        if (appState.selectedFilters.salaryPeriod) {
-            periodSelect.value = appState.selectedFilters.salaryPeriod;
-        } else {
-            const currentMonth = new Date().toISOString().substring(0, 7);
-            if (periods.includes(currentMonth)) {
-                periodSelect.value = currentMonth;
-            } else if (periodSelect.options.length > 0) {
-                periodSelect.value = periodSelect.options[0].value;
+        // Step 3: Populate the period dropdown with the fast index data.
+        if (periods.length > 0) {
+            periodSelect.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
+            
+            // Set the selected period from app state or default to the most recent.
+            if (appState.selectedFilters.salaryPeriod && periods.includes(appState.selectedFilters.salaryPeriod)) {
+                periodSelect.value = appState.selectedFilters.salaryPeriod;
+            } else {
+                periodSelect.value = periods[0];
             }
-            appState.selectedFilters.salaryPeriod = periodSelect.value;
+        } else {
+            periodSelect.innerHTML = '<option value="">No Data</option>';
         }
 
-        const onFilterChange = () => {
+        // Step 4: The core function that now runs AFTER user selection.
+        const onFilterChange = async () => {
             appState.selectedFilters.salaryTutorId = tutorSelect.value;
             appState.selectedFilters.salaryPeriod = periodSelect.value;
-            renderSalaryDetails(allCoursesForPeriods);
+            
+            const tutorId = tutorSelect.value;
+            const period = periodSelect.value;
+
+            if (!tutorId || !period) {
+                detailsContainer.innerHTML = `<p class="text-center text-slate-500">Please select a tutor and period to view details.</p>`;
+                return;
+            }
+
+            detailsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Fetching courses and calculating salary...</p>`;
+            
+            // This is the deferred, heavy operation. It now only runs on demand.
+            // We still fetch all courses because the revenue calculation needs full member history.
+            // But the page load itself is now instant.
+            const allCoursesSnapshot = await database.ref('/courses').once('value');
+            const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+
+            renderSalaryDetails(allCoursesForCalc);
         };
 
+        // Step 5: Wire up event listeners.
         tutorSelect.onchange = onFilterChange;
         periodSelect.onchange = onFilterChange;
-
-        exportBtn.onclick = () => {
+        
+        exportBtn.onclick = async () => {
             exportBtn.disabled = true;
             exportBtn.innerHTML = 'Exporting...';
 
@@ -3976,25 +4044,25 @@ Thank you for your understanding.
             if (!tutorId || !period || !tutor) {
                 showMessageBox('Please select a valid tutor and period.', 'error');
                 exportBtn.disabled = false;
-                exportBtn.innerHTML = `<svg ... > Export`; // Restore button text
+                exportBtn.innerHTML = `<svg ... > Export`;
                 return;
             }
-
-            const coursesInPeriod = allCoursesForPeriods.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
             
-            // --- FIX: Sort the courses by date before processing ---
+            // The export must also fetch the full data set to perform its calculations.
+            const allCoursesSnapshot = await database.ref('/courses').once('value');
+            const allCoursesForExport = firebaseObjectToArray(allCoursesSnapshot.val());
+            
+            const coursesInPeriod = allCoursesForExport.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
             const sortedCoursesInPeriod = [...coursesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
 
             const memberIdsInPeriod = new Set();
-            sortedCoursesInPeriod.forEach(course => { // Use sorted array
-                if (course.bookedBy) {
-                    Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
-                }
+            sortedCoursesInPeriod.forEach(course => {
+                if (course.bookedBy) Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
             });
 
             const allMemberBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                allCoursesForPeriods.forEach(course => {
+                allCoursesForExport.forEach(course => {
                     if (course.bookedBy) {
                         for (const memberId of Object.keys(course.bookedBy)) {
                             if (memberIdsInPeriod.has(memberId)) {
@@ -4008,7 +4076,7 @@ Thank you for your understanding.
             
             const { revenueByCourseId } = calculateRevenueForBookings(allMemberBookings);
             
-            const courseDetails = sortedCoursesInPeriod.map(course => { // Use sorted array
+            const courseDetails = sortedCoursesInPeriod.map(course => {
                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                 let earnings = 0;
                 let calculation = "N/A";
@@ -4036,7 +4104,6 @@ Thank you for your understanding.
                 Course: c.sportTypeName,
                 Attendees_Capacity: `${c.attendeesCount}/${c.maxParticipants}`,
                 Calculation: c.calculation,
-                // --- FIX: Format earnings to 2 decimal places ---
                 Earnings: c.earnings.toFixed(2)
             }));
 
@@ -4048,7 +4115,9 @@ Thank you for your understanding.
             exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
         };
 
-        renderSalaryDetails(allCoursesForPeriods);
+        // --- Step 6: Trigger the initial render.
+        onFilterChange();
+        // --- END: NEW High-Performance Logic ---
     }
 
     function renderSalaryDetails(allCourses) {
@@ -4215,8 +4284,10 @@ Thank you for your understanding.
         const periods = { 'Last 7 Days': 7, 'Last 30 Days': 30, 'Last 90 Days': 90, 'All Time': Infinity };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
         
+        // This object will be built in two phases for the export function.
         let currentStatsForExport = {};
 
+        // --- START: NEW TWO-PHASE RENDERING LOGIC ---
         const renderFilteredStats = async () => {
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Calculating statistics...</p>`;
             const days = parseInt(periodSelect.value);
@@ -4224,6 +4295,7 @@ Thank you for your understanding.
             const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
             const startDateIso = getIsoDate(startDate);
             
+            // --- Phase 1: Fetch only the courses within the selected period. This is fast. ---
             const coursesSnapshot = await database.ref('/courses').orderByChild('date').startAt(startDateIso).once('value');
             const filteredCourses = firebaseObjectToArray(coursesSnapshot.val());
 
@@ -4233,6 +4305,62 @@ Thank you for your understanding.
                  return;
             }
 
+            // --- Phase 1: Calculate and render all NON-REVENUE stats immediately. ---
+            let totalBookings = 0, totalAttendees = 0;
+            filteredCourses.forEach(course => {
+                totalBookings += course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+                totalAttendees += course.attendedBy ? Object.keys(course.attendedBy).length : 0;
+            });
+
+            const totalCapacity = filteredCourses.reduce((sum, c) => sum + c.maxParticipants, 0);
+            const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
+            const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
+            
+            // These rankings don't depend on revenue and can be calculated now.
+            const coursePopularity = rankByStat(filteredCourses, 'sportTypeId', 'bookedBy', appState.sportTypes);
+            const tutorPopularity = rankByStat(filteredCourses, 'tutorId', 'bookedBy', appState.tutors);
+            const peakTimes = rankTimeSlots(filteredCourses, 'desc');
+            const lowTimes = rankTimeSlots(filteredCourses, 'asc');
+
+            // Render the page shell with placeholders for the revenue stats.
+            statsContainer.innerHTML = `
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div id="grossRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-slate-800">Calculating...</p></div>
+                    <div id="netRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold text-slate-800">Calculating...</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Enrollments</p><p class="text-2xl font-bold text-slate-800">${totalBookings}</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Attendance Rate</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#6366f1', true)}
+                    <div id="topEarningCoursesCard">${createRankingCard('Top Earning Courses', [], 'Revenue', '#22c55e', true)}</div>
+                    ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#6366f1')}
+                    <div id="topTutorsByRevenueCard">${createRankingCard('Top Tutors by Revenue', [], 'Revenue', '#22c55e')}</div>
+                    ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments', '#f97316')}
+                    ${createRankingCard('Low Time Slots', lowTimes, 'Enrollments', '#f97316')}
+                </div>`;
+            
+            // Populate the export object with the stats we have so far.
+            currentStatsForExport = {
+                summary: [
+                    { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
+                    { Metric: 'Total Enrollments', Value: totalBookings },
+                    { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
+                    { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
+                ],
+                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course by Enrollment', Name: item.name, Value: item.value })),
+                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Enrollment', Name: item.name, Value: item.value })),
+                peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', Name: item.name, Value: item.value })),
+                lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', Name: item.name, Value: item.value }))
+            };
+            
+            // --- Phase 2: Asynchronously calculate and render REVENUE stats. ---
+            // This runs in the background without blocking the UI.
+            calculateAndRenderRevenueStats(filteredCourses);
+        };
+
+        const calculateAndRenderRevenueStats = async (filteredCourses) => {
+            // Identify all unique members who attended a class in the period.
             const memberIdsInPeriod = new Set();
             filteredCourses.forEach(course => {
                 if (course.bookedBy) {
@@ -4240,11 +4368,12 @@ Thank you for your understanding.
                 }
             });
 
+            // This is the heavy operation needed for FIFO calculation.
+            const allCoursesSnapshot = await database.ref('/courses').once('value');
+            const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+
             const allRelevantBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                const allCoursesSnapshot = await database.ref('/courses').once('value');
-                const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
-
                 allCoursesForCalc.forEach(course => {
                     if (course.bookedBy) {
                         for (const memberId of Object.keys(course.bookedBy)) {
@@ -4259,77 +4388,54 @@ Thank you for your understanding.
             
             const { revenueByCourseId } = calculateRevenueForBookings(allRelevantBookings);
             
-            let grossRevenue = 0, totalTutorPayout = 0, totalBookings = 0, totalAttendees = 0;
-
+            let grossRevenue = 0, totalTutorPayout = 0;
             filteredCourses.forEach(course => {
                 const courseRevenue = revenueByCourseId.get(course.id) || 0;
                 grossRevenue += courseRevenue;
-                const bookedIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
-                const attendedIds = course.attendedBy ? Object.keys(course.attendedBy) : [];
-                totalBookings += bookedIds.length;
-                totalAttendees += attendedIds.length;
                 
                 if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
                     const { salaryType, salaryValue } = course.payoutDetails;
                     if (salaryType === 'perCourse') totalTutorPayout += salaryValue;
-                    else if (salaryType === 'perHeadcount') totalTutorPayout += bookedIds.length * salaryValue;
+                    else if (salaryType === 'perHeadcount') totalTutorPayout += (course.bookedBy ? Object.keys(course.bookedBy).length : 0) * salaryValue;
                     else if (salaryType === 'percentage') totalTutorPayout += courseRevenue * (salaryValue / 100);
                 }
             });
 
             const totalNetRevenue = grossRevenue - totalTutorPayout;
-            const totalCapacity = filteredCourses.reduce((sum, c) => sum + c.maxParticipants, 0);
-            const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
-            const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
-            
-            const coursePopularity = rankByStat(filteredCourses, 'sportTypeId', 'bookedBy', appState.sportTypes);
-            const tutorPopularity = rankByStat(filteredCourses, 'tutorId', 'bookedBy', appState.tutors);
             const topCoursesByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.sportTypes, 'sportTypeId');
             const topTutorsByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.tutors, 'tutorId');
-            const peakTimes = rankTimeSlots(filteredCourses, 'desc');
-            const lowTimes = rankTimeSlots(filteredCourses, 'asc');
-            
-            const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
 
-            statsContainer.innerHTML = `
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(grossRevenue)}</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Enrollments</p><p class="text-2xl font-bold text-slate-800">${totalBookings}</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Attendance Rate</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#6366f1', true)}
-                    ${createRankingCard('Top Earning Courses', topCoursesByRevenue, 'Revenue', '#22c55e', true)}
-                    ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#6366f1')}
-                    ${createRankingCard('Top Tutors by Revenue', topTutorsByRevenue, 'Revenue', '#22c55e')}
-                    ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments', '#f97316')}
-                    ${createRankingCard('Low Time Slots', lowTimes, 'Enrollments', '#f97316')}
-                </div>`;
+            // Now, update the specific DOM elements that were waiting for this data.
+            const grossRevenueCard = document.getElementById('grossRevenueCard');
+            if (grossRevenueCard) grossRevenueCard.innerHTML = `<p class="text-sm text-slate-500">Gross Revenue</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(grossRevenue)}</p>`;
+
+            const netRevenueCard = document.getElementById('netRevenueCard');
+            if (netRevenueCard) {
+                const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
+                netRevenueCard.innerHTML = `<p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p>`;
+            }
             
-            currentStatsForExport = {
-                summary: [
-                    { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
-                    { Metric: 'Gross Revenue', Value: formatCurrency(grossRevenue) },
-                    { Metric: 'Net Revenue', Value: formatCurrency(totalNetRevenue) },
-                    { Metric: 'Total Enrollments', Value: totalBookings },
-                    { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
-                    { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
-                ],
-                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course by Enrollment', Name: item.name, Value: item.value })),
-                topCoursesByRevenue: topCoursesByRevenue.map(item => ({ Ranking: 'Course by Revenue', Name: item.name, Value: formatCurrency(item.value) })),
-                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Enrollment', Name: item.name, Value: item.value })),
-                topTutorsByRevenue: topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', Name: item.name, Value: formatCurrency(item.value) })),
-                peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', Name: item.name, Value: item.value })),
-                lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', Name: item.name, Value: item.value }))
-            };
+            const topEarningCoursesCard = document.getElementById('topEarningCoursesCard');
+            if(topEarningCoursesCard) topEarningCoursesCard.innerHTML = createRankingCard('Top Earning Courses', topCoursesByRevenue, 'Revenue', '#22c55e', true);
+
+            const topTutorsByRevenueCard = document.getElementById('topTutorsByRevenueCard');
+            if(topTutorsByRevenueCard) topTutorsByRevenueCard.innerHTML = createRankingCard('Top Tutors by Revenue', topTutorsByRevenue, 'Revenue', '#22c55e');
+
+            // Finally, update the export object with the revenue data.
+            currentStatsForExport.summary.push(
+                { Metric: 'Gross Revenue', Value: formatCurrency(grossRevenue) },
+                { Metric: 'Net Revenue', Value: formatCurrency(totalNetRevenue) }
+            );
+            currentStatsForExport.topCoursesByRevenue = topCoursesByRevenue.map(item => ({ Ranking: 'Course by Revenue', Name: item.name, Value: formatCurrency(item.value) }));
+            currentStatsForExport.topTutorsByRevenue = topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', Name: item.name, Value: formatCurrency(item.value) }));
         };
 
+        // --- Event Handlers ---
         exportBtn.onclick = () => {
             exportBtn.disabled = true;
             exportBtn.innerHTML = 'Exporting...';
 
+            // The export function now uses the 'currentStatsForExport' object which was built in two phases.
             const { summary, coursePopularity, topCoursesByRevenue, tutorPopularity, topTutorsByRevenue, peakTimes, lowTimes } = currentStatsForExport;
 
             if (!summary || summary.length === 0) {
@@ -4339,20 +4445,23 @@ Thank you for your understanding.
                 return;
             }
 
+            // A simple re-ordering for a more logical export file
+            const reorderedSummary = summary.sort((a,b) => a.Metric.localeCompare(b.Metric));
+
             const exportData = [
-                ...summary,
+                ...reorderedSummary,
                 { Metric: '', Value: '' }, 
-                ...coursePopularity,
+                ...(coursePopularity || []),
                 { Metric: '', Value: '' }, 
-                ...topCoursesByRevenue,
+                ...(topCoursesByRevenue || []),
                 { Metric: '', Value: '' }, 
-                ...tutorPopularity,
+                ...(tutorPopularity || []),
                 { Metric: '', Value: '' }, 
-                ...topTutorsByRevenue,
+                ...(topTutorsByRevenue || []),
                 { Metric: '', Value: '' }, 
-                ...peakTimes,
+                ...(peakTimes || []),
                 { Metric: '', Value: '' }, 
-                ...lowTimes,
+                ...(lowTimes || []),
             ];
 
             const formattedExportData = exportData.map(item => ({
@@ -4371,7 +4480,9 @@ Thank you for your understanding.
         };
 
         periodSelect.onchange = renderFilteredStats;
+        // Initial call to load the data for the default period.
         renderFilteredStats();
+        // --- END: NEW TWO-PHASE RENDERING LOGIC ---
     }
 
     function rankByStat(courses, groupByKey, valueKey, lookup) {
@@ -4566,53 +4677,81 @@ Thank you for your understanding.
                 <div id="coursesPagination" class="flex justify-between items-center mt-4"></div>
             </div>`;
         
+        // --- START: MODIFIED LOGIC ---
+
         const monthFilter = container.querySelector('#coursesMonthFilter');
         const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
         const tutorFilter = container.querySelector('#coursesTutorFilter');
         const addCourseBtn = container.querySelector('#addCourseBtn');
-        const coursesTableBody = container.querySelector('#coursesTableBody');
+        const exportBtn = container.querySelector('#exportCoursesBtn');
+        const tableBody = container.querySelector('#coursesTableBody');
 
-        coursesTableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading available months...</td></tr>`;
-        const allCoursesSnapshot = await database.ref('/courses').once('value');
-        const allCourses = firebaseObjectToArray(allCoursesSnapshot.val());
+        // This variable will hold only the courses for the selected month.
+        let monthlyCourses = [];
 
-        const periods = [...new Set(allCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
+        // --- Step 1: Populate Month Filter (using the more efficient global course list) ---
+        // We still need all courses for other pages, so we use the globally loaded appState.courses
+        // *only* for building the initial filter dropdown.
+        const allLoadedCourses = appState.courses; 
+        const periods = [...new Set(allLoadedCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
+
         if (periods.length > 0) {
             monthFilter.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
         } else {
             monthFilter.innerHTML = '<option value="">No Months Available</option>';
         }
-        
+
+        // --- Step 2: Set up other filters and event listeners ---
         populateSportTypeFilter(sportTypeFilter);
+        sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId || 'all';
         
-        if (appState.selectedFilters.coursesPeriod && periods.includes(appState.selectedFilters.coursesPeriod)) {
-            monthFilter.value = appState.selectedFilters.coursesPeriod;
-        } else if (periods.length > 0) {
-            monthFilter.value = periods[0];
-            appState.selectedFilters.coursesPeriod = periods[0];
-        }
-
-        if (appState.selectedFilters.coursesSportTypeId) {
-            sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId;
-        }
-
         populateTutorFilter(tutorFilter, sportTypeFilter.value);
         tutorFilter.value = appState.selectedFilters.coursesTutorId || 'all';
         
-        const updateCoursesTable = () => {
-            const coursesPaginationContainer = container.querySelector('#coursesPagination');
-            const coursesCountEl = container.querySelector('#coursesCount');
+        // --- Step 3: Create the core data fetching and rendering function ---
+        const fetchAndRenderCourses = async () => {
             const selectedMonth = monthFilter.value;
+            if (!selectedMonth) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Please select a month.</td></tr>`;
+                return;
+            }
+
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading courses for ${selectedMonth}...</td></tr>`;
+            
+            // This is the new, efficient query!
+            const startOfMonth = `${selectedMonth}-01`;
+            const endOfMonth = `${selectedMonth}-31`; // A safe upper bound for all months
+            
+            const snapshot = await database.ref('/courses')
+                .orderByChild('date')
+                .startAt(startOfMonth)
+                .endAt(endOfMonth)
+                .once('value');
+
+            monthlyCourses = firebaseObjectToArray(snapshot.val());
+            appState.pagination.courses.page = 1; // Reset to first page on new data fetch
+            updateCoursesTable();
+        };
+
+        // --- Step 4: Create the table rendering function (which now uses the small 'monthlyCourses' array) ---
+        const updateCoursesTable = () => {
+            const paginationContainer = container.querySelector('#coursesPagination');
+            const coursesCountEl = container.querySelector('#coursesCount');
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
-            let filteredCourses = allCourses.filter(c => c.date.startsWith(selectedMonth));
+
+            // Perform secondary filtering on the already small, month-specific dataset.
+            let filteredCourses = monthlyCourses;
             if (selectedSportType !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
             }
             if (selectedTutor !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.tutorId === selectedTutor);
             }
-            coursesCountEl.textContent = `(${filteredCourses.length} added)`;
+
+            coursesCountEl.textContent = `(${filteredCourses.length} in month)`;
+
+            // Sorting logic remains the same.
             const { key, direction } = appState.coursesSort;
             filteredCourses.sort((a, b) => {
                 let valA, valB;
@@ -4633,26 +4772,29 @@ Thank you for your understanding.
                 if (valA > valB) return direction === 'asc' ? 1 : -1;
                 return 0;
             });
-            container.querySelectorAll('th.sortable .sort-icon').forEach(icon => {
-                icon.className = 'sort-icon';
-            });
+
+            // Update sort icons.
+            container.querySelectorAll('th.sortable .sort-icon').forEach(icon => icon.className = 'sort-icon');
             const activeHeader = container.querySelector(`th[data-sort-key="${key}"] .sort-icon`);
-            if (activeHeader) {
-                activeHeader.classList.add(direction);
-            }
+            if (activeHeader) activeHeader.classList.add(direction);
+
+            // Pagination logic remains the same, operating on the filtered list.
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
             let page = appState.pagination.courses.page;
             if (page > totalPages) page = totalPages;
+
             const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage.courses, page * itemsPerPage.courses);
+            
             let lastDate = null;
-            coursesTableBody.innerHTML = paginatedCourses.map((course, index) => {
+            tableBody.innerHTML = paginatedCourses.map((course, index) => {
                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                 const tutor = appState.tutors.find(t => t.id === course.tutorId);
                 const entryNumber = (page - 1) * itemsPerPage.courses + index + 1;
                 const bookingsCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
                 const isNewDay = course.date !== lastDate;
                 lastDate = course.date;
+
                 return `
                     <tr class="border-b border-slate-100 ${isNewDay && index > 0 ? 'day-divider' : ''}">
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
@@ -4665,67 +4807,72 @@ Thank you for your understanding.
                             <button class="edit-course-btn font-semibold text-indigo-600" data-id="${course.id}">Edit</button>
                             <button class="delete-course-btn font-semibold text-red-600" data-id="${course.id}">Delete</button>
                         </td>
-                    </tr>
-                `;
-            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses available for this month with the selected filters.</td></tr>`;
-            renderPaginationControls(coursesPaginationContainer, page, totalPages, filteredCourses.length, itemsPerPage.courses, (newPage) => {
+                    </tr>`;
+            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses match the selected filters for this month.</td></tr>`;
+
+            renderPaginationControls(paginationContainer, page, totalPages, filteredCourses.length, itemsPerPage.courses, (newPage) => {
                 appState.pagination.courses.page = newPage;
                 updateCoursesTable();
             });
-            coursesTableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
+
+            // Re-attach event listeners for the newly rendered buttons.
+            tableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
                 btn.onclick = () => {
-                    const courseToEdit = allCourses.find(c => c.id === btn.dataset.id);
+                    const courseToEdit = monthlyCourses.find(c => c.id === btn.dataset.id);
                     openCourseModal(courseToEdit.date, courseToEdit);
                 };
             });
-            coursesTableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
+            tableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
                 btn.onclick = () => {
-                    const courseId = btn.dataset.id;
-                    const course = allCourses.find(c => c.id === courseId);
-                    handleDeleteCourseRequest(course);
+                    const courseToDelete = monthlyCourses.find(c => c.id === btn.dataset.id);
+                    handleDeleteCourseRequest(courseToDelete);
                 };
             });
         };
 
-        const handleFilterChange = () => {
-            appState.pagination.courses.page = 1;
+        // --- Step 5: Wire up all the event handlers ---
+        monthFilter.onchange = () => {
             appState.selectedFilters.coursesPeriod = monthFilter.value;
+            fetchAndRenderCourses(); // This is the key change - re-fetch data for the new month.
+        };
+
+        sportTypeFilter.onchange = () => {
             appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
-            tutorFilter.value = 'all';
+            tutorFilter.value = 'all'; // Reset tutor filter when sport changes
             appState.selectedFilters.coursesTutorId = 'all';
-            updateCoursesTable();
+            updateCoursesTable(); // Just re-render the table with existing monthly data
         };
 
-        monthFilter.onchange = handleFilterChange;
-        sportTypeFilter.onchange = handleFilterChange;
         tutorFilter.onchange = () => {
             appState.selectedFilters.coursesTutorId = tutorFilter.value;
-            updateCoursesTable();
-        };
-
-        addCourseBtn.onclick = () => {
-            const defaultDateForNewCourse = getIsoDate(new Date());
-            openCourseModal(defaultDateForNewCourse);
+            updateCoursesTable(); // Just re-render the table
         };
         
-        const exportBtn = container.querySelector('#exportCoursesBtn');
-        exportBtn.onclick = async () => {
+        container.querySelectorAll('th.sortable').forEach(header => {
+            header.onclick = () => {
+                const newKey = header.dataset.sortKey;
+                const currentSort = appState.coursesSort;
+                if (currentSort.key === newKey) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.key = newKey;
+                    currentSort.direction = 'asc';
+                }
+                updateCoursesTable();
+            };
+        });
+        
+        addCourseBtn.onclick = () => {
+            openCourseModal(getIsoDate(new Date()));
+        };
+        
+        exportBtn.onclick = () => {
             exportBtn.disabled = true;
             exportBtn.innerHTML = 'Exporting...';
-            const selectedMonth = monthFilter.value;
-            const selectedSportType = sportTypeFilter.value;
-            const selectedTutor = tutorFilter.value;
-            let coursesToExport = allCourses.filter(c => c.date.startsWith(selectedMonth));
-            if (selectedSportType !== 'all') {
-                coursesToExport = coursesToExport.filter(c => c.sportTypeId === selectedSportType);
-            }
-            if (selectedTutor !== 'all') {
-                coursesToExport = coursesToExport.filter(c => c.tutorId === selectedTutor);
-            }
-
-            // --- FIX: Sort the data before exporting ---
-            coursesToExport.sort((a, b) => {
+            
+            // The export function now correctly uses the already filtered 'monthlyCourses' array
+            const coursesToExport = monthlyCourses.sort((a, b) => {
                 const dateComparison = a.date.localeCompare(b.date);
                 if (dateComparison !== 0) return dateComparison;
                 return a.time.localeCompare(b.time);
@@ -4746,25 +4893,21 @@ Thank you for your understanding.
                     Capacity: course.maxParticipants
                 };
             });
+
             exportToCsv('courses-export', exportData);
+            
             exportBtn.disabled = false;
             exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
         };
 
-        container.querySelectorAll('th.sortable').forEach(header => {
-            header.onclick = () => {
-                const newKey = header.dataset.sortKey;
-                const currentSort = appState.coursesSort;
-                if (currentSort.key === newKey) {
-                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-                } else {
-                    currentSort.key = newKey;
-                    currentSort.direction = 'asc';
-                }
-                updateCoursesTable();
-            };
-        });
-
+        // --- Step 6: Initial data load ---
+        if (monthFilter.value) {
+            fetchAndRenderCourses();
+        } else {
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">No courses found in the database.</td></tr>`;
+        }
+        
+        // Add swipe gesture for mobile table scrolling
         const tableContainer = container.querySelector('.table-swipe-container');
         let isDown = false, startX, scrollLeft;
         tableContainer.addEventListener('mousedown', (e) => { isDown = true; tableContainer.classList.add('swiping'); startX = e.pageX - tableContainer.offsetLeft; scrollLeft = tableContainer.scrollLeft; });
@@ -4772,7 +4915,7 @@ Thank you for your understanding.
         tableContainer.addEventListener('mouseup', () => { isDown = false; tableContainer.classList.remove('swiping'); });
         tableContainer.addEventListener('mousemove', (e) => { if(!isDown) return; e.preventDefault(); const x = e.pageX - tableContainer.offsetLeft; const walk = (x - startX) * 2; tableContainer.scrollLeft = scrollLeft - walk; });
 
-        updateCoursesTable();
+        // --- END: MODIFIED LOGIC ---
     }
 
     // --- START: Replacement for openMemberBookingHistoryModal ---
@@ -4871,9 +5014,8 @@ Thank you for your understanding.
         }
 
         let initialDataLoaded = {};
-        // 'allCourses' is removed. We will query data on-demand instead.
         const requiredKeys = isOwner 
-        ? ['courses', 'tutors', 'sportTypes', 'currentUser'] // <-- REMOVED 'users' and 'studioSettings'
+        ? ['courses', 'tutors', 'sportTypes', 'currentUser']
         : ['courses', 'tutors', 'sportTypes', 'currentUser'];
         requiredKeys.forEach(k => initialDataLoaded[k] = false);
 
@@ -4888,147 +5030,155 @@ Thank you for your understanding.
         };
 
         const ownerCourseListener = (snapshot) => {
-        const val = snapshot.val();
-        // It's critical to get a fresh copy of previous courses for comparison.
-        const previousCourses = [...appState.courses]; 
-        const newCourses = firebaseObjectToArray(val);
+            const val = snapshot.val();
+            const previousCourses = [...appState.courses]; 
+            const newCourses = firebaseObjectToArray(val);
+            appState.courses = newCourses;
 
-        // Always update the application state with the latest data first.
-        appState.courses = newCourses;
-
-        // --- Start Detection Logic ---
-        // Only run this logic if the page is already loaded and the user is on the schedule.
-        if (previousCourses.length > 0 && appState.activePage === 'schedule') {
-            let aNewBookingWasHandled = false;
-
-            newCourses.forEach(newCourse => {
-                const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                if (oldCourse) {
-                    const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                    const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                    
-                    if (newBookedIds.length > oldBookedIds.length) {
-                        const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                        if (newMemberId) {
-                            aNewBookingWasHandled = true; // Mark that we've handled this special case.
-                            const member = appState.users.find(u => u.id === newMemberId);
-                            const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                            
-                            if (member && sportType) {
-                                // 1. Show the text notification.
-                                showBookingNotification({
-                                    memberName: member.name,
-                                    courseName: sportType.name,
-                                    courseTime: newCourse.time,
-                                    duration: newCourse.duration
-                                });
-
-                                // 2. Find the existing course element in the DOM.
-                                const courseElement = document.getElementById(newCourse.id);
-                                if (courseElement) {
-                                    const counterElement = courseElement.querySelector('.participant-counter');
-                                    if (counterElement) {
-                                        // 3. Directly update the counter's text content.
-                                        const currentBookings = newBookedIds.length;
-                                        counterElement.textContent = `${currentBookings}/${newCourse.maxParticipants}`;
-                                        counterElement.title = `${currentBookings} of ${newCourse.maxParticipants} spots filled`;
-                                        
-                                        // 4. Add the class to trigger the CSS animation.
-                                        counterElement.classList.add('new-booking-pulse');
-                                        
-                                        // 5. Remove the class after the animation is done to allow it to be re-triggered later.
-                                        setTimeout(() => {
-                                            counterElement.classList.remove('new-booking-pulse');
-                                        }, 2000); 
+            if (previousCourses.length > 0 && appState.activePage === 'schedule') {
+                let aNewBookingWasHandled = false;
+                newCourses.forEach(newCourse => {
+                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                    if (oldCourse) {
+                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                        
+                        if (newBookedIds.length > oldBookedIds.length) {
+                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                            if (newMemberId) {
+                                aNewBookingWasHandled = true;
+                                const member = appState.users.find(u => u.id === newMemberId);
+                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                                
+                                if (member && sportType) {
+                                    showBookingNotification({
+                                        memberName: member.name,
+                                        courseName: sportType.name,
+                                        courseTime: newCourse.time,
+                                        duration: newCourse.duration
+                                    });
+                                    const courseElement = document.getElementById(newCourse.id);
+                                    if (courseElement) {
+                                        const counterElement = courseElement.querySelector('.participant-counter');
+                                        if (counterElement) {
+                                            const currentBookings = newBookedIds.length;
+                                            counterElement.textContent = `${currentBookings}/${newCourse.maxParticipants}`;
+                                            counterElement.title = `${currentBookings} of ${newCourse.maxParticipants} spots filled`;
+                                            counterElement.classList.add('new-booking-pulse');
+                                            setTimeout(() => {
+                                                counterElement.classList.remove('new-booking-pulse');
+                                            }, 2000); 
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                });
+                if (aNewBookingWasHandled) {
+                    return; 
                 }
-            });
-
-            // --- This is the most critical part of the fix ---
-            // If we handled a new booking via direct DOM manipulation, we must
-            // stop the function here to prevent a full, unnecessary re-render.
-            if (aNewBookingWasHandled) {
-                return; 
             }
-        }
+            
+            if (!initialDataLoaded.courses){
+                initialDataLoaded.courses = true;
+                checkAllDataLoaded();
+            } else {
+                if (appState.activePage === 'schedule') {
+                     renderCurrentPage(); 
+                }
+            }
+        };
         
-        // If this is the very first data load, render the UI.
-        if (!initialDataLoaded.courses){
-            initialDataLoaded.courses = true;
-            checkAllDataLoaded();
-        } else {
-            // For any other data change that was NOT a new booking (e.g., an owner edits
-            // a course time, cancels a class, etc.), we will proceed with a full re-render
-            // to ensure the entire UI is in sync.
-            if (appState.activePage === 'schedule') {
-                 renderCurrentPage(); 
-            }
-        }
-    };
-
         const memberCourseFetcher = async () => {
             try {
                 const memberId = appState.currentUser.id;
                 const todayIso = getIsoDate(new Date());
 
+                // Phase 1: Initial Data Load
                 const memberBookingsSnapshot = await database.ref(`/memberBookings/${memberId}`).once('value');
                 const bookedCourseIds = memberBookingsSnapshot.exists() ? Object.keys(memberBookingsSnapshot.val()) : [];
 
-                const bookedCoursePromises = bookedCourseIds.map(courseId =>
-                    database.ref(`/courses/${courseId}`).once('value')
-                );
-                const bookedCourseSnapshots = await Promise.all(bookedCoursePromises);
-                const memberHistoryCourses = bookedCourseSnapshots
-                    .map(snap => ({ id: snap.key, ...snap.val() }))
-                    .filter(course => course.date); 
+                const bookedCoursePromises = bookedCourseIds.map(courseId => database.ref(`/courses/${courseId}`).once('value'));
+                const futureCoursesPromise = database.ref('/courses').orderByChild('date').startAt(todayIso).once('value');
+                
+                const [bookedCourseSnapshots, futureCoursesSnapshot] = await Promise.all([Promise.all(bookedCoursePromises), futureCoursesPromise]);
 
-                if (activeCoursesRef) activeCoursesRef.off(); 
-                activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(todayIso);
+                const memberHistoryCourses = bookedCourseSnapshots.map(snap => ({ id: snap.key, ...snap.val() })).filter(c => c.date);
+                const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
 
-                dataListeners.courses = (futureCoursesSnapshot) => {
-                    const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
-                    const allCoursesMap = new Map();
-                    memberHistoryCourses.forEach(course => allCoursesMap.set(course.id, course));
-                    futureCourses.forEach(course => allCoursesMap.set(course.id, course));
-                    appState.courses = Array.from(allCoursesMap.values());
+                const allCoursesMap = new Map();
+                memberHistoryCourses.forEach(course => allCoursesMap.set(course.id, course));
+                futureCourses.forEach(course => allCoursesMap.set(course.id, course));
+                appState.courses = Array.from(allCoursesMap.values());
 
-                    if (!initialDataLoaded.courses){
-                        initialDataLoaded.courses = true;
-                        checkAllDataLoaded();
-                    } else {
-                         if (appState.activePage === 'schedule') { saveSchedulePosition(); }
-                         renderCurrentPage();
-                    }
-                };
-                activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on member /courses`, error));
+                if (!initialDataLoaded.courses){
+                    initialDataLoaded.courses = true;
+                    checkAllDataLoaded();
+                } else {
+                     if (appState.activePage === 'schedule') { saveSchedulePosition(); }
+                     renderCurrentPage();
+                }
+
+                // Phase 2: Attach Real-Time Listeners
+                futureCourses.forEach(course => {
+                    const courseRef = database.ref(`/courses/${course.id}/bookedBy`);
+                    
+                    const listener = courseRef.on('value', (snapshot) => {
+                        const bookedByData = snapshot.val() || {};
+                        const currentBookings = Object.keys(bookedByData).length;
+                        const isFull = currentBookings >= course.maxParticipants;
+                        
+                        const courseElement = document.getElementById(course.id);
+                        if (!courseElement) return;
+
+                        const counterElement = courseElement.querySelector('.participant-counter');
+                        if (counterElement) {
+                            const newCounterHTML = createParticipantCounter(currentBookings, course.maxParticipants, false, false);
+                            counterElement.outerHTML = newCounterHTML;
+                        }
+
+                        const actionContainer = courseElement.querySelector('.member-action-container');
+                        if (actionContainer) {
+                           const isBookedByCurrentUser = bookedByData[appState.currentUser.id];
+                           let newActionHTML = '';
+                           if (isBookedByCurrentUser) {
+                                // Do nothing to prevent "CANCEL?" button from reverting.
+                           } else if (isFull) {
+                               newActionHTML = `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>`;
+                               courseElement.classList.remove('cursor-pointer');
+                           } else {
+                               newActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
+                               courseElement.classList.add('cursor-pointer');
+                           }
+                           if(newActionHTML) actionContainer.innerHTML = newActionHTML;
+                        }
+
+                        const courseInState = appState.courses.find(c => c.id === course.id);
+                        if (courseInState) courseInState.bookedBy = bookedByData;
+                    });
+                    
+                    dataListeners[`course_${course.id}`] = { ref: courseRef, listener };
+                });
 
             } catch (error) {
                 console.error("Failed to fetch member's courses:", error);
-                initialDataLoaded.courses = true;
-                checkAllDataLoaded();
+                if (!initialDataLoaded.courses) {
+                    initialDataLoaded.courses = true;
+                    checkAllDataLoaded();
+                }
             }
         };
 
         if (isOwner) {
             const today = new Date();
             const daysToLookBack = appState.ownerPastDaysVisible || 0;
-            const daysToLookForward = 30;
-
             const startDate = new Date();
             startDate.setUTCHours(0, 0, 0, 0);
             startDate.setUTCDate(today.getUTCDate() - daysToLookBack);
             const startIso = getIsoDate(startDate);
             
-            const endDate = new Date();
-            endDate.setUTCHours(0, 0, 0, 0);
-            endDate.setUTCDate(today.getUTCDate() + daysToLookForward);
-            const endIso = getIsoDate(endDate);
-
-            activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso).endAt(endIso);
+            activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso);
             dataListeners.courses = ownerCourseListener;
             activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on owner /courses`, error));
         } else {
@@ -5045,11 +5195,7 @@ Thank you for your understanding.
                     appState.currentUser = { ...appState.currentUser, ...val };
                 } else if (key === 'studioSettings') {
                     if (val) {
-                        appState.studioSettings = {
-                            ...appState.studioSettings,
-                            ...val,
-                            courseDefaults: { ...appState.studioSettings.courseDefaults, ...(val.courseDefaults || {}) }
-                        };
+                        appState.studioSettings = { ...appState.studioSettings, ...val, courseDefaults: { ...appState.studioSettings.courseDefaults, ...(val.courseDefaults || {}) } };
                     }
                 } else {
                     appState[key] = firebaseObjectToArray(val);
@@ -5057,22 +5203,13 @@ Thank you for your understanding.
                 
                 if (!initialDataLoaded[key]){
                     initialDataLoaded[key] = true;
-                    if (requiredKeys.includes(key)) {
-                        checkAllDataLoaded();
-                    }
+                    if (requiredKeys.includes(key)) checkAllDataLoaded();
                 } else {
-                    // --- START OF MODIFIED FIX ---
-                    // If any user data changes while on the schedule page,
-                    // do not re-render. Let the `courses` listener handle it.
-                    // This covers both a member canceling (currentUser) and an
-                    // owner deleting/refunding (users)
                     if ((key === 'currentUser' || key === 'users') && appState.activePage === 'schedule') {
-                        // Do nothing. The courses listener will handle the visual update.
+                        if (appState.currentUser.role === 'owner') renderCurrentPage();
                     } else {
-                        // For all other cases, re-render as normal.
                         renderCurrentPage();
                     }
-                    // --- END OF FIX ---
                 }
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
@@ -5080,34 +5217,23 @@ Thank you for your understanding.
     };
 
     const detachDataListeners = () => {
-        // --- NEW: Detach the 'allCourses' listener if it exists ---
-        if (dataListeners.allCourses) {
-            database.ref('/courses').off('value', dataListeners.allCourses);
-        }
-        
-        // --- START: MODIFIED LOGIC ---
-        // Specifically detach the courses listener using its stored query reference
         if (activeCoursesRef && dataListeners.courses) {
             activeCoursesRef.off('value', dataListeners.courses);
-            delete dataListeners.courses; // Clean up the listener map
         }
-        activeCoursesRef = null; // Reset the reference
-        // --- END: MODIFIED LOGIC ---
+        activeCoursesRef = null;
 
-        Object.entries(dataListeners).forEach(([key, listener]) => {
-            let path = `/${key}`;
-            if (key === 'currentUser' && appState.currentUser) {
-                path = `/users/${appState.currentUser.id}`;
-            } else if (key === 'users' && appState.currentUser?.role !== 'owner') {
-                return;
-            } else if (key === 'studioSettings' && appState.currentUser?.role !== 'owner') {
-                return;
+        Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
+            if (key.startsWith('course_')) {
+                listenerInfo.ref.off('value', listenerInfo.listener);
+            } else {
+                let path = `/${key}`;
+                if (key === 'currentUser' && appState.currentUser) {
+                    path = `/users/${appState.currentUser.id}`;
+                }
+                database.ref(path).off('value', listenerInfo);
             }
-            // The loop now handles all other listeners
-            database.ref(path).off('value', listener);
         });
         
-        // Reset the object for a clean state
         dataListeners = {};
     };
 
