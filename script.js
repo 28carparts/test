@@ -1571,14 +1571,12 @@ Thank you for your understanding.
                     )
                     : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
                 }
-                <div class="member-action-container">
-                    ${isOwner 
-                        ? (isFull 
-                            ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
-                            : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`) 
-                        : memberActionHTML
-                    }
-                </div>
+                ${isOwner 
+                    ? (isFull 
+                        ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
+                        : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`) 
+                    : memberActionHTML
+                }
             </div>`;
 
         el.addEventListener('click', (e) => {
@@ -5001,104 +4999,117 @@ Thank you for your understanding.
     const initDataListeners = () => {
         const isOwner = appState.currentUser?.role === 'owner';
 
-        // Detach any old listeners before setting up new ones.
-        detachDataListeners();
-
-        // This function now acts as a simple router.
-        if (isOwner) {
-            initOwnerListeners();
-        } else {
-            initMemberListeners();
-        }
-    };
-
-    // --- START: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
-    const initOwnerListeners = () => {
         const refs = {
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
-            users: database.ref('/users'),
-            studioSettings: database.ref('/studioSettings'),
-            currentUser: database.ref('/users/' + appState.currentUser.id),
         };
 
-        const today = new Date();
-        const daysToLookBack = appState.ownerPastDaysVisible || 0;
-        const startDate = new Date();
-        startDate.setUTCHours(0, 0, 0, 0);
-        startDate.setUTCDate(today.getUTCDate() - daysToLookBack);
-        const startIso = getIsoDate(startDate);
+        refs.currentUser = database.ref('/users/' + appState.currentUser.id);
         
-        activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso);
-        
-        const ownerCourseListener = (snapshot) => {
-            const val = snapshot.val();
-            const previousCourses = [...appState.courses];
-            const newCourses = firebaseObjectToArray(val);
-            appState.courses = newCourses;
+        if (isOwner) {
+            refs.users = database.ref('/users');
+            refs.studioSettings = database.ref('/studioSettings');
+        }
 
-            if (previousCourses.length > 0 && appState.activePage === 'schedule') {
-                let aNewBookingWasHandled = false;
-                newCourses.forEach(newCourse => {
-                    const oldCourse = previousCourses.find(c => c.id === newCourse.id);
-                    if (oldCourse) {
-                        const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                        const newBookedIds = Object.keys(newCourse.bookedBy || {});
-                        if (newBookedIds.length > oldBookedIds.length) {
-                            const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
-                            if (newMemberId) {
-                                aNewBookingWasHandled = true;
-                                const member = appState.users.find(u => u.id === newMemberId);
-                                const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
-                                if (member && sportType) {
-                                    showBookingNotification({ memberName: member.name, courseName: sportType.name, courseTime: newCourse.time, duration: newCourse.duration });
-                                    const courseElement = document.getElementById(newCourse.id);
-                                    if (courseElement) {
-                                        const counterElement = courseElement.querySelector('.participant-counter');
-                                        if (counterElement) {
-                                            counterElement.textContent = `${newBookedIds.length}/${newCourse.maxParticipants}`;
-                                            counterElement.title = `${newBookedIds.length} of ${newCourse.maxParticipants} spots filled`;
-                                            counterElement.classList.add('new-booking-pulse');
-                                            setTimeout(() => counterElement.classList.remove('new-booking-pulse'), 2000);
-                                        }
+        let initialDataLoaded = {};
+        // 'allCourses' is removed. We will query data on-demand instead.
+        const requiredKeys = isOwner 
+        ? ['courses', 'tutors', 'sportTypes', 'currentUser'] // <-- REMOVED 'users' and 'studioSettings'
+        : ['courses', 'tutors', 'sportTypes', 'currentUser'];
+        requiredKeys.forEach(k => initialDataLoaded[k] = false);
+
+        let allDataLoaded = false;
+        
+        const checkAllDataLoaded = () => {
+            if (allDataLoaded) return;
+            if (requiredKeys.every(key => initialDataLoaded[key])) {
+                allDataLoaded = true;
+                updateUIVisibility();
+            }
+        };
+
+        const ownerCourseListener = (snapshot) => {
+        const val = snapshot.val();
+        // It's critical to get a fresh copy of previous courses for comparison.
+        const previousCourses = [...appState.courses]; 
+        const newCourses = firebaseObjectToArray(val);
+
+        // Always update the application state with the latest data first.
+        appState.courses = newCourses;
+
+        // --- Start Detection Logic ---
+        // Only run this logic if the page is already loaded and the user is on the schedule.
+        if (previousCourses.length > 0 && appState.activePage === 'schedule') {
+            let aNewBookingWasHandled = false;
+
+            newCourses.forEach(newCourse => {
+                const oldCourse = previousCourses.find(c => c.id === newCourse.id);
+                if (oldCourse) {
+                    const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
+                    const newBookedIds = Object.keys(newCourse.bookedBy || {});
+                    
+                    if (newBookedIds.length > oldBookedIds.length) {
+                        const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
+                        if (newMemberId) {
+                            aNewBookingWasHandled = true; // Mark that we've handled this special case.
+                            const member = appState.users.find(u => u.id === newMemberId);
+                            const sportType = appState.sportTypes.find(st => st.id === newCourse.sportTypeId);
+                            
+                            if (member && sportType) {
+                                // 1. Show the text notification.
+                                showBookingNotification({
+                                    memberName: member.name,
+                                    courseName: sportType.name,
+                                    courseTime: newCourse.time,
+                                    duration: newCourse.duration
+                                });
+
+                                // 2. Find the existing course element in the DOM.
+                                const courseElement = document.getElementById(newCourse.id);
+                                if (courseElement) {
+                                    const counterElement = courseElement.querySelector('.participant-counter');
+                                    if (counterElement) {
+                                        // 3. Directly update the counter's text content.
+                                        const currentBookings = newBookedIds.length;
+                                        counterElement.textContent = `${currentBookings}/${newCourse.maxParticipants}`;
+                                        counterElement.title = `${currentBookings} of ${newCourse.maxParticipants} spots filled`;
+                                        
+                                        // 4. Add the class to trigger the CSS animation.
+                                        counterElement.classList.add('new-booking-pulse');
+                                        
+                                        // 5. Remove the class after the animation is done to allow it to be re-triggered later.
+                                        setTimeout(() => {
+                                            counterElement.classList.remove('new-booking-pulse');
+                                        }, 2000); 
                                     }
                                 }
                             }
                         }
                     }
-                });
-                if (aNewBookingWasHandled) return;
-            }
-            renderCurrentPage();
-        };
-        
-        dataListeners.courses = ownerCourseListener;
-        activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on owner /courses`, error));
-        
-        Object.entries(refs).forEach(([key, ref]) => {
-            dataListeners[key] = (snapshot) => {
-                const val = snapshot.val();
-                if (key === 'currentUser') {
-                    appState.currentUser = { ...appState.currentUser, ...val };
-                } else if (key === 'studioSettings') {
-                    if (val) appState.studioSettings = { ...appState.studioSettings, ...val, courseDefaults: { ...appState.studioSettings.courseDefaults, ...(val.courseDefaults || {}) } };
-                } else {
-                    appState[key] = firebaseObjectToArray(val);
                 }
-                renderCurrentPage();
-            };
-            ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
-        });
-    };
-    // --- END: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
+            });
 
-    // --- START: NEW MEMBER-SPECIFIC LISTENER FUNCTION ---
-    const initMemberListeners = () => {
-        const refs = {
-            tutors: database.ref('/tutors'),
-            sportTypes: database.ref('/sportTypes'),
-            currentUser: database.ref('/users/' + appState.currentUser.id),
-        };
+            // --- This is the most critical part of the fix ---
+            // If we handled a new booking via direct DOM manipulation, we must
+            // stop the function here to prevent a full, unnecessary re-render.
+            if (aNewBookingWasHandled) {
+                return; 
+            }
+        }
+        
+        // If this is the very first data load, render the UI.
+        if (!initialDataLoaded.courses){
+            initialDataLoaded.courses = true;
+            checkAllDataLoaded();
+        } else {
+            // For any other data change that was NOT a new booking (e.g., an owner edits
+            // a course time, cancels a class, etc.), we will proceed with a full re-render
+            // to ensure the entire UI is in sync.
+            if (appState.activePage === 'schedule') {
+                 renderCurrentPage(); 
+            }
+        }
+    };
 
         const memberCourseFetcher = async () => {
             try {
@@ -5107,120 +5118,151 @@ Thank you for your understanding.
 
                 const memberBookingsSnapshot = await database.ref(`/memberBookings/${memberId}`).once('value');
                 const bookedCourseIds = memberBookingsSnapshot.exists() ? Object.keys(memberBookingsSnapshot.val()) : [];
-                const bookedCoursePromises = bookedCourseIds.map(courseId => database.ref(`/courses/${courseId}`).once('value'));
-                const futureCoursesPromise = database.ref('/courses').orderByChild('date').startAt(todayIso).once('value');
-                
-                const [bookedCourseSnapshots, futureCoursesSnapshot] = await Promise.all([Promise.all(bookedCoursePromises), futureCoursesPromise]);
 
-                const memberHistoryCourses = bookedCourseSnapshots.map(snap => ({ id: snap.key, ...snap.val() })).filter(c => c.date);
-                const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
+                const bookedCoursePromises = bookedCourseIds.map(courseId =>
+                    database.ref(`/courses/${courseId}`).once('value')
+                );
+                const bookedCourseSnapshots = await Promise.all(bookedCoursePromises);
+                const memberHistoryCourses = bookedCourseSnapshots
+                    .map(snap => ({ id: snap.key, ...snap.val() }))
+                    .filter(course => course.date); 
 
-                const allCoursesMap = new Map();
-                memberHistoryCourses.forEach(course => allCoursesMap.set(course.id, course));
-                futureCourses.forEach(course => allCoursesMap.set(course.id, course));
-                appState.courses = Array.from(allCoursesMap.values());
-                
-                renderCurrentPage();
+                if (activeCoursesRef) activeCoursesRef.off(); 
+                activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(todayIso);
 
-                futureCourses.forEach(course => {
-                    const courseRef = database.ref(`/courses/${course.id}/bookedBy`);
-                    const listener = courseRef.on('value', (snapshot) => {
-                        const bookedByData = snapshot.val() || {};
-                        const currentBookings = Object.keys(bookedByData).length;
-                        const isFull = currentBookings >= course.maxParticipants;
-                        
-                        const courseElement = document.getElementById(course.id);
-                        if (!courseElement) return;
+                dataListeners.courses = (futureCoursesSnapshot) => {
+                    const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
+                    const allCoursesMap = new Map();
+                    memberHistoryCourses.forEach(course => allCoursesMap.set(course.id, course));
+                    futureCourses.forEach(course => allCoursesMap.set(course.id, course));
+                    appState.courses = Array.from(allCoursesMap.values());
 
-                        const counterElement = courseElement.querySelector('.participant-counter');
-                        if (counterElement) counterElement.outerHTML = createParticipantCounter(currentBookings, course.maxParticipants, false, false);
+                    if (!initialDataLoaded.courses){
+                        initialDataLoaded.courses = true;
+                        checkAllDataLoaded();
+                    } else {
+                         if (appState.activePage === 'schedule') { saveSchedulePosition(); }
+                         renderCurrentPage();
+                    }
+                };
+                activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on member /courses`, error));
 
-                        const actionContainer = courseElement.querySelector('.member-action-container');
-                        if (actionContainer) {
-                           const isBookedByCurrentUser = bookedByData[appState.currentUser.id];
-                           let newActionHTML = '';
-                           if (!isBookedByCurrentUser) {
-                               if (isFull) {
-                                   newActionHTML = `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>`;
-                                   courseElement.classList.remove('cursor-pointer');
-                               } else {
-                                   newActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
-                                   courseElement.classList.add('cursor-pointer');
-                               }
-                               actionContainer.innerHTML = newActionHTML;
-                           }
-                        }
-
-                        const courseInState = appState.courses.find(c => c.id === course.id);
-                        if (courseInState) courseInState.bookedBy = bookedByData;
-                    });
-                    
-                    dataListeners[`course_${course.id}`] = { ref: courseRef, listener };
-                });
             } catch (error) {
                 console.error("Failed to fetch member's courses:", error);
+                initialDataLoaded.courses = true;
+                checkAllDataLoaded();
             }
         };
 
-        memberCourseFetcher();
+        if (isOwner) {
+            const today = new Date();
+            const daysToLookBack = appState.ownerPastDaysVisible || 0;
+            const daysToLookForward = 30;
+
+            const startDate = new Date();
+            startDate.setUTCHours(0, 0, 0, 0);
+            startDate.setUTCDate(today.getUTCDate() - daysToLookBack);
+            const startIso = getIsoDate(startDate);
+            
+            const endDate = new Date();
+            endDate.setUTCHours(0, 0, 0, 0);
+            endDate.setUTCDate(today.getUTCDate() + daysToLookForward);
+            const endIso = getIsoDate(endDate);
+
+            activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso).endAt(endIso);
+            dataListeners.courses = ownerCourseListener;
+            activeCoursesRef.on('value', dataListeners.courses, (error) => console.error(`Listener error on owner /courses`, error));
+        } else {
+            memberCourseFetcher();
+        }
 
         Object.entries(refs).forEach(([key, ref]) => {
+            if (dataListeners[key]) ref.off('value', dataListeners[key]);
+
             dataListeners[key] = (snapshot) => {
                 const val = snapshot.val();
+                
                 if (key === 'currentUser') {
                     appState.currentUser = { ...appState.currentUser, ...val };
+                } else if (key === 'studioSettings') {
+                    if (val) {
+                        appState.studioSettings = {
+                            ...appState.studioSettings,
+                            ...val,
+                            courseDefaults: { ...appState.studioSettings.courseDefaults, ...(val.courseDefaults || {}) }
+                        };
+                    }
                 } else {
                     appState[key] = firebaseObjectToArray(val);
                 }
-                renderCurrentPage();
+                
+                if (!initialDataLoaded[key]){
+                    initialDataLoaded[key] = true;
+                    if (requiredKeys.includes(key)) {
+                        checkAllDataLoaded();
+                    }
+                } else {
+                    // --- START OF MODIFIED FIX ---
+                    // If any user data changes while on the schedule page,
+                    // do not re-render. Let the `courses` listener handle it.
+                    // This covers both a member canceling (currentUser) and an
+                    // owner deleting/refunding (users)
+                    if ((key === 'currentUser' || key === 'users') && appState.activePage === 'schedule') {
+                        // Do nothing. The courses listener will handle the visual update.
+                    } else {
+                        // For all other cases, re-render as normal.
+                        renderCurrentPage();
+                    }
+                    // --- END OF FIX ---
+                }
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
     };
-    // --- END: NEW MEMBER-SPECIFIC LISTENER FUNCTION ---
-    
+
     const detachDataListeners = () => {
+        // --- NEW: Detach the 'allCourses' listener if it exists ---
+        if (dataListeners.allCourses) {
+            database.ref('/courses').off('value', dataListeners.allCourses);
+        }
+        
+        // --- START: MODIFIED LOGIC ---
+        // Specifically detach the courses listener using its stored query reference
         if (activeCoursesRef && dataListeners.courses) {
             activeCoursesRef.off('value', dataListeners.courses);
+            delete dataListeners.courses; // Clean up the listener map
         }
-        activeCoursesRef = null;
+        activeCoursesRef = null; // Reset the reference
+        // --- END: MODIFIED LOGIC ---
 
-        Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
-            if (key.startsWith('course_')) {
-                listenerInfo.ref.off('value', listenerInfo.listener);
-            } else {
-                let path = `/${key}`;
-                if (key === 'currentUser' && appState.currentUser) {
-                    path = `/users/${appState.currentUser.id}`;
-                }
-                database.ref(path).off('value', listenerInfo);
+        Object.entries(dataListeners).forEach(([key, listener]) => {
+            let path = `/${key}`;
+            if (key === 'currentUser' && appState.currentUser) {
+                path = `/users/${appState.currentUser.id}`;
+            } else if (key === 'users' && appState.currentUser?.role !== 'owner') {
+                return;
+            } else if (key === 'studioSettings' && appState.currentUser?.role !== 'owner') {
+                return;
             }
+            // The loop now handles all other listeners
+            database.ref(path).off('value', listener);
         });
         
+        // Reset the object for a clean state
         dataListeners = {};
     };
 
     // --- Auth State Change Handler ---
     const handleAuthStateChange = (user) => {
         if (user) {
-            // Detach any listeners from a previous session.
             detachDataListeners();
-            
             database.ref('/users/' + user.uid).once('value', snapshot => {
                 if (snapshot.exists()) {
                     appState.currentUser = { id: user.uid, ...snapshot.val() };
                     DOMElements.authPage.classList.add('hidden');
                     DOMElements.appWrapper.classList.remove('hidden');
                     showMessageBox(`Welcome back, ${appState.currentUser.name}!`, 'success');
-                    
-                    // --- START: CRITICAL FIX ---
-                    // Build the main UI shell, including the navigation bar, immediately.
-                    updateUIVisibility();
-                    // --- END: CRITICAL FIX ---
-                    
-                    // Now, start fetching the dynamic data for the pages.
                     initDataListeners();
-
                 } else {
                     console.error("Authenticated user has no database entry. Logging out.");
                     auth.signOut();
