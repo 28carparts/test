@@ -1464,7 +1464,7 @@ Thank you for your understanding.
         });
     }
 
-    function createParticipantCounter(current, max, shouldPulse = false, isEditable = false) {
+    function createParticipantCounter(current, max, isEditable = false) {
         const fillRate = max > 0 ? current / max : 0;
         
         let statusClass = 'status-low';
@@ -1479,7 +1479,7 @@ Thank you for your understanding.
         const editableClass = isEditable ? 'participant-counter-editable' : '';
 
         return `
-            <div class="participant-counter ${statusClass} ${editableClass} ${shouldPulse ? 'new-booking-pulse' : ''}" title="${current} of ${max} spots filled">
+            <div class="participant-counter ${statusClass} ${editableClass}" title="${current} of ${max} spots filled">
                 ${current}/${max}
             </div>
         `;
@@ -1543,10 +1543,10 @@ Thank you for your understanding.
         
         const participantCounterHTML = isOwner
             ? (window.matchMedia('(any-pointer: fine)').matches
-                ? createParticipantCounter(currentBookings, course.maxParticipants, false, true)
-                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false, false)}</div>`
+                ? createParticipantCounter(currentBookings, course.maxParticipants, true)
+                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false)}</div>`
             )
-            : createParticipantCounter(currentBookings, course.maxParticipants, course.id === appState.pulseAnimationCourseId, false);
+            : createParticipantCounter(currentBookings, course.maxParticipants, false);
 
         el.innerHTML = `
             <div>
