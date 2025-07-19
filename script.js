@@ -4677,70 +4677,59 @@ Thank you for your understanding.
                 <div id="coursesPagination" class="flex justify-between items-center mt-4"></div>
             </div>`;
         
-        // --- START: MODIFIED LOGIC ---
-
         const monthFilter = container.querySelector('#coursesMonthFilter');
         const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
         const tutorFilter = container.querySelector('#coursesTutorFilter');
         const addCourseBtn = container.querySelector('#addCourseBtn');
         const exportBtn = container.querySelector('#exportCoursesBtn');
         const tableBody = container.querySelector('#coursesTableBody');
-
-        // This variable will hold only the courses for the selected month.
         let monthlyCourses = [];
 
-        // --- Step 1: Populate Month Filter (using the more efficient global course list) ---
-        // We still need all courses for other pages, so we use the globally loaded appState.courses
-        // *only* for building the initial filter dropdown.
-        const allLoadedCourses = appState.courses; 
-        const periods = [...new Set(allLoadedCourses.map(c => c.date.substring(0, 7)))].sort().reverse();
+        const periodsSnapshot = await database.ref('/courseMonths').once('value');
+        const periods = periodsSnapshot.exists() ? Object.keys(periodsSnapshot.val()).sort().reverse() : [];
 
         if (periods.length > 0) {
             monthFilter.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
+            if (appState.selectedFilters.coursesPeriod && periods.includes(appState.selectedFilters.coursesPeriod)) {
+                monthFilter.value = appState.selectedFilters.coursesPeriod;
+            } else {
+                monthFilter.value = periods[0];
+            }
         } else {
             monthFilter.innerHTML = '<option value="">No Months Available</option>';
         }
 
-        // --- Step 2: Set up other filters and event listeners ---
         populateSportTypeFilter(sportTypeFilter);
         sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId || 'all';
-        
         populateTutorFilter(tutorFilter, sportTypeFilter.value);
         tutorFilter.value = appState.selectedFilters.coursesTutorId || 'all';
         
-        // --- Step 3: Create the core data fetching and rendering function ---
         const fetchAndRenderCourses = async () => {
             const selectedMonth = monthFilter.value;
             if (!selectedMonth) {
                 tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Please select a month.</td></tr>`;
+                container.querySelector('#coursesCount').textContent = '';
+                container.querySelector('#coursesPagination').innerHTML = '';
                 return;
             }
 
             tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading courses for ${selectedMonth}...</td></tr>`;
             
-            // This is the new, efficient query!
             const startOfMonth = `${selectedMonth}-01`;
-            const endOfMonth = `${selectedMonth}-31`; // A safe upper bound for all months
-            
-            const snapshot = await database.ref('/courses')
-                .orderByChild('date')
-                .startAt(startOfMonth)
-                .endAt(endOfMonth)
-                .once('value');
+            const endOfMonth = `${selectedMonth}-31`;
+            const snapshot = await database.ref('/courses').orderByChild('date').startAt(startOfMonth).endAt(endOfMonth).once('value');
 
             monthlyCourses = firebaseObjectToArray(snapshot.val());
-            appState.pagination.courses.page = 1; // Reset to first page on new data fetch
+            appState.pagination.courses.page = 1;
             updateCoursesTable();
         };
 
-        // --- Step 4: Create the table rendering function (which now uses the small 'monthlyCourses' array) ---
         const updateCoursesTable = () => {
             const paginationContainer = container.querySelector('#coursesPagination');
             const coursesCountEl = container.querySelector('#coursesCount');
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
 
-            // Perform secondary filtering on the already small, month-specific dataset.
             let filteredCourses = monthlyCourses;
             if (selectedSportType !== 'all') {
                 filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
@@ -4751,7 +4740,6 @@ Thank you for your understanding.
 
             coursesCountEl.textContent = `(${filteredCourses.length} in month)`;
 
-            // Sorting logic remains the same.
             const { key, direction } = appState.coursesSort;
             filteredCourses.sort((a, b) => {
                 let valA, valB;
@@ -4773,12 +4761,10 @@ Thank you for your understanding.
                 return 0;
             });
 
-            // Update sort icons.
             container.querySelectorAll('th.sortable .sort-icon').forEach(icon => icon.className = 'sort-icon');
             const activeHeader = container.querySelector(`th[data-sort-key="${key}"] .sort-icon`);
             if (activeHeader) activeHeader.classList.add(direction);
 
-            // Pagination logic remains the same, operating on the filtered list.
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
             let page = appState.pagination.courses.page;
@@ -4815,40 +4801,35 @@ Thank you for your understanding.
                 updateCoursesTable();
             });
 
-            // Re-attach event listeners for the newly rendered buttons.
             tableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
                 btn.onclick = () => {
                     const courseToEdit = monthlyCourses.find(c => c.id === btn.dataset.id);
-                    openCourseModal(courseToEdit.date, courseToEdit);
+                    if (courseToEdit) openCourseModal(courseToEdit.date, courseToEdit);
                 };
             });
             tableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
                 btn.onclick = () => {
                     const courseToDelete = monthlyCourses.find(c => c.id === btn.dataset.id);
-                    handleDeleteCourseRequest(courseToDelete);
+                    if (courseToDelete) handleDeleteCourseRequest(courseToDelete);
                 };
             });
         };
 
-        // --- Step 5: Wire up all the event handlers ---
         monthFilter.onchange = () => {
             appState.selectedFilters.coursesPeriod = monthFilter.value;
-            fetchAndRenderCourses(); // This is the key change - re-fetch data for the new month.
+            fetchAndRenderCourses();
         };
-
         sportTypeFilter.onchange = () => {
             appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
-            tutorFilter.value = 'all'; // Reset tutor filter when sport changes
+            tutorFilter.value = 'all';
             appState.selectedFilters.coursesTutorId = 'all';
-            updateCoursesTable(); // Just re-render the table with existing monthly data
+            updateCoursesTable();
         };
-
         tutorFilter.onchange = () => {
             appState.selectedFilters.coursesTutorId = tutorFilter.value;
-            updateCoursesTable(); // Just re-render the table
+            updateCoursesTable();
         };
-        
         container.querySelectorAll('th.sortable').forEach(header => {
             header.onclick = () => {
                 const newKey = header.dataset.sortKey;
@@ -4863,15 +4844,12 @@ Thank you for your understanding.
             };
         });
         
-        addCourseBtn.onclick = () => {
-            openCourseModal(getIsoDate(new Date()));
-        };
+        addCourseBtn.onclick = () => openCourseModal(getIsoDate(new Date()));
         
         exportBtn.onclick = () => {
             exportBtn.disabled = true;
             exportBtn.innerHTML = 'Exporting...';
             
-            // The export function now correctly uses the already filtered 'monthlyCourses' array
             const coursesToExport = monthlyCourses.sort((a, b) => {
                 const dateComparison = a.date.localeCompare(b.date);
                 if (dateComparison !== 0) return dateComparison;
@@ -4894,28 +4872,32 @@ Thank you for your understanding.
                 };
             });
 
-            exportToCsv('courses-export', exportData);
+            // --- START: MODIFIED FILENAME LOGIC ---
+            // Get the selected month (e.g., "2025-06") from the filter dropdown.
+            const selectedMonth = monthFilter.value;
+            // Construct the dynamic filename. If a month is selected, append it.
+            const fileName = selectedMonth ? `courses-export_${selectedMonth}` : 'courses-export';
+            exportToCsv(fileName, exportData);
+            // --- END: MODIFIED FILENAME LOGIC ---
             
             exportBtn.disabled = false;
             exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
         };
 
-        // --- Step 6: Initial data load ---
         if (monthFilter.value) {
             fetchAndRenderCourses();
         } else {
             tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">No courses found in the database.</td></tr>`;
+            container.querySelector('#coursesCount').textContent = '';
+            container.querySelector('#coursesPagination').innerHTML = '';
         }
         
-        // Add swipe gesture for mobile table scrolling
         const tableContainer = container.querySelector('.table-swipe-container');
         let isDown = false, startX, scrollLeft;
         tableContainer.addEventListener('mousedown', (e) => { isDown = true; tableContainer.classList.add('swiping'); startX = e.pageX - tableContainer.offsetLeft; scrollLeft = tableContainer.scrollLeft; });
         tableContainer.addEventListener('mouseleave', () => { isDown = false; tableContainer.classList.remove('swiping'); });
         tableContainer.addEventListener('mouseup', () => { isDown = false; tableContainer.classList.remove('swiping'); });
         tableContainer.addEventListener('mousemove', (e) => { if(!isDown) return; e.preventDefault(); const x = e.pageX - tableContainer.offsetLeft; const walk = (x - startX) * 2; tableContainer.scrollLeft = scrollLeft - walk; });
-
-        // --- END: MODIFIED LOGIC ---
     }
 
     // --- START: Replacement for openMemberBookingHistoryModal ---
