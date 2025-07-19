@@ -2319,10 +2319,13 @@ Thank you for your understanding.
     }
 
     function renderMembersPage(container) {
+        // Calculate the member count by filtering out the owner and any deleted members.
+        const memberCount = appState.users.filter(u => u.role !== 'owner' && !u.isDeleted).length;
+
         container.innerHTML = `
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                    <h2 class="text-3xl font-bold text-slate-800">Manage Members</h2>
+                    <h2 class="text-3xl font-bold text-slate-800">Manage Members (${memberCount})</h2>
                     <div class="flex flex-wrap items-center justify-end gap-4">
                         <div class="relative w-64">
                             <input type="text" id="memberSearchInput" placeholder="Search by name, email, phone..." class="form-input w-full pr-10">
