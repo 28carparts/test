@@ -804,26 +804,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         modal.querySelector('#final-delete-btn').onclick = () => {
-            // --- START: Add the refund logic here ---
+            // Get all members who were booked on this course.
             const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+
+            // --- START: THE FIX IS HERE ---
+            // We now generate a refund promise for each member based on their specific 'creditsPaid'.
             const refundPromises = bookedMemberIds.map(memberId => {
                 const member = appState.users.find(u => u.id === memberId);
                 const attended = course.attendedBy && course.attendedBy[memberId];
-                // Only refund non-monthly members who have not attended the class.
+                
+                // Only refund non-monthly members who have NOT attended the class.
                 if (member && !member.monthlyPlan && !attended) {
-                    return database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) + parseFloat(course.credits));
+                    // 1. Get the specific booking details for this member.
+                    const bookingDetails = course.bookedBy[memberId];
+                    
+                    // 2. Use the 'creditsPaid' value from the booking details. This is the "digital receipt".
+                    const creditsToRefund = bookingDetails.creditsPaid;
+
+                    // 3. Create the refund transaction using the correct amount.
+                    return database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) + parseFloat(creditsToRefund));
                 }
-                return Promise.resolve(); // For members who don't need a refund.
+                
+                // For monthly members or those who attended, no refund is issued.
+                return Promise.resolve(); 
             });
+            // --- END: THE FIX IS HERE ---
 
             // Wait for all refunds to complete before deleting the course.
             Promise.all(refundPromises).then(() => {
-            // --- END: Add the refund logic here ---
                 saveSchedulePosition();
                 database.ref('/courses/' + course.id).remove().then(() => {
                     closeModal(modal);
                     closeModal(DOMElements.courseModal);
-                    showMessageBox('Course deleted and members notified.', 'success');
+                    showMessageBox('Course deleted and members refunded.', 'success'); // Message updated for clarity
                     if (appState.activePage === 'courses') {
                         renderCurrentPage();
                     }
@@ -886,20 +899,16 @@ Thank you for your understanding.
         if (appState.copyMode.active) return;
 
         const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
-        // --- START: MODIFIED LOGIC ---
         const isOwner = appState.currentUser?.role === 'owner';
-        // --- END: MODIFIED LOGIC ---
 
         DOMElements.joinedMembersModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">Course Details</h2>
                 <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === course.sportTypeId).name} on ${formatShortDateWithYear(course.date)}</p>
-                <!-- START: MODIFIED LOGIC: Conditional Revenue Details -->
                 ${isOwner ? `
                 <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">Calculating revenue...</p></div>
                 ` : ''}
-                <!-- END: MODIFIED LOGIC: Conditional Revenue Details -->
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Booked Members</h3>
                 <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto">
                     <p class="text-center text-slate-500 p-4">Loading booked members...</p>
@@ -933,7 +942,6 @@ Thank you for your understanding.
         bookedMembers.forEach(member => usersCache.set(member.id, member));
         appState.users = Array.from(usersCache.values());
 
-        // --- START: MODIFIED LOGIC: Conditional Revenue Calculation ---
         if (isOwner) {
             const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
             let grossRevenue = 0, tutorPayout = 0, netRevenue = 0;
@@ -955,8 +963,6 @@ Thank you for your understanding.
                     <div><p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
                 </div>`;
         }
-        // --- END: MODIFIED LOGIC: Conditional Revenue Calculation ---
-
         
         if (bookedMembers.length === 0) {
             listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this course yet.</p>`;
@@ -1052,11 +1058,14 @@ Thank you for your understanding.
                 }
 
                 const updates = {};
+                // --- START: IMPLEMENTATION ---
                 updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
                     bookedAt: new Date().toISOString(),
                     bookedBy: appState.currentUser.name,
-                    monthlyCreditValue: memberToAdd.monthlyCreditValue || 0
+                    monthlyCreditValue: memberToAdd.monthlyCreditValue || 0,
+                    creditsPaid: course.credits // Freeze the credit cost at time of booking
                 };
+                // --- END: IMPLEMENTATION ---
                 updates[`/memberBookings/${memberId}/${course.id}`] = true;
                 database.ref().update(updates).then(() => {
                     showMessageBox('Member added to course.', 'success');
@@ -1069,7 +1078,7 @@ Thank you for your understanding.
     function openBookingModal(course) {
         const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
         const tutor = appState.tutors.find(t => t.id === course.tutorId);
-        const currentUser = appState.currentUser; // Use the already loaded current user
+        const currentUser = appState.currentUser;
 
         DOMElements.bookingModal.innerHTML = `
             <div class="bg-white p-0 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content overflow-hidden">
@@ -1117,13 +1126,15 @@ Thank you for your understanding.
 
                 creditUpdatePromise.then(() => {
                     const updates = {};
+                    // --- START: IMPLEMENTATION ---
                     updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
                         bookedAt: new Date().toISOString(),
-                        bookedBy: 'member', // Flag for self-booking
-                        // --- NEW: Freeze the credit value at the time of booking ---
-                        monthlyCreditValue: currentUser.monthlyCreditValue || 0
+                        bookedBy: 'member',
+                        monthlyCreditValue: currentUser.monthlyCreditValue || 0,
+                        creditsPaid: course.credits // Freeze the credit cost at time of booking
                     };
-                    updates[`/memberBookings/${memberId}/${course.id}`] = true; // New index
+                    // --- END: IMPLEMENTATION ---
+                    updates[`/memberBookings/${memberId}/${course.id}`] = true;
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
                     return database.ref().update(updates);
                 }).then(() => {
@@ -1146,33 +1157,29 @@ Thank you for your understanding.
         showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
             const memberId = memberIdToUpdate || appState.currentUser.id;
             
-            // --- START: FIX ---
-            // The original code always searched appState.users, which is empty for a member.
-            // This new logic correctly gets the member data from the right place.
             let memberToUpdate;
             if (memberIdToUpdate) {
-                // If an owner is cancelling for another user, find them in the full list.
                 memberToUpdate = appState.users.find(u => u.id === memberId);
             } else {
-                // If a member is cancelling for themselves, use their own currentUser object.
                 memberToUpdate = appState.currentUser;
             }
-            // --- END: FIX ---
 
             if (!memberToUpdate) {
-                // This check now correctly handles both owner and member roles.
                 showMessageBox('Member not found.', 'error');
                 return;
             }
 
+            // --- START: CLEANED LOGIC ---
+            // Directly access the frozen 'creditsPaid' value from the booking record.
+            const bookingDetails = course.bookedBy[memberId];
+            const creditsToRefund = bookingDetails.creditsPaid;
+            // --- END: CLEANED LOGIC ---
+
             let creditRefundPromise = Promise.resolve();
             if (!memberToUpdate.monthlyPlan) {
-                // We need to operate on the entire user object to access initialCredits
                 creditRefundPromise = database.ref(`/users/${memberId}`).transaction(user => {
                     if (user) {
-                        const newCredits = (user.credits || 0) + parseFloat(course.credits);
-                        // This is the critical fix:
-                        // The user's balance cannot exceed their total purchased credits.
+                        const newCredits = (user.credits || 0) + parseFloat(creditsToRefund);
                         user.credits = Math.min(newCredits, user.initialCredits);
                     }
                     return user;
@@ -1181,27 +1188,21 @@ Thank you for your understanding.
 
             creditRefundPromise.then(() => {
                 const updates = {};
-                updates[`/courses/${course.id}/bookedBy/${memberId}`] = null; // Use null for multi-path updates
-                updates[`/memberBookings/${memberId}/${course.id}`] = null; // New index
+                updates[`/courses/${course.id}/bookedBy/${memberId}`] = null;
+                updates[`/memberBookings/${memberId}/${course.id}`] = null;
                 return database.ref().update(updates);
             }).then(() => {
-                // --- START: MODIFICATION FOR REAL-TIME UI UPDATE ---
-                // If an owner is cancelling, the modal will be re-opened, which fetches fresh data.
                 if (memberIdToUpdate) {
                     const updatedMember = appState.users.find(u => u.id === memberIdToUpdate);
                     if (updatedMember) openMemberBookingHistoryModal(updatedMember);
                 } 
-                // If a member is cancelling for themselves, update local state and re-render.
                 else {
-                    // Manually update the local app state to reflect the cancellation.
                     const courseIndex = appState.courses.findIndex(c => c.id === course.id);
                     if (courseIndex > -1 && appState.courses[courseIndex].bookedBy) {
                         delete appState.courses[courseIndex].bookedBy[appState.currentUser.id];
                     }
-                    // Re-render the current page (e.g., Account page) with the updated state.
                     renderCurrentPage();
                 }
-                // --- END: MODIFICATION FOR REAL-TIME UI UPDATE ---
 
                 showMessageBox('Booking cancelled.', 'info');
             }).catch(error => {
@@ -1423,7 +1424,7 @@ Thank you for your understanding.
         }
     }
 
-    async function handleCourseFormSubmit(e) {
+    function handleCourseFormSubmit(e) {
         e.preventDefault();
         saveSchedulePosition();
         const form = e.target;
@@ -1431,8 +1432,8 @@ Thank you for your understanding.
         const submitBtn = form.querySelector('.submit-btn');
         submitBtn.disabled = true;
 
-        // --- START: MODIFIED LOGIC ---
-        // This is now an async function to handle credit refunds gracefully.
+        // NOTE: The 'async' keyword is removed because the problematic 'await' for
+        // the refund logic has been taken out. This is the intended fix.
         
         const newCourseDataFromForm = {
             sportTypeId: form.querySelector('#courseSportType').value,
@@ -1476,26 +1477,9 @@ Thank you for your understanding.
                 ...newCourseDataFromForm // Overwrite with new values from the form
             };
 
-            // 2. Handle credit refunds if the cost has decreased
-            const creditDifference = originalCourse.credits - finalCourseData.credits;
-            if (creditDifference > 0 && originalCourse.bookedBy) {
-                const refundPromises = [];
-                const bookedMemberIds = Object.keys(originalCourse.bookedBy);
-
-                for (const memberId of bookedMemberIds) {
-                    const member = appState.users.find(u => u.id === memberId);
-                    // Only refund members who are not on a monthly plan
-                    if (member && !member.monthlyPlan) {
-                        const refundPromise = database.ref(`/users/${memberId}/credits`).transaction(currentCredits => {
-                            return (currentCredits || 0) + creditDifference;
-                        });
-                        refundPromises.push(refundPromise);
-                    }
-                }
-                // Wait for all refunds to complete before saving the course update
-                await Promise.all(refundPromises);
-                showMessageBox(`Refunded ${creditDifference} credit(s) to ${refundPromises.length} member(s).`, 'success');
-            }
+            // 2. THE FIX: The automatic refund logic that was here has been completely removed.
+            //    We no longer issue refunds when a course price is lowered. The cancellation
+            //    process will correctly use the original 'creditsPaid' value.
 
             updates[`/courses/${courseId}`] = finalCourseData;
             updates[`/courseMonths/${monthIndexKey}`] = true;
@@ -1520,7 +1504,6 @@ Thank you for your understanding.
         }).finally(() => {
             submitBtn.disabled = false;
         });
-        // --- END: MODIFIED LOGIC ---
     }
 
     function createParticipantCounter(current, max, isEditable = false) {
@@ -2188,7 +2171,6 @@ Thank you for your understanding.
                         </div>
                     </div>
 
-                    <!-- START: Conditional History Cards -->
                     ${member.monthlyPlan ? `
                     <div class="card p-6 mt-8">
                         <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">Payment History</h4>
@@ -2238,7 +2220,6 @@ Thank you for your understanding.
                             }
                         </div>
                     </div>`}
-                    <!-- END: Conditional History Cards -->
                 </div>
                 <div class="md:col-span-2">
                     <div class="card p-6">
@@ -2249,12 +2230,16 @@ Thank you for your understanding.
                                 const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                                 const isAttended = course.attendedBy && course.attendedBy[member.id];
                                 const isHighlighted = course.id === appState.highlightBookingId;
+                                // --- START: CLEANED LOGIC ---
+                                const bookingDetails = course.bookedBy[member.id];
+                                const creditsUsed = bookingDetails.creditsPaid;
+                                // --- END: CLEANED LOGIC ---
                                 return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-course-id="${course.id}">
                                     <div>
                                         <p class="font-bold text-slate-800">${sportType.name}</p>
                                         <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
-                                        <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
-                                        <p class="text-xs text-slate-500">${formatBookingAuditText(course.bookedBy[member.id])}</p>
+                                        <p class="text-xs text-slate-600">Credits Used: ${creditsUsed}</p>
+                                        <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
                                     </div>
                                     ${isAttended 
                                         ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
@@ -5027,7 +5012,6 @@ Thank you for your understanding.
     }
 
     async function openMemberBookingHistoryModal(member) {
-        // Show a loading state in the modal first
         DOMElements.memberBookingHistoryModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -5041,7 +5025,6 @@ Thank you for your understanding.
         openModal(DOMElements.memberBookingHistoryModal);
 
         try {
-            // Step 1: Get the list of course IDs from the member's index to find the count
             const memberBookingsSnapshot = await database.ref(`/memberBookings/${member.id}`).once('value');
             
             let bookingCount = 0;
@@ -5051,28 +5034,29 @@ Thank you for your understanding.
                 const bookedCourseIds = Object.keys(memberBookingsSnapshot.val());
                 bookingCount = bookedCourseIds.length;
 
-                // Step 2: Fetch the full details for each of those courses
                 const coursePromises = bookedCourseIds.map(courseId => database.ref(`/courses/${courseId}`).once('value'));
                 const courseSnapshots = await Promise.all(coursePromises);
 
                 memberBookings = courseSnapshots
                     .map(snap => ({ id: snap.key, ...snap.val() }))
-                    .filter(course => course.date) // Ensure course data exists
-                    .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by most recent
+                    .filter(course => course.date)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
             }
             
-            // --- START: MODIFIED CODE ---
-            // Step 3: Build the final HTML for the modal, including the title with the count and the list of bookings.
             const historyListHTML = memberBookings.length === 0 ? '<p class="text-slate-500 text-center p-8">This member has no booking history.</p>' :
                 memberBookings.map(course => {
                     const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
                     const isAttended = course.attendedBy && course.attendedBy[member.id];
+                    // --- START: CLEANED LOGIC ---
+                    const bookingDetails = course.bookedBy[member.id];
+                    const creditsUsed = bookingDetails.creditsPaid;
+                    // --- END: CLEANED LOGIC ---
                     return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
                         <div>
                             <p class="font-bold text-slate-800">${sportType?.name || 'Unknown Course'}</p>
                             <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
-                            <p class="text-xs text-slate-600">Credits Used: ${course.credits}</p>
-                            <p class="text-xs text-slate-500">${formatBookingAuditText(course.bookedBy[member.id])}</p>
+                            <p class="text-xs text-slate-600">Credits Used: ${creditsUsed}</p>
+                            <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
                         </div>
                         ${isAttended 
                             ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
@@ -5091,9 +5075,7 @@ Thank you for your understanding.
                     </div>
                 </div>
             `;
-            // --- END: MODIFIED CODE ---
 
-            // Step 4: Re-attach event listeners for the cancel buttons on the newly rendered content
             DOMElements.memberBookingHistoryModal.querySelectorAll('.cancel-booking-btn-member-history').forEach(btn => {
                 btn.onclick = () => {
                     const course = memberBookings.find(c => c.id === btn.dataset.courseId);
