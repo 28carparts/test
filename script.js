@@ -833,10 +833,24 @@ document.addEventListener('DOMContentLoaded', function() {
             // Wait for all refunds to complete before deleting the course.
             Promise.all(refundPromises).then(() => {
                 saveSchedulePosition();
-                database.ref('/courses/' + course.id).remove().then(() => {
+
+                // 1. Create an 'updates' object for a multi-path, atomic deletion.
+                const updates = {};
+                const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+
+                // 2. Mark the main course document for deletion.
+                updates[`/courses/${course.id}`] = null;
+
+                // 3. Mark the 'memberBookings' index entry for each booked member for deletion.
+                bookedMemberIds.forEach(memberId => {
+                    updates[`/memberBookings/${memberId}/${course.id}`] = null;
+                });
+
+                // 4. Execute the atomic update. This deletes the course and all its indexes at once.
+                database.ref().update(updates).then(() => {
                     closeModal(modal);
                     closeModal(DOMElements.courseModal);
-                    showMessageBox('Course deleted and members refunded.', 'success'); // Message updated for clarity
+                    showMessageBox('Course deleted and all records cleaned up.', 'success'); // More accurate message
                     if (appState.activePage === 'courses') {
                         renderCurrentPage();
                     }
