@@ -41,7 +41,7 @@ body {
 @media (min-width: 1024px) { .embla__slide { flex: 0 0 33.3333%; } }
 @media (min-width: 1536px) { .embla__slide { flex: 0 0 20%; } }
 
-/* cls Block */
+/* Class Block */
 .cls-block { 
     position: relative; z-index: 1;
     transition: all 0.2s ease-in-out;
