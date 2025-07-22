@@ -722,7 +722,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // If no bookings, just show the simple confirmation to delete.
             const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-            showConfirmation('Delete Class', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> cls? This action cannot be undone.`, () => {
+            showConfirmation('Delete Class', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> class? This action cannot be undone.`, () => {
                 saveSchedulePosition();
                 database.ref('/classes/' + cls.id).remove().then(() => {
                     closeModal(DOMElements.clsModal);
