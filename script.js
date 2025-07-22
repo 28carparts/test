@@ -18,17 +18,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- App State & Constants ---
     const MEMBER_PAST_DAYS = 0; 
-    const COURSE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#FF007F', '#00BFFF', '#32CD32', '#FFD700', '#8A2BE2', '#FF4500', '#20B2AA', '#DAA520', '#4682B4', '#FF69B4', '#7CFC00', '#ADFF2F', '#DC143C', '#BA55D3'];
+    const CLS_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#FF007F', '#00BFFF', '#32CD32', '#FFD700', '#8A2BE2', '#FF4500', '#20B2AA', '#DAA520', '#4682B4', '#FF69B4', '#7CFC00', '#ADFF2F', '#DC143C', '#BA55D3'];
     
     let appState = { 
-        courses: [],  
+        classes: [],  
         tutors: [], 
         sportTypes: [], 
         users: [],
         activePage: 'schedule', 
         currentUser: null,
         studioSettings: {
-            courseDefaults: {
+            clsDefaults: {
                 time: '09:00',
                 duration: 60,
                 credits: 1,
@@ -38,9 +38,9 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedFilters: {
             salaryTutorId: null,
             salaryPeriod: null, 
-            coursesPeriod: null,
-            coursesSportTypeId: 'all',
-            coursesTutorId: 'all',
+            classesPeriod: null,
+            classesSportTypeId: 'all',
+            classesTutorId: 'all',
             memberSportType: 'all', 
             memberTutor: 'all' 
         },
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
             targetDate: null,
         },
         pagination: {
-            courses: { page: 1 },
+            classes: { page: 1 },
             sports: { page: 1 },
             tutors: { page: 1 }
         },
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tutors: ''
         },
         itemsPerPage: {
-            courses: 10,
+            classes: 10,
             sports: 10,
             tutors: 6 
         },
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
             key: 'date',
             direction: 'asc'
         },
-        coursesSort: {
+        classesSort: {
             key: 'date',
             direction: 'asc'
         }
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let navEmblaApi = null;
     let onConfirmCallback = null;
     let dataListeners = {}; // To hold references to our listeners
-    let activeCoursesRef = null;
+    let activeClassesRef = null;
 
     // --- DOM Element Cache ---
     const DOMElements = {
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
         messageBox: document.getElementById('messageBox'),
         navButtons: document.querySelectorAll('.nav-btn'),
         pages: document.querySelectorAll('.page'),
-        courseModal: document.getElementById('courseModal'),
+        clsModal: document.getElementById('clsModal'),
         bookingModal: document.getElementById('bookingModal'),
         joinedMembersModal: document.getElementById('joinedMembersModal'),
         sportTypeModal: document.getElementById('sportTypeModal'),
@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
         changePasswordModal: document.getElementById('changePasswordModal'),
         confirmationModal: document.getElementById('confirmationModal'),
         memberBookingHistoryModal: document.getElementById('memberBookingHistoryModal'),
-        deleteCourseNotifyModal: document.getElementById('deleteCourseNotifyModal'),
+        deleteClsNotifyModal: document.getElementById('deleteClsNotifyModal'),
         filterModal: document.getElementById('filterModal'),
         numericDialModal: document.getElementById('numericDialModal'),
         cancelCopyBtn: document.getElementById('cancelCopyBtn')
@@ -122,15 +122,15 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const showBookingNotification = (bookingDetails) => {
-        const { memberName, courseName, courseTime, duration } = bookingDetails;
-        const timeRange = getTimeRange(courseTime, duration);
+        const { memberName, clsName, clsTime, duration } = bookingDetails;
+        const timeRange = getTimeRange(clsTime, duration);
 
         const templates = [
-            `Woot! <strong>${memberName}</strong> is joining the <strong>${courseName}</strong> class! 🎉`,
-            `New booking! See you at <strong>${courseName}</strong>, <strong>${memberName}</strong>!`,
-            `Let's go! <strong>${memberName}</strong> just snagged a spot in <strong>${courseName}</strong>.`,
-            `Awesome! <strong>${memberName}</strong> is in for <strong>${courseName}</strong> at <strong>${timeRange}</strong>.`,
-            `Score! Another spot filled in <strong>${courseName}</strong> by <strong>${memberName}</strong>! 👍`
+            `Woot! <strong>${memberName}</strong> is joining the <strong>${clsName}</strong> class! 🎉`,
+            `New booking! See you at <strong>${clsName}</strong>, <strong>${memberName}</strong>!`,
+            `Let's go! <strong>${memberName}</strong> just snagged a spot in <strong>${clsName}</strong>.`,
+            `Awesome! <strong>${memberName}</strong> is in for <strong>${clsName}</strong> at <strong>${timeRange}</strong>.`,
+            `Score! Another spot filled in <strong>${clsName}</strong> by <strong>${memberName}</strong>! 👍`
         ];
         
         const message = templates[Math.floor(Math.random() * templates.length)];
@@ -193,35 +193,35 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     // --- END: Add this new function here ---
 
-    function calculateCourseRevenueAndPayout(course, allUsers, allTutors, allCourses) {
-        const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+    function calculateClsRevenueAndPayout(cls, allUsers, allTutors, allClasses) {
+        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
         let tutorPayout = 0;
         
-        // This part requires a full set of courses to trace member purchase history
-        const membersOnThisCourse = bookedMemberIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+        // This part requires a full set of classes to trace member purchase history
+        const membersOnThisCls = bookedMemberIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
         const allBookingsByTheseMembers = [];
-        if (membersOnThisCourse.length > 0) {
-            const memberIdSet = new Set(membersOnThisCourse.map(m => m.id));
-            allCourses.forEach(c => {
+        if (membersOnThisCls.length > 0) {
+            const memberIdSet = new Set(membersOnThisCls.map(m => m.id));
+            allClasses.forEach(c => {
                 if (c.bookedBy) {
                     for (const memberId of Object.keys(c.bookedBy)) {
                         if (memberIdSet.has(memberId)) {
                             const member = allUsers.find(u => u.id === memberId);
-                            if (member) allBookingsByTheseMembers.push({ member, course: c });
+                            if (member) allBookingsByTheseMembers.push({ member, cls: c });
                         }
                     }
                 }
             });
         }
         
-        const { revenueByCourseId } = calculateRevenueForBookings(allBookingsByTheseMembers);
-        const grossRevenue = revenueByCourseId.get(course.id) || 0;
+        const { revenueByClsId } = calculateRevenueForBookings(allBookingsByTheseMembers);
+        const grossRevenue = revenueByClsId.get(cls.id) || 0;
 
         // --- START: SIMPLIFIED PAYOUT CALCULATION ---
         // We now assume `payoutDetails` always exists and remove the legacy fallback.
-        if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
-            const { salaryType, salaryValue } = course.payoutDetails;
-            if (salaryType === 'perCourse') {
+        if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
+            const { salaryType, salaryValue } = cls.payoutDetails;
+            if (salaryType === 'perCls') {
                 tutorPayout = salaryValue;
             } else if (salaryType === 'percentage') {
                 tutorPayout = grossRevenue * (salaryValue / 100);
@@ -357,9 +357,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentSlideNode = emblaApi.slideNodes()[currentIndex];
             if (currentSlideNode) {
                 // Find the date from the data attribute within the slide
-                const coursesContainer = currentSlideNode.querySelector('.courses-container[data-date]');
-                if (coursesContainer) {
-                    appState.scheduleScrollDate = coursesContainer.dataset.date;
+                const classesContainer = currentSlideNode.querySelector('.classes-container[data-date]');
+                if (classesContainer) {
+                    appState.scheduleScrollDate = classesContainer.dataset.date;
                 }
             }
         }
@@ -491,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function() {
             let navButtonsHTML = [
                 // Buttons visible to both Owner and Staff
                 `<button data-page="schedule" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Schedule</button>`,
-                `<button data-page="courses" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Courses</button>`,
+                `<button data-page="classes" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Classes</button>`,
                 `<button data-page="members" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Members</button>`,
                 `<button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">Admin</button>`,
                 // Statistics and Salary are conditionally inserted for Owner only
@@ -583,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let pageIdToRender = appState.activePage;
 
         const ownerOnlyPages = ['statistics', 'salary']; // Pages only for Owner
-        const adminPages = ['members', 'admin', 'courses']; // Pages for Owner and Staff
+        const adminPages = ['members', 'admin', 'classes']; // Pages for Owner and Staff
         const memberOnlyPages = ['account'];
 
         // If a Staff member tries to access an owner-only page
@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderAccountPage(pageElement);
         } else if (pageIdToRender === 'admin') {
             // Check if studioSettings are loaded. If not, fetch them.
-            if (!appState.studioSettings.courseDefaults.time) { // A simple check to see if settings are default or loaded
+            if (!appState.studioSettings.clsDefaults.time) { // A simple check to see if settings are default or loaded
                 pageElement.innerHTML = `<p class="text-center p-8">Loading admin settings...</p>`;
                 database.ref('/studioSettings').once('value').then(snapshot => {
                     if (snapshot.exists()) {
@@ -658,18 +658,18 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 renderSalaryPage(pageElement);
             }
-        } else if (pageIdToRender === 'statistics' || pageIdToRender === 'courses') {
+        } else if (pageIdToRender === 'statistics' || pageIdToRender === 'classes') {
             // These pages also need the full user list.
             if (appState.users.length === 0) {
                 pageElement.innerHTML = `<p class="text-center p-8">Loading required member data...</p>`;
                 database.ref('/users').once('value').then(snapshot => {
                     appState.users = firebaseObjectToArray(snapshot.val());
                     if (pageIdToRender === 'statistics') renderStatisticsPage(pageElement);
-                    if (pageIdToRender === 'courses') renderCoursesPage(pageElement);
+                    if (pageIdToRender === 'classes') renderClassesPage(pageElement);
                 });
             } else {
                 if (pageIdToRender === 'statistics') renderStatisticsPage(pageElement);
-                if (pageIdToRender === 'courses') renderCoursesPage(pageElement);
+                if (pageIdToRender === 'classes') renderClassesPage(pageElement);
             }
         }
         // --- END: REVERTED On-Demand Loading Logic ---
@@ -713,21 +713,21 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     };
 
-    function handleDeleteCourseRequest(course) {
-        const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+    function handleDeleteClsRequest(cls) {
+        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
 
         if (bookedMemberIds.length > 0) {
             // If there are bookings, open the notification modal. No refund happens here.
-            openDeleteCourseNotifyModal(course);
+            openDeleteClsNotifyModal(cls);
         } else {
             // If no bookings, just show the simple confirmation to delete.
-            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-            showConfirmation('Delete Course', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> course? This action cannot be undone.`, () => {
+            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+            showConfirmation('Delete Class', `Are you sure you want to delete the <strong>"${sportType?.name}"</strong> cls? This action cannot be undone.`, () => {
                 saveSchedulePosition();
-                database.ref('/courses/' + course.id).remove().then(() => {
-                    closeModal(DOMElements.courseModal);
-                    showMessageBox('Course deleted.', 'info');
-                    if (appState.activePage === 'courses') {
+                database.ref('/classes/' + cls.id).remove().then(() => {
+                    closeModal(DOMElements.clsModal);
+                    showMessageBox('Class deleted.', 'info');
+                    if (appState.activePage === 'classes') {
                         renderCurrentPage();
                     }
                 });
@@ -735,16 +735,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function openDeleteCourseNotifyModal(course) {
-        const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+    function openDeleteClsNotifyModal(cls) {
+        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
         const bookedMembers = bookedMemberIds.map(id => appState.users.find(u => u.id === id)).filter(Boolean);
 
-        DOMElements.deleteCourseNotifyModal.innerHTML = `
+        DOMElements.deleteClsNotifyModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <div class="text-center">
                     <h2 class="text-2xl font-bold text-slate-800">Notify Booked Members</h2>
-                    <p class="text-slate-500 mt-2 mb-6">This course has ${bookedMembers.length} booking(s). Please copy the message for each member to notify them of the cancellation before deleting the course. Credits have been refunded.</p>
+                    <p class="text-slate-500 mt-2 mb-6">This class has ${bookedMembers.length} booking(s). Please copy the message for each member to notify them of the cancellation before deleting the class. Credits have been refunded.</p>
                 </div>
                 <div id="notify-members-list" class="space-y-3 max-h-60 overflow-y-auto p-4 bg-slate-50 rounded-lg">
                     ${bookedMembers.map(member => {
@@ -765,18 +765,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     `}).join('')}
                 </div>
                 <div class="flex justify-center mt-8">
-                    <button type="button" id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Course</button>
+                    <button type="button" id="final-delete-btn" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>Delete Class</button>
                 </div>
             </div>`;
         
-        const modal = DOMElements.deleteCourseNotifyModal;
+        const modal = DOMElements.deleteClsNotifyModal;
         modal.querySelectorAll('.copy-notify-msg-btn').forEach(btn => {
             btn.onclick = () => {
                 const memberItem = btn.closest('[data-member-id]');
                 const memberId = memberItem.dataset.memberId;
                 const member = appState.users.find(u => u.id === memberId);
                 
-                const message = createWhatsAppMessage(member, course);
+                const message = createWhatsAppMessage(member, cls);
                 copyTextToClipboard(message, 'WhatsApp message copied to clipboard!');
 
                 memberItem.querySelector('.member-name').classList.add('notified-member');
@@ -804,19 +804,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         modal.querySelector('#final-delete-btn').onclick = () => {
-            // Get all members who were booked on this course.
-            const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+            // Get all members who were booked on this class.
+            const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
 
             // --- START: THE FIX IS HERE ---
             // We now generate a refund promise for each member based on their specific 'creditsPaid'.
             const refundPromises = bookedMemberIds.map(memberId => {
                 const member = appState.users.find(u => u.id === memberId);
-                const attended = course.attendedBy && course.attendedBy[memberId];
+                const attended = cls.attendedBy && cls.attendedBy[memberId];
                 
                 // Only refund non-monthly members who have NOT attended the class.
                 if (member && !member.monthlyPlan && !attended) {
                     // 1. Get the specific booking details for this member.
-                    const bookingDetails = course.bookedBy[memberId];
+                    const bookingDetails = cls.bookedBy[memberId];
                     
                     // 2. Use the 'creditsPaid' value from the booking details. This is the "digital receipt".
                     const creditsToRefund = bookingDetails.creditsPaid;
@@ -830,28 +830,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             // --- END: THE FIX IS HERE ---
 
-            // Wait for all refunds to complete before deleting the course.
+            // Wait for all refunds to complete before deleting the class.
             Promise.all(refundPromises).then(() => {
                 saveSchedulePosition();
 
                 // 1. Create an 'updates' object for a multi-path, atomic deletion.
                 const updates = {};
-                const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+                const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
 
-                // 2. Mark the main course document for deletion.
-                updates[`/courses/${course.id}`] = null;
+                // 2. Mark the main class document for deletion.
+                updates[`/classes/${cls.id}`] = null;
 
                 // 3. Mark the 'memberBookings' index entry for each booked member for deletion.
                 bookedMemberIds.forEach(memberId => {
-                    updates[`/memberBookings/${memberId}/${course.id}`] = null;
+                    updates[`/memberBookings/${memberId}/${cls.id}`] = null;
                 });
 
-                // 4. Execute the atomic update. This deletes the course and all its indexes at once.
+                // 4. Execute the atomic update. This deletes the class and all its indexes at once.
                 database.ref().update(updates).then(() => {
                     closeModal(modal);
-                    closeModal(DOMElements.courseModal);
-                    showMessageBox('Course deleted and all records cleaned up.', 'success'); // More accurate message
-                    if (appState.activePage === 'courses') {
+                    closeModal(DOMElements.clsModal);
+                    showMessageBox('Class deleted and all records cleaned up.', 'success'); // More accurate message
+                    if (appState.activePage === 'classes') {
                         renderCurrentPage();
                     }
                 });
@@ -861,9 +861,9 @@ document.addEventListener('DOMContentLoaded', function() {
         openModal(modal);
     }
 
-    function createWhatsAppMessage(member, course) {
-        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-        const tutor = appState.tutors.find(t => t.id === course.tutorId);
+    function createWhatsAppMessage(member, cls) {
+        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+        const tutor = appState.tutors.find(t => t.id === cls.tutorId);
         const bookingLink = "https://www.studiopulse.app/schedule";
 
         const message = `
@@ -871,9 +871,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 This is a notification from StudioPulse. Unfortunately, we have to cancel the following class:
 
-*Course:* ${sportType.name}
-*Date:* ${formatShortDateWithYear(course.date)}
-*Time:* ${getTimeRange(course.time, course.duration)}
+*Class:* ${sportType.name}
+*Date:* ${formatShortDateWithYear(cls.date)}
+*Time:* ${getTimeRange(cls.time, cls.duration)}
 *Tutor:* ${tutor.name}
 
 We apologize for any inconvenience. The credit for this class has been refunded to your account. 🙏
@@ -908,20 +908,20 @@ Thank you for your understanding.
         document.body.removeChild(textArea);
     }
     
-    // --- Course, Booking, and Member List Modals (Refactored) ---
-    async function openJoinedMembersModal(course) {
+    // --- Class, Booking, and Member List Modals (Refactored) ---
+    async function openJoinedMembersModal(cls) {
         if (appState.copyMode.active) return;
 
-        const bookedMemberIds = course.bookedBy ? Object.keys(course.bookedBy) : [];
+        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
         const isOwner = appState.currentUser?.role === 'owner';
 
         DOMElements.joinedMembersModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-                <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">Course Details</h2>
-                <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === course.sportTypeId).name} on ${formatShortDateWithYear(course.date)}</p>
+                <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">Class Details</h2>
+                <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === cls.sportTypeId).name} on ${formatShortDateWithYear(cls.date)}</p>
                 ${isOwner ? `
-                <div id="courseRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">Calculating revenue...</p></div>
+                <div id="clsRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">Calculating revenue...</p></div>
                 ` : ''}
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Booked Members</h3>
                 <div id="joinedMembersList" class="space-y-3 max-h-60 overflow-y-auto">
@@ -957,13 +957,13 @@ Thank you for your understanding.
         appState.users = Array.from(usersCache.values());
 
         if (isOwner) {
-            const revenueEl = DOMElements.joinedMembersModal.querySelector('#courseRevenueDetails');
+            const revenueEl = DOMElements.joinedMembersModal.querySelector('#clsRevenueDetails');
             let grossRevenue = 0, tutorPayout = 0, netRevenue = 0;
             if (bookedMemberIds.length > 0) {
-                const allCoursesSnapshot = await database.ref('/courses').once('value');
-                const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+                const allClassesSnapshot = await database.ref('/classes').once('value');
+                const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
 
-                const revenueData = calculateCourseRevenueAndPayout(course, appState.users, appState.tutors, allCoursesForCalc);
+                const revenueData = calculateClsRevenueAndPayout(cls, appState.users, appState.tutors, allClassesForCalc);
                 grossRevenue = revenueData.grossRevenue;
                 tutorPayout = revenueData.tutorPayout;
                 netRevenue = revenueData.netRevenue;
@@ -979,10 +979,10 @@ Thank you for your understanding.
         }
         
         if (bookedMembers.length === 0) {
-            listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this course yet.</p>`;
+            listEl.innerHTML = `<p class="text-slate-500 text-center">No members have booked this class yet.</p>`;
         } else {
             listEl.innerHTML = bookedMembers.map(member => {
-                const isAttended = course.attendedBy && course.attendedBy[member.id];
+                const isAttended = cls.attendedBy && cls.attendedBy[member.id];
                 return `<div class="bg-slate-100 p-3 rounded-lg flex justify-between items-center">
                     <div class="flex items-center">
                        <input type="checkbox" data-member-id="${member.id}" class="h-5 w-5 rounded text-indigo-600 mr-4 attendance-checkbox" ${isAttended ? 'checked' : ''}>
@@ -998,7 +998,7 @@ Thank you for your understanding.
             listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                 checkbox.onchange = (e) => {
                     const memberId = e.target.dataset.memberId;
-                    const attendedRef = database.ref(`/courses/${course.id}/attendedBy/${memberId}`);
+                    const attendedRef = database.ref(`/classes/${cls.id}/attendedBy/${memberId}`);
                     if (e.target.checked) {
                         attendedRef.set(true);
                     } else {
@@ -1028,7 +1028,7 @@ Thank you for your understanding.
 
             const unbookedMembers = appState.users.filter(u => 
                 u.role !== 'owner' && u.role !== 'staff' && !u.isDeleted &&
-                (!course.bookedBy || !course.bookedBy[u.id]) && (
+                (!cls.bookedBy || !cls.bookedBy[u.id]) && (
                     u.name.toLowerCase().includes(searchTerm) ||
                     u.email.toLowerCase().includes(searchTerm) ||
                     (u.phone && u.phone.includes(searchTerm)))
@@ -1056,42 +1056,42 @@ Thank you for your understanding.
             if (target) {
                 const memberId = target.dataset.memberId;
                 const memberToAdd = appState.users.find(u => u.id === memberId);
-                const currentBookings = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+                const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
 
-                if (currentBookings >= course.maxParticipants) {
+                if (currentBookings >= cls.maxParticipants) {
                     showMessageBox('Cannot add member, class is full.', 'error');
                     return;
                 }
                 
                 if (memberToAdd && !memberToAdd.monthlyPlan) {
-                    if (parseFloat(memberToAdd.credits) < parseFloat(course.credits)) {
+                    if (parseFloat(memberToAdd.credits) < parseFloat(cls.credits)) {
                         showMessageBox('Member has insufficient credits.', 'error');
                         return;
                     }
-                    database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(course.credits));
+                    database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(cls.credits));
                 }
 
                 const updates = {};
                 // --- START: IMPLEMENTATION ---
-                updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
+                updates[`/classes/${cls.id}/bookedBy/${memberId}`] = {
                     bookedAt: new Date().toISOString(),
                     bookedBy: appState.currentUser.name,
                     monthlyCreditValue: memberToAdd.monthlyCreditValue || 0,
-                    creditsPaid: course.credits // Freeze the credit cost at time of booking
+                    creditsPaid: cls.credits // Freeze the credit cost at time of booking
                 };
                 // --- END: IMPLEMENTATION ---
-                updates[`/memberBookings/${memberId}/${course.id}`] = true;
+                updates[`/memberBookings/${memberId}/${cls.id}`] = true;
                 database.ref().update(updates).then(() => {
-                    showMessageBox('Member added to course.', 'success');
+                    showMessageBox('Member added to class.', 'success');
                     closeModal(DOMElements.joinedMembersModal);
                 });
             }
         };
     }
 
-    function openBookingModal(course) {
-        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-        const tutor = appState.tutors.find(t => t.id === course.tutorId);
+    function openBookingModal(cls) {
+        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+        const tutor = appState.tutors.find(t => t.id === cls.tutorId);
         const currentUser = appState.currentUser;
 
         DOMElements.bookingModal.innerHTML = `
@@ -1107,11 +1107,11 @@ Thank you for your understanding.
                     <p class="opacity-80">You're about to book a class!</p>
                 </div>
                 <div class="p-8 space-y-4">
-                    <div class="flex justify-between items-center"><span class="text-slate-500">Course:</span><strong class="text-slate-800">${sportType.name}</strong></div>
+                    <div class="flex justify-between items-center"><span class="text-slate-500">Class:</span><strong class="text-slate-800">${sportType.name}</strong></div>
                     <div class="flex justify-between items-center"><span class="text-slate-500">Tutor:</span><strong class="text-slate-800">${tutor.name}</strong></div>
-                    <div class="flex justify-between items-center"><span class="text-slate-500">Time:</span><strong class="text-slate-800">${formatDateWithWeekday(course.date)}, ${getTimeRange(course.time, course.duration)}</strong></div>
+                    <div class="flex justify-between items-center"><span class="text-slate-500">Time:</span><strong class="text-slate-800">${formatDateWithWeekday(cls.date)}, ${getTimeRange(cls.time, cls.duration)}</strong></div>
                     <hr class="my-4">
-                    <div class="flex justify-between items-center"><span class="text-slate-500">Credits Required:</span><strong class="text-indigo-600 text-lg">${course.credits}</strong></div>
+                    <div class="flex justify-between items-center"><span class="text-slate-500">Credits Required:</span><strong class="text-indigo-600 text-lg">${cls.credits}</strong></div>
                     <div class="flex justify-between items-center"><span class="text-slate-500">Your Balance:</span><strong class="text-slate-800 text-lg">${currentUser.monthlyPlan ? 'Monthly Plan' : `${formatCredits(currentUser.credits)} Credits`}</strong></div>
                 </div>
                 <div class="p-6 bg-slate-50">
@@ -1122,38 +1122,38 @@ Thank you for your understanding.
         const confirmBtn = DOMElements.bookingModal.querySelector('#confirmBookingBtn');
         confirmBtn.onclick = () => {
             const memberId = currentUser.id;
-            const currentBookings = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+            const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
 
-            if (course.bookedBy && course.bookedBy[memberId]) {
-                 showMessageBox('You have already booked this course.', 'error');
-            } else if (!currentUser.monthlyPlan && (parseFloat(currentUser.credits || 0) < parseFloat(course.credits))) {
-                showMessageBox('Not enough credits to book this course.', 'error');
-            } else if (currentBookings >= course.maxParticipants) {
+            if (cls.bookedBy && cls.bookedBy[memberId]) {
+                 showMessageBox('You have already booked this class.', 'error');
+            } else if (!currentUser.monthlyPlan && (parseFloat(currentUser.credits || 0) < parseFloat(cls.credits))) {
+                showMessageBox('Not enough credits to book this class.', 'error');
+            } else if (currentBookings >= cls.maxParticipants) {
                 showMessageBox('Sorry, this class is full.', 'error');
             } else {
                 confirmBtn.disabled = true;
                 
                 let creditUpdatePromise = Promise.resolve();
                 if (!currentUser.monthlyPlan) {
-                    creditUpdatePromise = database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(course.credits));
+                    creditUpdatePromise = database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(cls.credits));
                 }
 
                 creditUpdatePromise.then(() => {
                     const updates = {};
                     // --- START: IMPLEMENTATION ---
-                    updates[`/courses/${course.id}/bookedBy/${memberId}`] = {
+                    updates[`/classes/${cls.id}/bookedBy/${memberId}`] = {
                         bookedAt: new Date().toISOString(),
                         bookedBy: 'member',
                         monthlyCreditValue: currentUser.monthlyCreditValue || 0,
-                        creditsPaid: course.credits // Freeze the credit cost at time of booking
+                        creditsPaid: cls.credits // Freeze the credit cost at time of booking
                     };
                     // --- END: IMPLEMENTATION ---
-                    updates[`/memberBookings/${memberId}/${course.id}`] = true;
+                    updates[`/memberBookings/${memberId}/${cls.id}`] = true;
                     updates[`/users/${memberId}/lastBooking`] = new Date().toISOString();
                     return database.ref().update(updates);
                 }).then(() => {
-                    appState.highlightBookingId = course.id;
-                    appState.scrollToDateOnNextLoad = course.date;
+                    appState.highlightBookingId = cls.id;
+                    appState.scrollToDateOnNextLoad = cls.date;
                     showMessageBox('Booking successful!', 'success');
                     closeModal(DOMElements.bookingModal);
                     switchPage('account');
@@ -1167,8 +1167,8 @@ Thank you for your understanding.
         openModal(DOMElements.bookingModal);
     }
 
-    function handleCancelBooking(course, memberIdToUpdate = null) {
-        showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this course?', () => {
+    function handleCancelBooking(cls, memberIdToUpdate = null) {
+        showConfirmation('Cancel Booking', 'Are you sure you want to cancel your booking for this class?', () => {
             const memberId = memberIdToUpdate || appState.currentUser.id;
             
             let memberToUpdate;
@@ -1185,7 +1185,7 @@ Thank you for your understanding.
 
             // --- START: CLEANED LOGIC ---
             // Directly access the frozen 'creditsPaid' value from the booking record.
-            const bookingDetails = course.bookedBy[memberId];
+            const bookingDetails = cls.bookedBy[memberId];
             const creditsToRefund = bookingDetails.creditsPaid;
             // --- END: CLEANED LOGIC ---
 
@@ -1202,8 +1202,8 @@ Thank you for your understanding.
 
             creditRefundPromise.then(() => {
                 const updates = {};
-                updates[`/courses/${course.id}/bookedBy/${memberId}`] = null;
-                updates[`/memberBookings/${memberId}/${course.id}`] = null;
+                updates[`/classes/${cls.id}/bookedBy/${memberId}`] = null;
+                updates[`/memberBookings/${memberId}/${cls.id}`] = null;
                 return database.ref().update(updates);
             }).then(() => {
                 if (memberIdToUpdate) {
@@ -1211,9 +1211,9 @@ Thank you for your understanding.
                     if (updatedMember) openMemberBookingHistoryModal(updatedMember);
                 } 
                 else {
-                    const courseIndex = appState.courses.findIndex(c => c.id === course.id);
-                    if (courseIndex > -1 && appState.courses[courseIndex].bookedBy) {
-                        delete appState.courses[courseIndex].bookedBy[appState.currentUser.id];
+                    const clsIndex = appState.classes.findIndex(c => c.id === cls.id);
+                    if (clsIndex > -1 && appState.classes[clsIndex].bookedBy) {
+                        delete appState.classes[clsIndex].bookedBy[appState.currentUser.id];
                     }
                     renderCurrentPage();
                 }
@@ -1225,45 +1225,45 @@ Thank you for your understanding.
         });
     }
 
-    function openCourseModal(dateIso, courseToEdit = null) {
-        DOMElements.courseModal.innerHTML = `
+    function openClsModal(dateIso, clsToEdit = null) {
+        DOMElements.clsModal.innerHTML = `
             <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-                <h2 id="courseModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
-                <form id="courseForm">
-                    <input type="hidden" id="courseModalId">
+                <h2 id="clsModalTitle" class="text-3xl font-bold text-slate-800 mb-6 text-center"></h2>
+                <form id="clsForm">
+                    <input type="hidden" id="clsModalId">
                     <div class="space-y-4">
                         <div>
-                            <label for="courseSportType" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type</label>
-                            <select id="courseSportType" name="sportTypeId" required class="form-select"></select>
+                            <label for="clsSportType" class="block text-slate-600 text-sm font-semibold mb-2">Sport Type</label>
+                            <select id="clsSportType" name="sportTypeId" required class="form-select"></select>
                         </div>
                         <div>
-                            <label for="courseTutor" class="block text-slate-600 text-sm font-semibold mb-2">Tutor</label>
-                            <select id="courseTutor" name="tutorId" required class="form-select"></select>
+                            <label for="clsTutor" class="block text-slate-600 text-sm font-semibold mb-2">Tutor</label>
+                            <select id="clsTutor" name="tutorId" required class="form-select"></select>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label for="courseDate" class="block text-slate-600 text-sm font-semibold mb-2">Date</label>
-                                <input type="date" id="courseDate" name="date" required class="form-input">
+                                <label for="clsDate" class="block text-slate-600 text-sm font-semibold mb-2">Date</label>
+                                <input type="date" id="clsDate" name="date" required class="form-input">
                             </div>
                             <div>
-                                <label for="courseTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time (24h)</label>
-                                <input type="text" id="courseTime" name="time" required class="form-input" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:MM" title="Enter time in 24-hour HH:MM format">
+                                <label for="clsTime" class="block text-slate-600 text-sm font-semibold mb-2">Start Time (24h)</label>
+                                <input type="text" id="clsTime" name="time" required class="form-input" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:MM" title="Enter time in 24-hour HH:MM format">
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label for="courseDuration" class="block text-slate-600 text-sm font-semibold mb-2">Duration (min)</label>
-                                <input type="number" id="courseDuration" name="duration" required min="15" max="240" step="5" class="form-input">
+                                <label for="clsDuration" class="block text-slate-600 text-sm font-semibold mb-2">Duration (min)</label>
+                                <input type="number" id="clsDuration" name="duration" required min="15" max="240" step="5" class="form-input">
                             </div>
                             <div>
-                                <label for="courseCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label>
-                                <input type="number" id="courseCredits" name="credits" required min="0" max="20" step="0.01" class="form-input">
+                                <label for="clsCredits" class="block text-slate-600 text-sm font-semibold mb-2">Credits</label>
+                                <input type="number" id="clsCredits" name="credits" required min="0" max="20" step="0.01" class="form-input">
                             </div>
                         </div>
                         <div>
-                            <label for="courseMaxParticipants" class="block text-slate-600 text-sm font-semibold mb-2">Max Participants</label>
-                            <input type="number" id="courseMaxParticipants" name="maxParticipants" required min="1" max="100" class="form-input">
+                            <label for="clsMaxParticipants" class="block text-slate-600 text-sm font-semibold mb-2">Max Participants</label>
+                            <input type="number" id="clsMaxParticipants" name="maxParticipants" required min="1" max="100" class="form-input">
                         </div>
                         <!-- START: NEW CHECKBOX ADDED HERE -->
                         <div class="pt-4 border-t">
@@ -1282,71 +1282,71 @@ Thank you for your understanding.
                 </form>
             </div>`;
 
-        const modal = DOMElements.courseModal;
+        const modal = DOMElements.clsModal;
         const form = modal.querySelector('form');
         form.reset();
-        populateDropdown(form.querySelector('#courseSportType'), appState.sportTypes);
+        populateDropdown(form.querySelector('#clsSportType'), appState.sportTypes);
         
         const deleteBtn = form.querySelector('.delete-btn');
         deleteBtn.classList.add('hidden');
         
         const updateTutorDropdown = () => {
-            const selectedSportId = form.querySelector('#courseSportType').value;
+            const selectedSportId = form.querySelector('#clsSportType').value;
             const skilledTutors = appState.tutors.filter(tutor => tutor.skills.some(skill => skill.sportTypeId === selectedSportId));
-            populateDropdown(form.querySelector('#courseTutor'), skilledTutors);
+            populateDropdown(form.querySelector('#clsTutor'), skilledTutors);
         };
 
-        form.querySelector('#courseSportType').onchange = updateTutorDropdown;
+        form.querySelector('#clsSportType').onchange = updateTutorDropdown;
 
-        if (courseToEdit) {
-            modal.querySelector('#courseModalTitle').textContent = 'Edit Course';
+        if (clsToEdit) {
+            modal.querySelector('#clsModalTitle').textContent = 'Edit Class';
             modal.querySelector('.submit-btn').textContent = 'Save Changes';
-            form.querySelector('#courseModalId').value = courseToEdit.id;
-            form.querySelector('#courseSportType').value = courseToEdit.sportTypeId;
+            form.querySelector('#clsModalId').value = clsToEdit.id;
+            form.querySelector('#clsSportType').value = clsToEdit.sportTypeId;
             updateTutorDropdown();
-            form.querySelector('#courseTutor').value = courseToEdit.tutorId;
-            form.querySelector('#courseDuration').value = courseToEdit.duration;
-            form.querySelector('#courseTime').value = courseToEdit.time;
-            form.querySelector('#courseCredits').value = courseToEdit.credits;
-            form.querySelector('#courseMaxParticipants').value = courseToEdit.maxParticipants;
-            form.querySelector('#courseDate').value = courseToEdit.date;
+            form.querySelector('#clsTutor').value = clsToEdit.tutorId;
+            form.querySelector('#clsDuration').value = clsToEdit.duration;
+            form.querySelector('#clsTime').value = clsToEdit.time;
+            form.querySelector('#clsCredits').value = clsToEdit.credits;
+            form.querySelector('#clsMaxParticipants').value = clsToEdit.maxParticipants;
+            form.querySelector('#clsDate').value = clsToEdit.date;
             // --- START: POPULATE CHECKBOX ON EDIT ---
-            form.querySelector('#notForMonthlyCheckbox').checked = courseToEdit.notForMonthly || false;
+            form.querySelector('#notForMonthlyCheckbox').checked = clsToEdit.notForMonthly || false;
             // --- END: POPULATE CHECKBOX ON EDIT ---
             deleteBtn.classList.remove('hidden');
-            deleteBtn.onclick = () => handleDeleteCourseRequest(courseToEdit);
+            deleteBtn.onclick = () => handleDeleteClsRequest(clsToEdit);
         } else {
-            modal.querySelector('#courseModalTitle').textContent = 'Add New Course';
-            modal.querySelector('.submit-btn').textContent = 'Add Course';
-            form.querySelector('#courseModalId').value = '';
+            modal.querySelector('#clsModalTitle').textContent = 'Add New Class';
+            modal.querySelector('.submit-btn').textContent = 'Add Class';
+            form.querySelector('#clsModalId').value = '';
             updateTutorDropdown();
             const defaultDate = dateIso || new Date().toISOString().split('T')[0];
-            form.querySelector('#courseDate').value = defaultDate;
+            form.querySelector('#clsDate').value = defaultDate;
             
-            const defaults = appState.studioSettings.courseDefaults;
-            form.querySelector('#courseDuration').value = defaults.duration;
-            form.querySelector('#courseCredits').value = defaults.credits;
-            form.querySelector('#courseMaxParticipants').value = defaults.maxParticipants;
+            const defaults = appState.studioSettings.clsDefaults;
+            form.querySelector('#clsDuration').value = defaults.duration;
+            form.querySelector('#clsCredits').value = defaults.credits;
+            form.querySelector('#clsMaxParticipants').value = defaults.maxParticipants;
 
-            const coursesOnDay = appState.courses
+            const classesOnDay = appState.classes
                 .filter(c => c.date === defaultDate)
                 .sort((a, b) => a.time.localeCompare(b.time));
 
-            if (coursesOnDay.length > 0) {
-                const lastCourse = coursesOnDay[coursesOnDay.length - 1];
-                const [hours, minutes] = lastCourse.time.split(':').map(Number);
-                const lastCourseStartTime = new Date();
-                lastCourseStartTime.setHours(hours, minutes, 0, 0);
-                const nextAvailableTime = new Date(lastCourseStartTime.getTime() + lastCourse.duration * 60000);
+            if (classesOnDay.length > 0) {
+                const lastCls = classesOnDay[classesOnDay.length - 1];
+                const [hours, minutes] = lastCls.time.split(':').map(Number);
+                const lastClsStartTime = new Date();
+                lastClsStartTime.setHours(hours, minutes, 0, 0);
+                const nextAvailableTime = new Date(lastClsStartTime.getTime() + lastCls.duration * 60000);
                 
                 const defaultHours = String(nextAvailableTime.getHours()).padStart(2, '0');
                 const defaultMinutes = String(nextAvailableTime.getMinutes()).padStart(2, '0');
-                form.querySelector('#courseTime').value = `${defaultHours}:${defaultMinutes}`;
+                form.querySelector('#clsTime').value = `${defaultHours}:${defaultMinutes}`;
             } else {
-                form.querySelector('#courseTime').value = defaults.time;
+                form.querySelector('#clsTime').value = defaults.time;
             }
         }
-        form.onsubmit = handleCourseFormSubmit;
+        form.onsubmit = handleClsFormSubmit;
         openModal(modal);
     }
 
@@ -1438,81 +1438,81 @@ Thank you for your understanding.
         }
     }
 
-    function handleCourseFormSubmit(e) {
+    function handleClsFormSubmit(e) {
         e.preventDefault();
         saveSchedulePosition();
         const form = e.target;
-        const courseId = form.querySelector('#courseModalId').value;
+        const clsId = form.querySelector('#clsModalId').value;
         const submitBtn = form.querySelector('.submit-btn');
         submitBtn.disabled = true;
 
         // NOTE: The 'async' keyword is removed because the problematic 'await' for
         // the refund logic has been taken out. This is the intended fix.
         
-        const newCourseDataFromForm = {
-            sportTypeId: form.querySelector('#courseSportType').value,
-            tutorId: form.querySelector('#courseTutor').value,
-            duration: parseInt(form.querySelector('#courseDuration').value),
-            time: form.querySelector('#courseTime').value,
-            credits: parseFloat(form.querySelector('#courseCredits').value),
-            maxParticipants: parseInt(form.querySelector('#courseMaxParticipants').value),
-            date: form.querySelector('#courseDate').value,
+        const newClsDataFromForm = {
+            sportTypeId: form.querySelector('#clsSportType').value,
+            tutorId: form.querySelector('#clsTutor').value,
+            duration: parseInt(form.querySelector('#clsDuration').value),
+            time: form.querySelector('#clsTime').value,
+            credits: parseFloat(form.querySelector('#clsCredits').value),
+            maxParticipants: parseInt(form.querySelector('#clsMaxParticipants').value),
+            date: form.querySelector('#clsDate').value,
             notForMonthly: form.querySelector('#notForMonthlyCheckbox').checked
         };
 
-        const tutor = appState.tutors.find(t => t.id === newCourseDataFromForm.tutorId);
+        const tutor = appState.tutors.find(t => t.id === newClsDataFromForm.tutorId);
         if (tutor) {
-            const skill = tutor.skills.find(s => s.sportTypeId === newCourseDataFromForm.sportTypeId);
+            const skill = tutor.skills.find(s => s.sportTypeId === newClsDataFromForm.sportTypeId);
             if (skill) {
-                newCourseDataFromForm.payoutDetails = {
-                    salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                newClsDataFromForm.payoutDetails = {
+                    salaryType: tutor.isEmployee ? 'perCls' : skill.salaryType,
                     salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
                 };
             }
         }
 
         const updates = {};
-        const monthIndexKey = newCourseDataFromForm.date.substring(0, 7);
+        const monthIndexKey = newClsDataFromForm.date.substring(0, 7);
 
         let promise;
 
-        if (courseId) {
+        if (clsId) {
             // --- THIS IS THE CRITICAL EDITING LOGIC ---
-            const originalCourse = appState.courses.find(c => c.id === courseId);
-            if (!originalCourse) {
-                showMessageBox('Error: Could not find original course to update.', 'error');
+            const originalCls = appState.classes.find(c => c.id === clsId);
+            if (!originalCls) {
+                showMessageBox('Error: Could not find original class to update.', 'error');
                 submitBtn.disabled = false;
                 return;
             }
 
             // 1. Preserve existing booking and attendance data
-            const finalCourseData = {
-                ...originalCourse,       // Start with the original course data (including bookedBy)
-                ...newCourseDataFromForm // Overwrite with new values from the form
+            const finalClsData = {
+                ...originalCls,       // Start with the original class data (including bookedBy)
+                ...newClsDataFromForm // Overwrite with new values from the form
             };
 
             // 2. THE FIX: The automatic refund logic that was here has been completely removed.
-            //    We no longer issue refunds when a course price is lowered. The cancellation
+            //    We no longer issue refunds when a class price is lowered. The cancellation
             //    process will correctly use the original 'creditsPaid' value.
 
-            updates[`/courses/${courseId}`] = finalCourseData;
-            updates[`/courseMonths/${monthIndexKey}`] = true;
+            updates[`/classes/${clsId}`] = finalClsData;
+            updates[`/clsMonths/${monthIndexKey}`] = true;
             promise = database.ref().update(updates);
 
         } else {
-            // This is a NEW course, so the logic is simpler
-            const newCourseKey = database.ref('/courses').push().key;
-            newCourseDataFromForm.bookedBy = {};
-            newCourseDataFromForm.attendedBy = {};
+            // This is a NEW class, so the logic is simpler
+            const newClsKey = database.ref('/classes').push().key;
+            newClsDataFromForm.bookedBy = {};
+            newClsDataFromForm.attendedBy = {};
             
-            updates[`/courses/${newCourseKey}`] = newCourseDataFromForm;
-            updates[`/courseMonths/${monthIndexKey}`] = true;
+            updates[`/classes/${newClsKey}`] = newClsDataFromForm;
+            updates[`/clsMonths/${monthIndexKey}`] = true;
             promise = database.ref().update(updates);
         }
 
         promise.then(() => {
-            showMessageBox(courseId ? 'Course updated successfully!' : 'Course added!', 'success');
-            closeModal(DOMElements.courseModal);
+            showMessageBox(clsId ? 'Class updated successfully!' : 'Class added!', 'success');
+            closeModal(DOMElements.clsModal);
         }).catch(error => {
             showMessageBox(error.message, 'error');
         }).finally(() => {
@@ -1542,23 +1542,23 @@ Thank you for your understanding.
     }
 
     // --- Main Rendering Functions ---
-    function createCourseElement(course) {
-        const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-        const tutor = appState.tutors.find(t => t.id === course.tutorId);
+    function createClsElement(cls) {
+        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+        const tutor = appState.tutors.find(t => t.id === cls.tutorId);
         const el = document.createElement('div');
-        el.id = course.id; 
+        el.id = cls.id; 
         const isOwner = appState.currentUser?.role === 'owner';
         const isStaff = appState.currentUser?.role === 'staff';
         const isAdmin = isOwner || isStaff;
-        const currentBookings = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
+        const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
         
-        el.className = `course-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between`;
+        el.className = `cls-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between`;
         el.style.backgroundColor = sportType?.color || '#64748b';
 
         if (!isAdmin) {
             const { memberSportType, memberTutor } = appState.selectedFilters;
-            const sportMatch = memberSportType === 'all' || course.sportTypeId === memberSportType;
-            const tutorMatch = memberTutor === 'all' || course.tutorId === memberTutor;
+            const sportMatch = memberSportType === 'all' || cls.sportTypeId === memberSportType;
+            const tutorMatch = memberTutor === 'all' || cls.tutorId === memberTutor;
             if (!sportMatch || !tutorMatch) {
                 el.classList.add('filtered-out');
             }
@@ -1566,34 +1566,34 @@ Thank you for your understanding.
         
         let actionButton = '';
         let mainAction = () => {};
-        const isBookedByCurrentUser = !isAdmin && appState.currentUser && course.bookedBy && course.bookedBy[appState.currentUser.id];
-        const isAttendedByCurrentUser = !isAdmin && appState.currentUser && course.attendedBy && course.attendedBy[appState.currentUser.id];
-        const isFull = currentBookings >= course.maxParticipants;
+        const isBookedByCurrentUser = !isAdmin && appState.currentUser && cls.bookedBy && cls.bookedBy[appState.currentUser.id];
+        const isAttendedByCurrentUser = !isAdmin && appState.currentUser && cls.attendedBy && cls.attendedBy[appState.currentUser.id];
+        const isFull = currentBookings >= cls.maxParticipants;
         // --- START: NEW STATE VARIABLES ---
         const isMonthlyMember = !isAdmin && appState.currentUser.monthlyPlan;
-        const isRestrictedForMonthly = course.notForMonthly;
+        const isRestrictedForMonthly = cls.notForMonthly;
         // --- END: NEW STATE VARIABLES ---
 
         if (isAdmin) {
             el.classList.add('cursor-pointer');
-            actionButton = `<button class="edit-course-btn absolute top-2 right-2 opacity-60 hover:opacity-100 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
+            actionButton = `<button class="edit-cls-btn absolute top-2 right-2 opacity-60 hover:opacity-100 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>`;
             mainAction = () => { 
                 if (!appState.copyMode.active) {
-                    const freshCourseData = appState.courses.find(c => c.id === course.id);
-                    openJoinedMembersModal(freshCourseData);
+                    const freshClsData = appState.classes.find(c => c.id === cls.id);
+                    openJoinedMembersModal(freshClsData);
                 } 
             };
-        // --- START: NEW LOGIC BLOCK FOR RESTRICTED COURSES ---
+        // --- START: NEW LOGIC BLOCK FOR RESTRICTED CLASSES ---
         } else if (isMonthlyMember && isRestrictedForMonthly) {
-            // This is a monthly member looking at a restricted course.
-            el.classList.add('course-block-restricted'); // New CSS class for styling
-            mainAction = () => showMessageBox('This course is not available for Monthly Plan members.', 'info');
+            // This is a monthly member looking at a restricted class.
+            el.classList.add('cls-block-restricted'); // New CSS class for styling
+            mainAction = () => showMessageBox('This class is not available for Monthly Plan members.', 'info');
         // --- END: NEW LOGIC BLOCK ---
         } else if (isBookedByCurrentUser) {
             el.classList.add('booked-by-member');
         } else if (appState.currentUser && !isFull) {
             el.classList.add('cursor-pointer');
-            mainAction = () => openBookingModal(course);
+            mainAction = () => openBookingModal(cls);
         }
 
         let memberActionHTML;
@@ -1603,22 +1603,22 @@ Thank you for your understanding.
             } else {
                 memberActionHTML = `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="BOOKED" data-cancel-text="CANCEL?">BOOKED</button>`;
             }
-        // --- START: NEW LOGIC FOR RESTRICTED COURSES ---
+        // --- START: NEW LOGIC FOR RESTRICTED CLASSES ---
         } else if (isMonthlyMember && isRestrictedForMonthly) {
             memberActionHTML = `<span class="bg-white text-slate-600 font-bold text-xs px-3 py-1 rounded-full">NOT AVAILABLE</span>`;
-        // --- END: NEW LOGIC FOR RESTRICTED COURSES ---
+        // --- END: NEW LOGIC FOR RESTRICTED CLASSES ---
         } else if (isFull) {
             memberActionHTML = `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>`;
         } else {
-            memberActionHTML = `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`;
+            memberActionHTML = `<span class="font-bold text-white">${cls.credits} ${cls.credits === 1 ? 'credit' : 'credits'}</span>`;
         }
         
         const participantCounterHTML = isAdmin
             ? (window.matchMedia('(any-pointer: fine)').matches
-                ? createParticipantCounter(currentBookings, course.maxParticipants, true)
-                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, course.maxParticipants, false)}</div>`
+                ? createParticipantCounter(currentBookings, cls.maxParticipants, true)
+                : `<div class="participant-dial-trigger">${createParticipantCounter(currentBookings, cls.maxParticipants, false)}</div>`
             )
-            : createParticipantCounter(currentBookings, course.maxParticipants, false);
+            : createParticipantCounter(currentBookings, cls.maxParticipants, false);
 
         el.innerHTML = `
             <div>
@@ -1635,19 +1635,19 @@ Thank you for your understanding.
             <div class="mt-2 flex justify-between items-center">
                 ${isAdmin
                     ? (window.matchMedia('(any-pointer: fine)').matches
-                        ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot time-slot-editable">${getTimeRange(course.time, course.duration)}</p>`
+                        ? `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block time-slot time-slot-editable">${getTimeRange(cls.time, cls.duration)}</p>`
                         : `<div class="relative inline-block">
-                               <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md">${getTimeRange(course.time, course.duration)}</p>
-                               <input type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${course.time}" />
+                               <p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md">${getTimeRange(cls.time, cls.duration)}</p>
+                               <input type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${cls.time}" />
                            </div>`
                     )
-                    : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(course.time, course.duration)}</p>`
+                    : `<p class="font-bold text-base bg-black/20 px-2 py-1 rounded-md inline-block">${getTimeRange(cls.time, cls.duration)}</p>`
                 }
                 <div class="member-action-container">
                     ${isAdmin 
                         ? (isFull 
                             ? `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">FULL</span>` 
-                            : `<span class="font-bold text-white">${course.credits} ${course.credits === 1 ? 'credit' : 'credits'}</span>`) 
+                            : `<span class="font-bold text-white">${cls.credits} ${cls.credits === 1 ? 'credit' : 'credits'}</span>`) 
                         : memberActionHTML
                     }
                 </div>
@@ -1660,14 +1660,14 @@ Thank you for your understanding.
         });
 
         if (isAdmin) {
-            el.querySelector('.edit-course-btn').onclick = (e) => {
+            el.querySelector('.edit-cls-btn').onclick = (e) => {
                 e.stopPropagation();
-                openCourseModal(course.date, course);
+                openClsModal(cls.date, cls);
             };
             
             const timeSlotEl = el.querySelector('.time-slot-editable');
             if (timeSlotEl) {
-                let localCourseTime = course.time;
+                let localClsTime = cls.time;
                 
                 timeSlotEl.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -1682,18 +1682,18 @@ Thank you for your understanding.
                     if (!timeSlotEl.classList.contains('editing')) return;
                     e.preventDefault();
                     
-                    const [hours, minutes] = localCourseTime.split(':').map(Number);
+                    const [hours, minutes] = localClsTime.split(':').map(Number);
                     let totalMinutes = hours * 60 + minutes;
                     
                     if (e.deltaY < 0) totalMinutes -= 15; else totalMinutes += 15;
                     if (totalMinutes < 0) totalMinutes = 24 * 60 - 15; if (totalMinutes >= 24 * 60) totalMinutes = 0;
 
                     const newHours = Math.floor(totalMinutes / 60); const newMinutes = totalMinutes % 60;
-                    localCourseTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
-                    timeSlotEl.textContent = getTimeRange(localCourseTime, course.duration);
+                    localClsTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                    timeSlotEl.textContent = getTimeRange(localClsTime, cls.duration);
 
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/time`).set(localCourseTime); }, 1500);
+                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/classes/${cls.id}/time`).set(localClsTime); }, 1500);
                 });
             }
 
@@ -1703,7 +1703,7 @@ Thank you for your understanding.
                 timeInput.addEventListener('change', () => {
                     let timeChangeDebounce;
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/time`).set(timeInput.value); }, 1500);
+                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/classes/${cls.id}/time`).set(timeInput.value); }, 1500);
                 });
             }
 
@@ -1722,7 +1722,7 @@ Thank you for your understanding.
                     if (e.deltaY < 0) { localMaxParticipants++; } else { localMaxParticipants = Math.max(1, localMaxParticipants - 1); }
                     participantCounterEl.textContent = `${currentBookings}/${localMaxParticipants}`;
                     clearTimeout(maxPartChangeDebounce);
-                    maxPartChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/courses/${course.id}/maxParticipants`).set(localMaxParticipants); }, 1500);
+                    maxPartChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/classes/${cls.id}/maxParticipants`).set(localMaxParticipants); }, 1500);
                 });
             }
 
@@ -1732,11 +1732,11 @@ Thank you for your understanding.
                     e.stopPropagation();
                     openNumericDialModal(
                         'Set Max Participants',
-                        course.maxParticipants,
+                        cls.maxParticipants,
                         1, 100,
                         (newMax) => {
                             saveSchedulePosition();
-                            database.ref(`/courses/${course.id}/maxParticipants`).set(newMax);
+                            database.ref(`/classes/${cls.id}/maxParticipants`).set(newMax);
                         }
                     );
                 });
@@ -1745,7 +1745,7 @@ Thank you for your understanding.
         } else if (isBookedByCurrentUser && !isAttendedByCurrentUser) {
             const cancelButton = el.querySelector('.cancel-booking-btn-toggle');
             if (cancelButton) {
-                cancelButton.onclick = (e) => { e.stopPropagation(); saveSchedulePosition(); handleCancelBooking(course); };
+                cancelButton.onclick = (e) => { e.stopPropagation(); saveSchedulePosition(); handleCancelBooking(cls); };
                 cancelButton.onmouseenter = () => cancelButton.textContent = cancelButton.dataset.cancelText;
                 cancelButton.onmouseleave = () => cancelButton.textContent = cancelButton.dataset.bookedText;
             }
@@ -1755,21 +1755,21 @@ Thank you for your understanding.
     }
 
     function _reSortDayColumn(dateIso) {
-        const dayContainer = document.querySelector(`.courses-container[data-date="${dateIso}"]`);
+        const dayContainer = document.querySelector(`.classes-container[data-date="${dateIso}"]`);
         if (!dayContainer) return; // Do nothing if the day is not visible
 
-        // 1. Get all courses for this specific day from the global app state
-        const dailyCourses = appState.courses.filter(c => c.date === dateIso);
+        // 1. Get all classes for this specific day from the global app state
+        const dailyClasses = appState.classes.filter(c => c.date === dateIso);
         
         // 2. Sort them by time to ensure the correct order
-        dailyCourses.sort((a, b) => a.time.localeCompare(b.time));
+        dailyClasses.sort((a, b) => a.time.localeCompare(b.time));
 
         // 3. Clear only this day's container
         dayContainer.innerHTML = '';
 
-        // 4. Re-append the newly sorted course elements
-        dailyCourses.forEach(course => {
-            dayContainer.appendChild(createCourseElement(course));
+        // 4. Re-append the newly sorted class elements
+        dailyClasses.forEach(cls => {
+            dayContainer.appendChild(createClsElement(cls));
         });
     }
 
@@ -1812,23 +1812,23 @@ Thank you for your understanding.
                                 ${todayBadge}
                             </div>
                         </div>
-                        <div data-date="${dateIso}" class="courses-container px-1 py-1 flex-grow"></div>
+                        <div data-date="${dateIso}" class="classes-container px-1 py-1 flex-grow"></div>
                         <div class="add-controls-wrapper mt-auto p-2">
-                            ${showAddButton ? `<button data-date="${dateIso}" class="add-course-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}
+                            ${showAddButton ? `<button data-date="${dateIso}" class="add-cls-button w-full flex items-center justify-center py-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 transition-all"><svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>Add Class</button>${copyButtonsHTML}` : ''}
                         </div>
                     </div>
                 </div>`;
         });
         emblaContainer.innerHTML = content;
 
-        const coursesByDate = appState.courses.reduce((acc, course) => { (acc[course.date] = acc[course.date] || []).push(course); return acc; }, {});
-        container.querySelectorAll('.courses-container').forEach(cont => {
+        const classesByDate = appState.classes.reduce((acc, cls) => { (acc[cls.date] = acc[cls.date] || []).push(cls); return acc; }, {});
+        container.querySelectorAll('.classes-container').forEach(cont => {
             const date = cont.dataset.date;
-            const dailyCourses = coursesByDate[date] || [];
+            const dailyClasses = classesByDate[date] || [];
             
             cont.innerHTML = '';
             
-            dailyCourses.sort((a, b) => a.time.localeCompare(b.time)).forEach(course => cont.appendChild(createCourseElement(course)));
+            dailyClasses.sort((a, b) => a.time.localeCompare(b.time)).forEach(cls => cont.appendChild(createClsElement(cls)));
         });
 
         const emblaNode = container.querySelector('.embla__viewport');
@@ -1922,11 +1922,11 @@ Thank you for your understanding.
 
         let memberEndDate = new Date(today.getTime());
 
-        const futureCourses = appState.courses.filter(c => new Date(c.date) >= memberStartDate);
-        if (futureCourses.length > 0) {
-            const latestCourseDate = new Date(Math.max(...futureCourses.map(c => new Date(c.date).getTime())));
-            if (latestCourseDate > memberEndDate) {
-                memberEndDate = latestCourseDate;
+        const futureClasses = appState.classes.filter(c => new Date(c.date) >= memberStartDate);
+        if (futureClasses.length > 0) {
+            const latestClsDate = new Date(Math.max(...futureClasses.map(c => new Date(c.date).getTime())));
+            if (latestClsDate > memberEndDate) {
+                memberEndDate = latestClsDate;
             }
         }
         
@@ -1944,17 +1944,17 @@ Thank you for your understanding.
         const { memberSportType, memberTutor } = appState.selectedFilters;
         const isFilterActive = memberSportType !== 'all' || memberTutor !== 'all';
 
-        // 1. Determine the set of courses visible to the member
+        // 1. Determine the set of classes visible to the member
         const today = new Date();
         today.setUTCHours(0, 0, 0, 0);
         const memberStartDate = new Date(today.getTime());
-        const futureCourses = appState.courses.filter(c => new Date(c.date) >= memberStartDate);
+        const futureClasses = appState.classes.filter(c => new Date(c.date) >= memberStartDate);
 
-        // 2. Derive available sport types and tutors from that specific set of courses
-        const relevantSportTypeIds = new Set(futureCourses.map(c => c.sportTypeId));
+        // 2. Derive available sport types and tutors from that specific set of classes
+        const relevantSportTypeIds = new Set(futureClasses.map(c => c.sportTypeId));
         const availableSportTypes = appState.sportTypes.filter(st => relevantSportTypeIds.has(st.id));
         
-        const relevantTutorIds = new Set(futureCourses.map(c => c.tutorId));
+        const relevantTutorIds = new Set(futureClasses.map(c => c.tutorId));
         const availableTutors = appState.tutors.filter(t => relevantTutorIds.has(t.id));
 
         DOMElements.filterModal.innerHTML = `
@@ -2040,68 +2040,68 @@ Thank you for your understanding.
 
         if (type === 'day') {
             const sourceDate = sourceData;
-            const coursesToCopy = appState.courses.filter(c => c.date === sourceDate);
-            if (coursesToCopy.length === 0) {
+            const classesToCopy = appState.classes.filter(c => c.date === sourceDate);
+            if (classesToCopy.length === 0) {
                 showMessageBox('Source day has no classes to copy.', 'error');
                 cancelCopy();
                 return;
             } else {
-                const copyPromises = coursesToCopy.map(course => {
+                const copyPromises = classesToCopy.map(cls => {
                     // --- START: FIX ---
                     // 1. Exclude the old payoutDetails from the spread operator.
-                    const { id, bookedBy, attendedBy, payoutDetails, ...restOfCourse } = course;
-                    const newCourse = {
-                        ...restOfCourse,
+                    const { id, bookedBy, attendedBy, payoutDetails, ...restOfCls } = cls;
+                    const newCls = {
+                        ...restOfCls,
                         date: targetDate,
                         bookedBy: {},
                         attendedBy: {}
                     };
 
                     // 2. Generate new payoutDetails based on the tutor's CURRENT salary.
-                    const tutor = appState.tutors.find(t => t.id === newCourse.tutorId);
+                    const tutor = appState.tutors.find(t => t.id === newCls.tutorId);
                     if (tutor) {
-                        const skill = tutor.skills.find(s => s.sportTypeId === newCourse.sportTypeId);
+                        const skill = tutor.skills.find(s => s.sportTypeId === newCls.sportTypeId);
                         if (skill) {
-                            newCourse.payoutDetails = {
-                                salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                            newCls.payoutDetails = {
+                                salaryType: tutor.isEmployee ? 'perCls' : skill.salaryType,
                                 salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
                             };
                         }
                     }
                     // --- END: FIX ---
 
-                    return database.ref('/courses').push(newCourse);
+                    return database.ref('/classes').push(newCls);
                 });
                 Promise.all(copyPromises).then(() => {
-                    showMessageBox(`Copied ${coursesToCopy.length} class(es) from ${formatDateWithWeekday(sourceDate)} to ${formatDateWithWeekday(targetDate)}.`, 'success');
+                    showMessageBox(`Copied ${classesToCopy.length} class(es) from ${formatDateWithWeekday(sourceDate)} to ${formatDateWithWeekday(targetDate)}.`, 'success');
                 });
             }
         } else if (type === 'class') {
             // --- START: FIX ---
             // 1. Exclude the old payoutDetails from the spread operator.
-            const { id, bookedBy, attendedBy, payoutDetails, ...restOfCourse } = sourceData;
-            const newCourse = {
-                ...restOfCourse,
+            const { id, bookedBy, attendedBy, payoutDetails, ...restOfCls } = sourceData;
+            const newCls = {
+                ...restOfCls,
                 date: targetDate,
                 bookedBy: {},
                 attendedBy: {}
             };
 
             // 2. Generate new payoutDetails based on the tutor's CURRENT salary.
-            const tutor = appState.tutors.find(t => t.id === newCourse.tutorId);
+            const tutor = appState.tutors.find(t => t.id === newCls.tutorId);
             if (tutor) {
-                const skill = tutor.skills.find(s => s.sportTypeId === newCourse.sportTypeId);
+                const skill = tutor.skills.find(s => s.sportTypeId === newCls.sportTypeId);
                 if (skill) {
-                    newCourse.payoutDetails = {
-                        salaryType: tutor.isEmployee ? 'perCourse' : skill.salaryType,
+                    newCls.payoutDetails = {
+                        salaryType: tutor.isEmployee ? 'perCls' : skill.salaryType,
                         salaryValue: tutor.isEmployee ? 0 : skill.salaryValue
                     };
                 }
             }
             // --- END: FIX ---
 
-            database.ref('/courses').push(newCourse).then(() => {
-                const sportTypeName = appState.sportTypes.find(st => st.id === newCourse.sportTypeId).name;
+            database.ref('/classes').push(newCls).then(() => {
+                const sportTypeName = appState.sportTypes.find(st => st.id === newCls.sportTypeId).name;
                 showMessageBox(`Copied "${sportTypeName}" to ${formatDateWithWeekday(targetDate)}.`, 'success');
             });
         }
@@ -2122,7 +2122,7 @@ Thank you for your understanding.
 
         const { type, targetDate } = appState.copyMode;
 
-        const targetDayEl = schedulePage.querySelector(`.day-column .courses-container[data-date="${targetDate}"]`)?.closest('.day-column');
+        const targetDayEl = schedulePage.querySelector(`.day-column .classes-container[data-date="${targetDate}"]`)?.closest('.day-column');
         if (targetDayEl) {
             targetDayEl.classList.add('copy-mode-paste-zone');
         }
@@ -2137,10 +2137,10 @@ Thank you for your understanding.
             });
         } else if (type === 'class') {
             showMessageBox('Copy Class: Select a class to copy FROM.', 'info');
-            schedulePage.querySelectorAll('.course-block').forEach(courseEl => {
-                const course = appState.courses.find(c => c.id === courseEl.id);
-                if (course && course.date !== targetDate) {
-                    courseEl.classList.add('copy-mode-source-class');
+            schedulePage.querySelectorAll('.cls-block').forEach(clsEl => {
+                const cls = appState.classes.find(c => c.id === clsEl.id);
+                if (cls && cls.date !== targetDate) {
+                    clsEl.classList.add('copy-mode-source-class');
                 }
             });
         }
@@ -2153,7 +2153,7 @@ Thank you for your understanding.
             return;
         };
         
-        const memberBookings = appState.courses.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => new Date(b.date) - new Date(a.date));
+        const memberBookings = appState.classes.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => new Date(b.date) - new Date(a.date));
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
         const paymentHistory = firebaseObjectToArray(member.paymentHistory);
 
@@ -2240,24 +2240,24 @@ Thank you for your understanding.
                         <h3 class="text-2xl font-bold text-slate-800 mb-4">My Bookings (${memberBookings.length})</h3>
                         <div class="space-y-3 max-h-[60vh] overflow-y-auto">
                             ${memberBookings.length === 0 ? '<p class="text-slate-500">You have no upcoming or past bookings.</p>' :
-                            memberBookings.map(course => {
-                                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                                const isAttended = course.attendedBy && course.attendedBy[member.id];
-                                const isHighlighted = course.id === appState.highlightBookingId;
+                            memberBookings.map(cls => {
+                                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                                const isAttended = cls.attendedBy && cls.attendedBy[member.id];
+                                const isHighlighted = cls.id === appState.highlightBookingId;
                                 // --- START: CLEANED LOGIC ---
-                                const bookingDetails = course.bookedBy[member.id];
+                                const bookingDetails = cls.bookedBy[member.id];
                                 const creditsUsed = bookingDetails.creditsPaid;
                                 // --- END: CLEANED LOGIC ---
-                                return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-course-id="${course.id}">
+                                return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-cls-id="${cls.id}">
                                     <div>
                                         <p class="font-bold text-slate-800">${sportType.name}</p>
-                                        <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
+                                        <p class="text-sm text-slate-500">${formatShortDateWithYear(cls.date)} at ${getTimeRange(cls.time, cls.duration)}</p>
                                         <p class="text-xs text-slate-600">Credits Used: ${creditsUsed}</p>
                                         <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
                                     </div>
                                     ${isAttended 
                                         ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
-                                        : `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}">Cancel</button>`
+                                        : `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-cls-id="${cls.id}">Cancel</button>`
                                     }
                                 </div>`
                             }).join('')}
@@ -2268,13 +2268,13 @@ Thank you for your understanding.
 
         container.querySelectorAll('.cancel-booking-btn-dash').forEach(btn => {
             btn.onclick = () => {
-                const course = appState.courses.find(c => c.id === btn.dataset.courseId);
-                handleCancelBooking(course);
+                const cls = appState.classes.find(c => c.id === btn.dataset.clsId);
+                handleCancelBooking(cls);
             };
         });
 
         if (appState.highlightBookingId) {
-            const elementToScrollTo = container.querySelector(`[data-course-id="${appState.highlightBookingId}"]`);
+            const elementToScrollTo = container.querySelector(`[data-cls-id="${appState.highlightBookingId}"]`);
             if (elementToScrollTo) {
                 elementToScrollTo.scrollIntoView({
                     behavior: 'smooth',
@@ -2458,7 +2458,7 @@ Thank you for your understanding.
                  <div class="w-full mt-4 mb-6 p-4 bg-slate-50 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
                         <h4 class="font-semibold text-slate-800">Auto-Adjust Monthly Plans</h4>
-                        <p class="text-sm text-slate-600">Recalculate estimated courses and credit values for all monthly members based on the last 30 days of attendance.</p>
+                        <p class="text-sm text-slate-600">Recalculate estimated classes and credit values for all monthly members based on the last 30 days of attendance.</p>
                     </div>
                     <button id="recalculatePlansBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto flex-shrink-0">Recalculate All</button>
                 </div>
@@ -2577,7 +2577,7 @@ Thank you for your understanding.
                         showMessageBox('Could not find member to delete.', 'error');
                         return;
                     }
-                    showConfirmation('Anonymize Member', `This will cancel all of <strong>${memberName}</strong>'s upcoming bookings and anonymize their record. Attended course history and revenue will be preserved. This cannot be undone.`, () => {
+                    showConfirmation('Anonymize Member', `This will cancel all of <strong>${memberName}</strong>'s upcoming bookings and anonymize their record. Attended class history and revenue will be preserved. This cannot be undone.`, () => {
                         handleMemberDeletion(memberToDelete);
                     });
                 };
@@ -2655,25 +2655,25 @@ Thank you for your understanding.
                 showMessageBox('Generating booking history... This may take a moment.', 'info', 5000);
                 try {
                     const usersSnapshot = await database.ref('/users').once('value');
-                    const coursesSnapshot = await database.ref('/courses').once('value');
+                    const classesSnapshot = await database.ref('/classes').once('value');
                     const allUsers = firebaseObjectToArray(usersSnapshot.val());
-                    const allCourses = firebaseObjectToArray(coursesSnapshot.val());
+                    const allClasses = firebaseObjectToArray(classesSnapshot.val());
                     const exportData = [];
                     const members = allUsers.filter(u => u.role === 'member' && !u.isDeleted);
                     members.forEach(member => {
-                        allCourses.forEach(course => {
-                            if (course.bookedBy && course.bookedBy[member.id]) {
-                                const bookingInfo = course.bookedBy[member.id];
-                                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                                const tutor = appState.tutors.find(t => t.id === course.tutorId);
+                        allClasses.forEach(cls => {
+                            if (cls.bookedBy && cls.bookedBy[member.id]) {
+                                const bookingInfo = cls.bookedBy[member.id];
+                                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                                const tutor = appState.tutors.find(t => t.id === cls.tutorId);
                                 exportData.push({
                                     MemberName: member.name,
                                     MemberEmail: member.email,
-                                    BookingDate: course.date,
-                                    CourseName: sportType?.name || 'Unknown',
+                                    BookingDate: cls.date,
+                                    ClassName: sportType?.name || 'Unknown',
                                     TutorName: tutor?.name || 'Unknown',
-                                    CreditsUsed: course.credits,
-                                    WasAttended: (course.attendedBy && course.attendedBy[member.id]) ? 'Yes' : 'No',
+                                    CreditsUsed: cls.credits,
+                                    WasAttended: (cls.attendedBy && cls.attendedBy[member.id]) ? 'Yes' : 'No',
                                     BookingMadeOn: bookingInfo.bookedAt ? bookingInfo.bookedAt.slice(0, 10) : '',
                                     BookingMadeBy: bookingInfo.bookedBy || 'Unknown'
                                 });
@@ -2760,7 +2760,7 @@ Thank you for your understanding.
         container.querySelector('#recalculatePlansBtn').onclick = () => {
             showConfirmation(
                 'Recalculate Monthly Plans?',
-                'This will analyze the last 30 days of attendance for all monthly members and update their estimated course counts and credit values. This action cannot be undone.',
+                'This will analyze the last 30 days of attendance for all monthly members and update their estimated class counts and credit values. This action cannot be undone.',
                 recalculateMonthlyPlans
             );
         };
@@ -2771,16 +2771,16 @@ Thank you for your understanding.
         const updates = {};
         let upcomingCancellations = 0;
 
-        // Find all courses this member is booked on
-        const memberBookings = appState.courses.filter(c => c.bookedBy && c.bookedBy[memberId]);
+        // Find all classes this member is booked on
+        const memberBookings = appState.classes.filter(c => c.bookedBy && c.bookedBy[memberId]);
         
-        memberBookings.forEach(course => {
-            const isAttended = course.attendedBy && course.attendedBy[memberId];
+        memberBookings.forEach(cls => {
+            const isAttended = cls.attendedBy && cls.attendedBy[memberId];
             
             // Only cancel upcoming, non-attended bookings
             if (!isAttended) {
-                updates[`/courses/${course.id}/bookedBy/${memberId}`] = null;
-                updates[`/memberBookings/${memberId}/${course.id}`] = null; // New index
+                updates[`/classes/${cls.id}/bookedBy/${memberId}`] = null;
+                updates[`/memberBookings/${memberId}/${cls.id}`] = null; // New index
                 upcomingCancellations++;
             }
         });
@@ -3394,13 +3394,13 @@ Thank you for your understanding.
             thirtyDaysAgo.setDate(today.getDate() - 30);
             thirtyDaysAgo.setHours(0, 0, 0, 0); // Also normalize the 30-day mark
 
-            // Efficiently fetch only the courses from the last 30 days.
-            const coursesSnapshotPromise = database.ref('/courses').orderByChild('date').startAt(getIsoDate(thirtyDaysAgo)).once('value');
+            // Efficiently fetch only the classes from the last 30 days.
+            const classesSnapshotPromise = database.ref('/classes').orderByChild('date').startAt(getIsoDate(thirtyDaysAgo)).once('value');
             
-            const [usersSnapshot, coursesSnapshot] = await Promise.all([usersSnapshotPromise, coursesSnapshotPromise]);
+            const [usersSnapshot, classesSnapshot] = await Promise.all([usersSnapshotPromise, classesSnapshotPromise]);
 
             const allUsers = firebaseObjectToArray(usersSnapshot.val());
-            const recentCourses = firebaseObjectToArray(coursesSnapshot.val());
+            const recentClasses = firebaseObjectToArray(classesSnapshot.val());
             
             // Filter for the correct target members.
             const monthlyMembers = allUsers.filter(u => u.role === 'member' && u.monthlyPlan && !u.isDeleted && u.planStartDate);
@@ -3430,13 +3430,13 @@ Thank you for your understanding.
                     continue;
                 }
 
-                const attendedCoursesCount = recentCourses.filter(course => {
-                    const courseDate = new Date(course.date);
-                    return course.attendedBy && course.attendedBy[member.id] &&
-                           courseDate >= observationStartDate && courseDate <= today;
+                const attendedClassesCount = recentClasses.filter(cls => {
+                    const clsDate = new Date(cls.date);
+                    return cls.attendedBy && cls.attendedBy[member.id] &&
+                           clsDate >= observationStartDate && clsDate <= today;
                 }).length;
 
-                const dailyAttendanceRate = attendedCoursesCount / activeDays;
+                const dailyAttendanceRate = attendedClassesCount / activeDays;
                 const projectedMonthlyAttendance = dailyAttendanceRate * 30;
 
                 // --- START: NEW Dynamic Adaptive Smoothing Logic ---
@@ -3501,22 +3501,22 @@ Thank you for your understanding.
             if (!acc[memberId]) {
                 acc[memberId] = [];
             }
-            acc[memberId].push(booking.course);
+            acc[memberId].push(booking.cls);
             return acc;
         }, {});
 
         let totalGrossRevenue = 0;
-        const revenueByCourseId = new Map();
+        const revenueByClsId = new Map();
 
         for (const memberId in bookingsByMember) {
             const member = appState.users.find(u => u.id === memberId);
             if (!member) continue;
 
-            const memberCourses = bookingsByMember[memberId].sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`));
+            const memberClasses = bookingsByMember[memberId].sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`));
 
             if (member.monthlyPlan) {
-                for (const course of memberCourses) {
-                    const bookingInfo = course.bookedBy[member.id];
+                for (const cls of memberClasses) {
+                    const bookingInfo = cls.bookedBy[member.id];
                     
                     // --- MODIFIED: Use the frozen value from the booking object ---
                     // It checks for the new object format first, with a fallback for any old data.
@@ -3524,9 +3524,9 @@ Thank you for your understanding.
                         ? bookingInfo.monthlyCreditValue
                         : (member.monthlyCreditValue || 0); // Fallback for legacy bookings
                     
-                    const revenue = (course.credits || 0) * creditValueForThisBooking;
+                    const revenue = (cls.credits || 0) * creditValueForThisBooking;
                     totalGrossRevenue += revenue;
-                    revenueByCourseId.set(course.id, (revenueByCourseId.get(course.id) || 0) + revenue);
+                    revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + revenue);
                 }
                 continue;
             }
@@ -3543,24 +3543,24 @@ Thank you for your understanding.
                 }));
             // --- END: THE FIX IS HERE ---
             
-            for (const course of memberCourses) {
-                let creditsToDeduct = course.credits;
-                let courseRevenue = 0;
+            for (const cls of memberClasses) {
+                let creditsToDeduct = cls.credits;
+                let clsRevenue = 0;
 
                 for (const purchase of purchasePool) {
                     if (creditsToDeduct <= 0) break;
                     if (purchase.remainingCredits <= 0) continue;
 
                     const deductFromThisPool = Math.min(creditsToDeduct, purchase.remainingCredits);
-                    courseRevenue += deductFromThisPool * purchase.costPerCredit;
+                    clsRevenue += deductFromThisPool * purchase.costPerCredit;
                     purchase.remainingCredits -= deductFromThisPool;
                     creditsToDeduct -= deductFromThisPool;
                 }
-                totalGrossRevenue += courseRevenue;
-                revenueByCourseId.set(course.id, (revenueByCourseId.get(course.id) || 0) + courseRevenue);
+                totalGrossRevenue += clsRevenue;
+                revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + clsRevenue);
             }
         }
-        return { grossRevenue: totalGrossRevenue, revenueByCourseId };
+        return { grossRevenue: totalGrossRevenue, revenueByClsId };
     }
 
     function handleAdminSettingsSave(e) {
@@ -3577,9 +3577,9 @@ Thank you for your understanding.
             maxParticipants: parseInt(form.querySelector('#defaultMaxParticipants').value)
         };
 
-        database.ref('/studioSettings/courseDefaults').set(newDefaults)
+        database.ref('/studioSettings/clsDefaults').set(newDefaults)
             .then(() => {
-                showMessageBox('Default course settings saved successfully!', 'success');
+                showMessageBox('Default class settings saved successfully!', 'success');
             })
             .catch(error => {
                 showMessageBox(`Error saving settings: ${error.message}`, 'error');
@@ -3639,8 +3639,8 @@ Thank you for your understanding.
                 </div>
                 <!-- END: MODIFIED LOGIC -->
                 <div class="card p-6 md:p-8">
-                    <h3 class="text-2xl font-bold text-slate-800 mb-4">Course Defaults</h3>
-                    <p class="text-slate-500 mb-6">Set the default values for when you add a new course. This speeds up your workflow.</p>
+                    <h3 class="text-2xl font-bold text-slate-800 mb-4">Class Defaults</h3>
+                    <p class="text-slate-500 mb-6">Set the default values for when you add a new class. This speeds up your workflow.</p>
                     <form id="adminSettingsForm">
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
@@ -3713,7 +3713,7 @@ Thank you for your understanding.
 
         const settingsForm = container.querySelector('#adminSettingsForm');
         if (settingsForm) {
-            const defaults = appState.studioSettings.courseDefaults;
+            const defaults = appState.studioSettings.clsDefaults;
             settingsForm.querySelector('#defaultTime').value = defaults.time;
             settingsForm.querySelector('#defaultDuration').value = defaults.duration;
             settingsForm.querySelector('#defaultCredits').value = defaults.credits;
@@ -3801,16 +3801,16 @@ Thank you for your understanding.
             // --- START: REFINED LOGIC WITH DATA INTEGRITY CHECK ---
             // First, check if the item is in use.
             if (type === 'sportType') {
-                const isInUse = appState.courses.some(c => c.sportTypeId === id);
+                const isInUse = appState.classes.some(c => c.sportTypeId === id);
                 if (isInUse) {
-                    showMessageBox(`Cannot delete "${name}" because it is assigned to one or more courses.`, 'error');
+                    showMessageBox(`Cannot delete "${name}" because it is assigned to one or more classes.`, 'error');
                     return; // Prevent deletion
                 }
             }
             if (type === 'tutor') {
-                const isInUse = appState.courses.some(c => c.tutorId === id);
+                const isInUse = appState.classes.some(c => c.tutorId === id);
                 if (isInUse) {
-                    showMessageBox(`Cannot delete "${name}" because they are assigned to one or more courses.`, 'error');
+                    showMessageBox(`Cannot delete "${name}" because they are assigned to one or more classes.`, 'error');
                     return; // Prevent deletion
                 }
             }
@@ -3849,7 +3849,7 @@ Thank you for your understanding.
             modal.querySelector('#sportTypeModalTitle').textContent = 'Add Sport Type';
             modal.querySelector('.submit-btn').textContent = 'Add Type';
             form.querySelector('#sportTypeModalId').value = '';
-            form.querySelector('#sportTypeColor').value = COURSE_COLORS[0];
+            form.querySelector('#sportTypeColor').value = CLS_COLORS[0];
         }
         renderColorPicker(form.querySelector('#colorPickerContainer'), form.querySelector('#sportTypeColor'));
         form.onsubmit = handleSportTypeFormSubmit;
@@ -3996,7 +3996,7 @@ Thank you for your understanding.
             <button type="button" class="remove-skill-btn absolute -top-2 -right-2 bg-red-500 text-white h-5 w-5 rounded-full text-xs flex items-center justify-center">&times;</button>
             <select class="form-select skill-type-select">${availableSports}</select>
             <div class="flex gap-1 rounded-lg bg-slate-200 p-1 salary-type-container">
-                <button type="button" data-value="perCourse" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Per Course</button>
+                <button type="button" data-value="perCls" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Per Class</button>
                 <button type="button" data-value="percentage" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Percentage</button>
                 <button type="button" data-value="perHeadcount" class="salary-type-btn flex-1 p-1 rounded-md text-xs">Per Attendee</button>
             </div>
@@ -4009,12 +4009,12 @@ Thank you for your understanding.
 
         const updateRowSalaryUI = (type) => {
             salaryTypeContainer.querySelectorAll('.salary-type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.value === type));
-            salaryValueInput.placeholder = { perCourse: '$ per course', percentage: '% of revenue', perHeadcount: '$ per head' }[type];
+            salaryValueInput.placeholder = { perCls: '$ per class', percentage: '% of revenue', perHeadcount: '$ per head' }[type];
         };
 
         salaryTypeContainer.onclick = (e) => { if(e.target.matches('.salary-type-btn')) updateRowSalaryUI(e.target.dataset.value); };
 
-        const initialSalaryType = skill?.salaryType || 'perCourse';
+        const initialSalaryType = skill?.salaryType || 'perCls';
         updateRowSalaryUI(initialSalaryType);
         salaryValueInput.value = skill?.salaryValue || '';
         skillRow.querySelector('.remove-skill-btn').onclick = () => skillRow.remove();
@@ -4107,7 +4107,7 @@ Thank you for your understanding.
         }
 
         // Step 2: Fetch the new, lightweight month index.
-        const periodsSnapshot = await database.ref('/courseMonths').once('value');
+        const periodsSnapshot = await database.ref('/clsMonths').once('value');
         const periods = periodsSnapshot.exists() ? Object.keys(periodsSnapshot.val()).sort().reverse() : [];
         
         // Step 3: Populate the period dropdown with the fast index data.
@@ -4137,15 +4137,15 @@ Thank you for your understanding.
                 return;
             }
 
-            detailsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Fetching courses and calculating salary...</p>`;
+            detailsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Fetching classes and calculating salary...</p>`;
             
             // This is the deferred, heavy operation. It now only runs on demand.
-            // We still fetch all courses because the revenue calculation needs full member history.
+            // We still fetch all classes because the revenue calculation needs full member history.
             // But the page load itself is now instant.
-            const allCoursesSnapshot = await database.ref('/courses').once('value');
-            const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+            const allClassesSnapshot = await database.ref('/classes').once('value');
+            const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
 
-            renderSalaryDetails(allCoursesForCalc);
+            renderSalaryDetails(allClassesForCalc);
         };
 
         // Step 5: Wire up event listeners.
@@ -4168,59 +4168,59 @@ Thank you for your understanding.
             }
             
             // The export must also fetch the full data set to perform its calculations.
-            const allCoursesSnapshot = await database.ref('/courses').once('value');
-            const allCoursesForExport = firebaseObjectToArray(allCoursesSnapshot.val());
+            const allClassesSnapshot = await database.ref('/classes').once('value');
+            const allClassesForExport = firebaseObjectToArray(allClassesSnapshot.val());
             
-            const coursesInPeriod = allCoursesForExport.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
-            const sortedCoursesInPeriod = [...coursesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
+            const classesInPeriod = allClassesForExport.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+            const sortedClassesInPeriod = [...classesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
 
             const memberIdsInPeriod = new Set();
-            sortedCoursesInPeriod.forEach(course => {
-                if (course.bookedBy) Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
+            sortedClassesInPeriod.forEach(cls => {
+                if (cls.bookedBy) Object.keys(cls.bookedBy).forEach(id => memberIdsInPeriod.add(id));
             });
 
             const allMemberBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                allCoursesForExport.forEach(course => {
-                    if (course.bookedBy) {
-                        for (const memberId of Object.keys(course.bookedBy)) {
+                allClassesForExport.forEach(cls => {
+                    if (cls.bookedBy) {
+                        for (const memberId of Object.keys(cls.bookedBy)) {
                             if (memberIdsInPeriod.has(memberId)) {
                                 const member = appState.users.find(u => u.id === memberId);
-                                if (member) allMemberBookings.push({ member, course });
+                                if (member) allMemberBookings.push({ member, cls });
                             }
                         }
                     }
                 });
             }
             
-            const { revenueByCourseId } = calculateRevenueForBookings(allMemberBookings);
+            const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings);
             
-            const courseDetails = sortedCoursesInPeriod.map(course => {
-                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+            const clsDetails = sortedClassesInPeriod.map(cls => {
+                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                 let earnings = 0;
                 let calculation = "N/A";
-                const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-                const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
+                const attendeesCount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                const clsGrossRevenue = revenueByClsId.get(cls.id) || 0;
                 
-                if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
-                    const { salaryType, salaryValue } = course.payoutDetails;
-                    if (salaryType === 'perCourse') {
+                if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
+                    const { salaryType, salaryValue } = cls.payoutDetails;
+                    if (salaryType === 'perCls') {
                         earnings = salaryValue;
                         calculation = `${formatCurrency(salaryValue)} (fixed)`;
                     } else if (salaryType === 'percentage') {
-                        earnings = courseGrossRevenue * (salaryValue / 100);
-                        calculation = `${formatCurrency(courseGrossRevenue)} x ${salaryValue}%`;
+                        earnings = clsGrossRevenue * (salaryValue / 100);
+                        calculation = `${formatCurrency(clsGrossRevenue)} x ${salaryValue}%`;
                     } else if (salaryType === 'perHeadcount') {
                         earnings = attendeesCount * salaryValue;
                         calculation = `${attendeesCount} attendees x ${formatCurrency(salaryValue)}`;
                     }
                 }
-                return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
+                return { ...cls, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
             });
             
-            const exportData = courseDetails.map(c => ({
+            const exportData = clsDetails.map(c => ({
                 Date: c.date,
-                Course: c.sportTypeName,
+                Class: c.sportTypeName,
                 Attendees_Capacity: `${c.attendeesCount}/${c.maxParticipants}`,
                 Calculation: c.calculation,
                 Earnings: c.earnings.toFixed(2)
@@ -4239,7 +4239,7 @@ Thank you for your understanding.
         // --- END: NEW High-Performance Logic ---
     }
 
-    function renderSalaryDetails(allCourses) {
+    function renderSalaryDetails(allClasses) {
         const container = document.getElementById('salaryDetailsContainer');
         const tutorId = document.getElementById('salaryTutorSelect').value;
         const period = document.getElementById('salaryPeriodSelect').value;
@@ -4250,24 +4250,24 @@ Thank you for your understanding.
         }
 
         const tutor = appState.tutors.find(t => t.id === tutorId);
-        const coursesInPeriod = allCourses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
+        const classesInPeriod = allClasses.filter(c => c.tutorId === tutorId && c.date.startsWith(period));
 
         const memberIdsInPeriod = new Set();
-        coursesInPeriod.forEach(course => {
-            if (course.bookedBy) {
-                Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
+        classesInPeriod.forEach(cls => {
+            if (cls.bookedBy) {
+                Object.keys(cls.bookedBy).forEach(id => memberIdsInPeriod.add(id));
             }
         });
 
         const allMemberBookings = [];
         if (memberIdsInPeriod.size > 0) {
-            allCourses.forEach(course => {
-                if (course.bookedBy) {
-                    for (const memberId of Object.keys(course.bookedBy)) {
+            allClasses.forEach(cls => {
+                if (cls.bookedBy) {
+                    for (const memberId of Object.keys(cls.bookedBy)) {
                         if (memberIdsInPeriod.has(memberId)) {
                             const member = appState.users.find(u => u.id === memberId);
                             if (member) {
-                                allMemberBookings.push({ member, course });
+                                allMemberBookings.push({ member, cls });
                             }
                         }
                     }
@@ -4275,24 +4275,24 @@ Thank you for your understanding.
             });
         }
         
-        const { revenueByCourseId } = calculateRevenueForBookings(allMemberBookings);
+        const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings);
         
         let totalEarnings = 0;
-        const courseDetails = coursesInPeriod.map(course => {
-            const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
+        const clsDetails = classesInPeriod.map(cls => {
+            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
             let earnings = 0;
             let calculation = "N/A";
-            const attendeesCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-            const courseGrossRevenue = revenueByCourseId.get(course.id) || 0;
+            const attendeesCount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+            const clsGrossRevenue = revenueByClsId.get(cls.id) || 0;
             
-            if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
-                const { salaryType, salaryValue } = course.payoutDetails;
-                if (salaryType === 'perCourse') {
+            if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
+                const { salaryType, salaryValue } = cls.payoutDetails;
+                if (salaryType === 'perCls') {
                     earnings = salaryValue;
                     calculation = `${formatCurrency(salaryValue)} (fixed)`;
                 } else if (salaryType === 'percentage') {
-                    earnings = courseGrossRevenue * (salaryValue / 100);
-                    calculation = `${formatCurrency(courseGrossRevenue)} x ${salaryValue}%`;
+                    earnings = clsGrossRevenue * (salaryValue / 100);
+                    calculation = `${formatCurrency(clsGrossRevenue)} x ${salaryValue}%`;
                 } else if (salaryType === 'perHeadcount') {
                     earnings = attendeesCount * salaryValue;
                     // --- START: MODIFIED LINE ---
@@ -4303,11 +4303,11 @@ Thank you for your understanding.
             }
 
             totalEarnings += earnings;
-            return { ...course, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
+            return { ...cls, sportTypeName: sportType?.name || 'Unknown', earnings, calculation, attendeesCount };
         });
 
         const { key, direction } = appState.salarySort;
-        courseDetails.sort((a, b) => {
+        clsDetails.sort((a, b) => {
             let valA = a[key];
             let valB = b[key];
 
@@ -4329,8 +4329,8 @@ Thank you for your understanding.
         container.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Earnings</p><p class="text-3xl font-bold text-slate-800">${formatCurrency(totalEarnings)}</p></div>
-                <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Courses Taught</p><p class="text-3xl font-bold text-slate-800">${coursesInPeriod.length}</p></div>
-                <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Attendees</p><p class="text-3xl font-bold text-slate-800">${courseDetails.reduce((acc, c) => acc + c.attendeesCount, 0)}</p></div>
+                <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Classes Taught</p><p class="text-3xl font-bold text-slate-800">${classesInPeriod.length}</p></div>
+                <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Total Attendees</p><p class="text-3xl font-bold text-slate-800">${clsDetails.reduce((acc, c) => acc + c.attendeesCount, 0)}</p></div>
             </div>
             <div>
                 <h3 class="text-xl font-bold text-slate-700 mb-4">Detailed Breakdown</h3>
@@ -4338,21 +4338,21 @@ Thank you for your understanding.
                     <thead>
                         <tr class="border-b">
                             <th class="p-2 sortable cursor-pointer" data-sort-key="date">Date<span class="sort-icon"></span></th>
-                            <th class="p-2 sortable cursor-pointer" data-sort-key="sportTypeName">Course<span class="sort-icon"></span></th>
+                            <th class="p-2 sortable cursor-pointer" data-sort-key="sportTypeName">Class<span class="sort-icon"></span></th>
                             <th class="p-2 sortable cursor-pointer" data-sort-key="attendeesCount">Attendees<span class="sort-icon"></span></th>
                             <th class="p-2 sortable cursor-pointer" data-sort-key="calculation">Calculation<span class="sort-icon"></span></th>
                             <th class="p-2 text-right sortable cursor-pointer" data-sort-key="earnings">Earnings<span class="sort-icon"></span></th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${courseDetails.map(c => `
+                        ${clsDetails.map(c => `
                             <tr class="border-b border-slate-100">
                                 <td class="p-2">${formatShortDateWithYear(c.date)}</td>
                                 <td class="p-2">${c.sportTypeName}</td>
                                 <td class="p-2">${c.attendeesCount} / ${c.maxParticipants}</td>
                                 <td class="p-2 text-sm text-slate-500">${c.calculation}</td>
                                 <td class="p-2 text-right font-semibold">${formatCurrency(c.earnings)}</td>
-                            </tr>`).join('') || `<tr><td colspan="5" class="text-center p-4 text-slate-500">No courses taught in this period.</td></tr>`}
+                            </tr>`).join('') || `<tr><td colspan="5" class="text-center p-4 text-slate-500">No classes taught in this period.</td></tr>`}
                     </tbody>
                 </table></div>
             </div>`;
@@ -4376,7 +4376,7 @@ Thank you for your understanding.
                         sortState.key = newKey;
                         sortState.direction = 'asc';
                     }
-                    renderSalaryDetails(allCourses);
+                    renderSalaryDetails(allClasses);
                 };
             });
     }
@@ -4414,11 +4414,11 @@ Thank you for your understanding.
             const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
             const startDateIso = getIsoDate(startDate);
             
-            // --- Phase 1: Fetch only the courses within the selected period. This is fast. ---
-            const coursesSnapshot = await database.ref('/courses').orderByChild('date').startAt(startDateIso).once('value');
-            const filteredCourses = firebaseObjectToArray(coursesSnapshot.val());
+            // --- Phase 1: Fetch only the classes within the selected period. This is fast. ---
+            const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).once('value');
+            const filteredClasses = firebaseObjectToArray(classesSnapshot.val());
 
-            if (filteredCourses.length === 0) {
+            if (filteredClasses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">No data available for the selected period.</p>`;
                  currentStatsForExport = {}; 
                  return;
@@ -4426,20 +4426,20 @@ Thank you for your understanding.
 
             // --- Phase 1: Calculate and render all NON-REVENUE stats immediately. ---
             let totalBookings = 0, totalAttendees = 0;
-            filteredCourses.forEach(course => {
-                totalBookings += course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-                totalAttendees += course.attendedBy ? Object.keys(course.attendedBy).length : 0;
+            filteredClasses.forEach(cls => {
+                totalBookings += cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                totalAttendees += cls.attendedBy ? Object.keys(cls.attendedBy).length : 0;
             });
 
-            const totalCapacity = filteredCourses.reduce((sum, c) => sum + c.maxParticipants, 0);
+            const totalCapacity = filteredClasses.reduce((sum, c) => sum + c.maxParticipants, 0);
             const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
             const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
             
             // These rankings don't depend on revenue and can be calculated now.
-            const coursePopularity = rankByStat(filteredCourses, 'sportTypeId', 'bookedBy', appState.sportTypes);
-            const tutorPopularity = rankByStat(filteredCourses, 'tutorId', 'bookedBy', appState.tutors);
-            const peakTimes = rankTimeSlots(filteredCourses, 'desc');
-            const lowTimes = rankTimeSlots(filteredCourses, 'asc');
+            const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', 'bookedBy', appState.sportTypes);
+            const tutorPopularity = rankByStat(filteredClasses, 'tutorId', 'bookedBy', appState.tutors);
+            const peakTimes = rankTimeSlots(filteredClasses, 'desc');
+            const lowTimes = rankTimeSlots(filteredClasses, 'asc');
 
             // Render the page shell with placeholders for the revenue stats.
             statsContainer.innerHTML = `
@@ -4451,8 +4451,8 @@ Thank you for your understanding.
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">Avg. Fill Rate</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${createRankingCard('Most Popular Courses', coursePopularity, 'Enrollments', '#6366f1', true)}
-                    <div id="topEarningCoursesCard">${createRankingCard('Top Earning Courses', [], 'Revenue', '#22c55e', true)}</div>
+                    ${createRankingCard('Most Popular Classes', clsPopularity, 'Enrollments', '#6366f1', true)}
+                    <div id="topEarningClassesCard">${createRankingCard('Top Earning Classes', [], 'Revenue', '#22c55e', true)}</div>
                     ${createRankingCard('Top Tutors by Enrollment', tutorPopularity, 'Enrollments', '#6366f1')}
                     <div id="topTutorsByRevenueCard">${createRankingCard('Top Tutors by Revenue', [], 'Revenue', '#22c55e')}</div>
                     ${createRankingCard('Peak Time Slots', peakTimes, 'Enrollments', '#f97316')}
@@ -4467,7 +4467,7 @@ Thank you for your understanding.
                     { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
                     { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
                 ],
-                coursePopularity: coursePopularity.map(item => ({ Ranking: 'Course by Enrollment', Name: item.name, Value: item.value })),
+                clsPopularity: clsPopularity.map(item => ({ Ranking: 'Class by Enrollment', Name: item.name, Value: item.value })),
                 tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Enrollment', Name: item.name, Value: item.value })),
                 peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', Name: item.name, Value: item.value })),
                 lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', Name: item.name, Value: item.value }))
@@ -4475,54 +4475,54 @@ Thank you for your understanding.
             
             // --- Phase 2: Asynchronously calculate and render REVENUE stats. ---
             // This runs in the background without blocking the UI.
-            calculateAndRenderRevenueStats(filteredCourses);
+            calculateAndRenderRevenueStats(filteredClasses);
         };
 
-        const calculateAndRenderRevenueStats = async (filteredCourses) => {
+        const calculateAndRenderRevenueStats = async (filteredClasses) => {
             // Identify all unique members who attended a class in the period.
             const memberIdsInPeriod = new Set();
-            filteredCourses.forEach(course => {
-                if (course.bookedBy) {
-                    Object.keys(course.bookedBy).forEach(id => memberIdsInPeriod.add(id));
+            filteredClasses.forEach(cls => {
+                if (cls.bookedBy) {
+                    Object.keys(cls.bookedBy).forEach(id => memberIdsInPeriod.add(id));
                 }
             });
 
             // This is the heavy operation needed for FIFO calculation.
-            const allCoursesSnapshot = await database.ref('/courses').once('value');
-            const allCoursesForCalc = firebaseObjectToArray(allCoursesSnapshot.val());
+            const allClassesSnapshot = await database.ref('/classes').once('value');
+            const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
 
             const allRelevantBookings = [];
             if (memberIdsInPeriod.size > 0) {
-                allCoursesForCalc.forEach(course => {
-                    if (course.bookedBy) {
-                        for (const memberId of Object.keys(course.bookedBy)) {
+                allClassesForCalc.forEach(cls => {
+                    if (cls.bookedBy) {
+                        for (const memberId of Object.keys(cls.bookedBy)) {
                             if (memberIdsInPeriod.has(memberId)) {
                                 const member = appState.users.find(u => u.id === memberId);
-                                if (member) allRelevantBookings.push({ member, course });
+                                if (member) allRelevantBookings.push({ member, cls });
                             }
                         }
                     }
                 });
             }
             
-            const { revenueByCourseId } = calculateRevenueForBookings(allRelevantBookings);
+            const { revenueByClsId } = calculateRevenueForBookings(allRelevantBookings);
             
             let grossRevenue = 0, totalTutorPayout = 0;
-            filteredCourses.forEach(course => {
-                const courseRevenue = revenueByCourseId.get(course.id) || 0;
-                grossRevenue += courseRevenue;
+            filteredClasses.forEach(cls => {
+                const clsRevenue = revenueByClsId.get(cls.id) || 0;
+                grossRevenue += clsRevenue;
                 
-                if (course.payoutDetails && typeof course.payoutDetails.salaryValue !== 'undefined') {
-                    const { salaryType, salaryValue } = course.payoutDetails;
-                    if (salaryType === 'perCourse') totalTutorPayout += salaryValue;
-                    else if (salaryType === 'perHeadcount') totalTutorPayout += (course.bookedBy ? Object.keys(course.bookedBy).length : 0) * salaryValue;
-                    else if (salaryType === 'percentage') totalTutorPayout += courseRevenue * (salaryValue / 100);
+                if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
+                    const { salaryType, salaryValue } = cls.payoutDetails;
+                    if (salaryType === 'perCls') totalTutorPayout += salaryValue;
+                    else if (salaryType === 'perHeadcount') totalTutorPayout += (cls.bookedBy ? Object.keys(cls.bookedBy).length : 0) * salaryValue;
+                    else if (salaryType === 'percentage') totalTutorPayout += clsRevenue * (salaryValue / 100);
                 }
             });
 
             const totalNetRevenue = grossRevenue - totalTutorPayout;
-            const topCoursesByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.sportTypes, 'sportTypeId');
-            const topTutorsByRevenue = rankByGroupedRevenue(filteredCourses, revenueByCourseId, appState.tutors, 'tutorId');
+            const topClassesByRevenue = rankByGroupedRevenue(filteredClasses, revenueByClsId, appState.sportTypes, 'sportTypeId');
+            const topTutorsByRevenue = rankByGroupedRevenue(filteredClasses, revenueByClsId, appState.tutors, 'tutorId');
 
             // Now, update the specific DOM elements that were waiting for this data.
             const grossRevenueCard = document.getElementById('grossRevenueCard');
@@ -4534,8 +4534,8 @@ Thank you for your understanding.
                 netRevenueCard.innerHTML = `<p class="text-sm text-slate-500">Net Revenue</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p>`;
             }
             
-            const topEarningCoursesCard = document.getElementById('topEarningCoursesCard');
-            if(topEarningCoursesCard) topEarningCoursesCard.innerHTML = createRankingCard('Top Earning Courses', topCoursesByRevenue, 'Revenue', '#22c55e', true);
+            const topEarningClassesCard = document.getElementById('topEarningClassesCard');
+            if(topEarningClassesCard) topEarningClassesCard.innerHTML = createRankingCard('Top Earning Classes', topClassesByRevenue, 'Revenue', '#22c55e', true);
 
             const topTutorsByRevenueCard = document.getElementById('topTutorsByRevenueCard');
             if(topTutorsByRevenueCard) topTutorsByRevenueCard.innerHTML = createRankingCard('Top Tutors by Revenue', topTutorsByRevenue, 'Revenue', '#22c55e');
@@ -4545,7 +4545,7 @@ Thank you for your understanding.
                 { Metric: 'Gross Revenue', Value: formatCurrency(grossRevenue) },
                 { Metric: 'Net Revenue', Value: formatCurrency(totalNetRevenue) }
             );
-            currentStatsForExport.topCoursesByRevenue = topCoursesByRevenue.map(item => ({ Ranking: 'Course by Revenue', Name: item.name, Value: formatCurrency(item.value) }));
+            currentStatsForExport.topClassesByRevenue = topClassesByRevenue.map(item => ({ Ranking: 'Class by Revenue', Name: item.name, Value: formatCurrency(item.value) }));
             currentStatsForExport.topTutorsByRevenue = topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', Name: item.name, Value: formatCurrency(item.value) }));
         };
 
@@ -4555,7 +4555,7 @@ Thank you for your understanding.
             exportBtn.innerHTML = 'Exporting...';
 
             // The export function now uses the 'currentStatsForExport' object which was built in two phases.
-            const { summary, coursePopularity, topCoursesByRevenue, tutorPopularity, topTutorsByRevenue, peakTimes, lowTimes } = currentStatsForExport;
+            const { summary, clsPopularity, topClassesByRevenue, tutorPopularity, topTutorsByRevenue, peakTimes, lowTimes } = currentStatsForExport;
 
             if (!summary || summary.length === 0) {
                 showMessageBox('No statistics data to export.', 'info');
@@ -4570,9 +4570,9 @@ Thank you for your understanding.
             const exportData = [
                 ...reorderedSummary,
                 { Metric: '', Value: '' }, 
-                ...(coursePopularity || []),
+                ...(clsPopularity || []),
                 { Metric: '', Value: '' }, 
-                ...(topCoursesByRevenue || []),
+                ...(topClassesByRevenue || []),
                 { Metric: '', Value: '' }, 
                 ...(tutorPopularity || []),
                 { Metric: '', Value: '' }, 
@@ -4604,10 +4604,10 @@ Thank you for your understanding.
         // --- END: NEW TWO-PHASE RENDERING LOGIC ---
     }
 
-    function rankByStat(courses, groupByKey, valueKey, lookup) {
-        const stats = courses.reduce((acc, course) => {
-            const count = course[valueKey] ? Object.keys(course[valueKey]).length : 0;
-            acc[course[groupByKey]] = (acc[course[groupByKey]] || 0) + count;
+    function rankByStat(classes, groupByKey, valueKey, lookup) {
+        const stats = classes.reduce((acc, cls) => {
+            const count = cls[valueKey] ? Object.keys(cls[valueKey]).length : 0;
+            acc[cls[groupByKey]] = (acc[cls[groupByKey]] || 0) + count;
             return acc;
         }, {});
         return Object.entries(stats)
@@ -4621,12 +4621,12 @@ Thank you for your understanding.
             .slice(0, 5);
     }
 
-    function rankByGroupedRevenue(courses, revenueByCourseId, lookupArray, groupingKey) {
-        const revenueByGroup = courses.reduce((acc, course) => {
-            const courseRevenue = revenueByCourseId.get(course.id) || 0;
-            const groupId = course[groupingKey];
+    function rankByGroupedRevenue(classes, revenueByClsId, lookupArray, groupingKey) {
+        const revenueByGroup = classes.reduce((acc, cls) => {
+            const clsRevenue = revenueByClsId.get(cls.id) || 0;
+            const groupId = cls[groupingKey];
             if (groupId) {
-                acc[groupId] = (acc[groupId] || 0) + courseRevenue;
+                acc[groupId] = (acc[groupId] || 0) + clsRevenue;
             }
             return acc;
         }, {});
@@ -4645,9 +4645,9 @@ Thank you for your understanding.
             .slice(0, 5);
     }
 
-    function rankTimeSlots(courses, sortDirection = 'desc') {
+    function rankTimeSlots(classes, sortDirection = 'desc') {
         const timeSlots = {};
-        courses.forEach(c => {
+        classes.forEach(c => {
             const hour = c.time.split(':')[0];
             // Using a simple 1-hour slot for clarity
             const slot = `${String(hour).padStart(2, '0')}:00 - ${String(parseInt(hour) + 1).padStart(2, '0')}:00`;
@@ -4698,7 +4698,7 @@ Thank you for your understanding.
     }
 
     function renderColorPicker(container, colorInput) {
-        container.innerHTML = COURSE_COLORS.map((color, index) => `<input type="radio" name="color" id="color-${index}" value="${color}" class="color-swatch-radio" ${color === colorInput.value ? 'checked' : ''}><label for="color-${index}" class="color-swatch-label" style="background-color: ${color};"></label>`).join('');
+        container.innerHTML = CLS_COLORS.map((color, index) => `<input type="radio" name="color" id="color-${index}" value="${color}" class="color-swatch-radio" ${color === colorInput.value ? 'checked' : ''}><label for="color-${index}" class="color-swatch-label" style="background-color: ${color};"></label>`).join('');
         container.onchange = e => { if (e.target.name === 'color') colorInput.value = e.target.value; };
     }
 
@@ -4761,7 +4761,7 @@ Thank you for your understanding.
         container.appendChild(buttonsEl);
     }
 
-    async function renderCoursesPage(container) {
+    async function renderClassesPage(container) {
         // --- START: MODIFIED LOGIC ---
         const isOwner = appState.currentUser?.role === 'owner';
         // --- END: MODIFIED LOGIC ---
@@ -4769,20 +4769,20 @@ Thank you for your understanding.
         container.innerHTML = `
             <div class="card p-6 md:p-8">
                 <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                    <h2 class="text-3xl font-bold text-slate-800">All Courses <span id="coursesCount" class="text-xl font-semibold text-slate-500"></span></h2>
+                    <h2 class="text-3xl font-bold text-slate-800">All Classes <span id="classesCount" class="text-xl font-semibold text-slate-500"></span></h2>
                     <div class="flex flex-wrap gap-4">
-                        <select id="coursesMonthFilter" class="form-select w-48"></select>
-                        <select id="coursesSportTypeFilter" class="form-select w-48"></select>
-                        <select id="coursesTutorFilter" class="form-select w-48"></select>
+                        <select id="classesMonthFilter" class="form-select w-48"></select>
+                        <select id="classesSportTypeFilter" class="form-select w-48"></select>
+                        <select id="classesTutorFilter" class="form-select w-48"></select>
                         <!-- START: MODIFIED LOGIC: Conditional Export Button -->
                         ${isOwner ? `
-                        <button id="exportCoursesBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                        <button id="exportClassesBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                             Export
                         </button>
                         ` : ''}
                         <!-- END: MODIFIED LOGIC: Conditional Export Button -->
-                        <button id="addCourseBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
+                        <button id="addClsBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
                     </div>
                 </div>
                 <div class="overflow-x-auto table-swipe-container">
@@ -4791,34 +4791,34 @@ Thank you for your understanding.
                             <tr class="border-b">
                                 <th class="p-2 w-12">#</th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="date">Date/Time<span class="sort-icon"></span></th>
-                                <th class="p-2">Course</th>
+                                <th class="p-2">Class</th>
                                 <th class="p-2">Tutor</th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="credits">Credits<span class="sort-icon"></span></th>
                                 <th class="p-2 sortable cursor-pointer" data-sort-key="attendees">Attendees<span class="sort-icon"></span></th>
                                 <th class="p-2"></th>
                             </tr>
                         </thead>
-                        <tbody id="coursesTableBody"></tbody>
+                        <tbody id="classesTableBody"></tbody>
                     </table>
                 </div>
-                <div id="coursesPagination" class="flex justify-between items-center mt-4"></div>
+                <div id="classesPagination" class="flex justify-between items-center mt-4"></div>
             </div>`;
         
-        const monthFilter = container.querySelector('#coursesMonthFilter');
-        const sportTypeFilter = container.querySelector('#coursesSportTypeFilter');
-        const tutorFilter = container.querySelector('#coursesTutorFilter');
-        const addCourseBtn = container.querySelector('#addCourseBtn');
-        const exportBtn = container.querySelector('#exportCoursesBtn');
-        const tableBody = container.querySelector('#coursesTableBody');
-        let monthlyCourses = [];
+        const monthFilter = container.querySelector('#classesMonthFilter');
+        const sportTypeFilter = container.querySelector('#classesSportTypeFilter');
+        const tutorFilter = container.querySelector('#classesTutorFilter');
+        const addClsBtn = container.querySelector('#addClsBtn');
+        const exportBtn = container.querySelector('#exportClassesBtn');
+        const tableBody = container.querySelector('#classesTableBody');
+        let monthlyClasses = [];
 
-        const periodsSnapshot = await database.ref('/courseMonths').once('value');
+        const periodsSnapshot = await database.ref('/clsMonths').once('value');
         const periods = periodsSnapshot.exists() ? Object.keys(periodsSnapshot.val()).sort().reverse() : [];
 
         if (periods.length > 0) {
             monthFilter.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
-            if (appState.selectedFilters.coursesPeriod && periods.includes(appState.selectedFilters.coursesPeriod)) {
-                monthFilter.value = appState.selectedFilters.coursesPeriod;
+            if (appState.selectedFilters.classesPeriod && periods.includes(appState.selectedFilters.classesPeriod)) {
+                monthFilter.value = appState.selectedFilters.classesPeriod;
             } else {
                 monthFilter.value = periods[0];
             }
@@ -4827,48 +4827,48 @@ Thank you for your understanding.
         }
 
         populateSportTypeFilter(sportTypeFilter);
-        sportTypeFilter.value = appState.selectedFilters.coursesSportTypeId || 'all';
+        sportTypeFilter.value = appState.selectedFilters.classesSportTypeId || 'all';
         populateTutorFilter(tutorFilter, sportTypeFilter.value);
-        tutorFilter.value = appState.selectedFilters.coursesTutorId || 'all';
+        tutorFilter.value = appState.selectedFilters.classesTutorId || 'all';
         
-        const fetchAndRenderCourses = async () => {
+        const fetchAndRenderClasses = async () => {
             const selectedMonth = monthFilter.value;
             if (!selectedMonth) {
                 tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Please select a month.</td></tr>`;
-                container.querySelector('#coursesCount').textContent = '';
-                container.querySelector('#coursesPagination').innerHTML = '';
+                container.querySelector('#classesCount').textContent = '';
+                container.querySelector('#classesPagination').innerHTML = '';
                 return;
             }
 
-            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading courses for ${selectedMonth}...</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">Loading classes for ${selectedMonth}...</td></tr>`;
             
             const startOfMonth = `${selectedMonth}-01`;
             const endOfMonth = `${selectedMonth}-31`;
-            const snapshot = await database.ref('/courses').orderByChild('date').startAt(startOfMonth).endAt(endOfMonth).once('value');
+            const snapshot = await database.ref('/classes').orderByChild('date').startAt(startOfMonth).endAt(endOfMonth).once('value');
 
-            monthlyCourses = firebaseObjectToArray(snapshot.val());
-            appState.pagination.courses.page = 1;
-            updateCoursesTable();
+            monthlyClasses = firebaseObjectToArray(snapshot.val());
+            appState.pagination.classes.page = 1;
+            updateClassesTable();
         };
 
-        const updateCoursesTable = () => {
-            const paginationContainer = container.querySelector('#coursesPagination');
-            const coursesCountEl = container.querySelector('#coursesCount');
+        const updateClassesTable = () => {
+            const paginationContainer = container.querySelector('#classesPagination');
+            const classesCountEl = container.querySelector('#classesCount');
             const selectedSportType = sportTypeFilter.value;
             const selectedTutor = tutorFilter.value;
 
-            let filteredCourses = monthlyCourses;
+            let filteredClasses = monthlyClasses;
             if (selectedSportType !== 'all') {
-                filteredCourses = filteredCourses.filter(c => c.sportTypeId === selectedSportType);
+                filteredClasses = filteredClasses.filter(c => c.sportTypeId === selectedSportType);
             }
             if (selectedTutor !== 'all') {
-                filteredCourses = filteredCourses.filter(c => c.tutorId === selectedTutor);
+                filteredClasses = filteredClasses.filter(c => c.tutorId === selectedTutor);
             }
 
-            coursesCountEl.textContent = `(${filteredCourses.length} in month)`;
+            classesCountEl.textContent = `(${filteredClasses.length} in month)`;
 
-            const { key, direction } = appState.coursesSort;
-            filteredCourses.sort((a, b) => {
+            const { key, direction } = appState.classesSort;
+            filteredClasses.sort((a, b) => {
                 let valA, valB;
                 switch (key) {
                     case 'date':
@@ -4893,115 +4893,115 @@ Thank you for your understanding.
             if (activeHeader) activeHeader.classList.add(direction);
 
             const { itemsPerPage } = appState;
-            const totalPages = Math.ceil(filteredCourses.length / itemsPerPage.courses) || 1;
-            let page = appState.pagination.courses.page;
+            const totalPages = Math.ceil(filteredClasses.length / itemsPerPage.classes) || 1;
+            let page = appState.pagination.classes.page;
             if (page > totalPages) page = totalPages;
 
-            const paginatedCourses = filteredCourses.slice((page - 1) * itemsPerPage.courses, page * itemsPerPage.courses);
+            const paginatedClasses = filteredClasses.slice((page - 1) * itemsPerPage.classes, page * itemsPerPage.classes);
             
             let lastDate = null;
-            tableBody.innerHTML = paginatedCourses.map((course, index) => {
-                const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                const tutor = appState.tutors.find(t => t.id === course.tutorId);
-                const entryNumber = (page - 1) * itemsPerPage.courses + index + 1;
-                const bookingsCount = course.bookedBy ? Object.keys(course.bookedBy).length : 0;
-                const isNewDay = course.date !== lastDate;
-                lastDate = course.date;
+            tableBody.innerHTML = paginatedClasses.map((cls, index) => {
+                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                const tutor = appState.tutors.find(t => t.id === cls.tutorId);
+                const entryNumber = (page - 1) * itemsPerPage.classes + index + 1;
+                const bookingsCount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                const isNewDay = cls.date !== lastDate;
+                lastDate = cls.date;
 
                 return `
                     <tr class="border-b border-slate-100 ${isNewDay && index > 0 ? 'day-divider' : ''}">
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
-                        <td class="p-2">${formatShortDateWithYear(course.date)}<br><span class="text-sm text-slate-500">${getTimeRange(course.time, course.duration)}</span></td>
+                        <td class="p-2">${formatShortDateWithYear(cls.date)}<br><span class="text-sm text-slate-500">${getTimeRange(cls.time, cls.duration)}</span></td>
                         <td class="p-2 font-semibold">${sportType?.name || 'Unknown'}</td>
                         <td class="p-2">${tutor?.name || 'Unknown'}</td>
-                        <td class="p-2">${course.credits}</td>
-                        <td class="p-2">${bookingsCount}/${course.maxParticipants}</td>
+                        <td class="p-2">${cls.credits}</td>
+                        <td class="p-2">${bookingsCount}/${cls.maxParticipants}</td>
                         <td class="p-2 text-right space-x-2">
-                            <button class="edit-course-btn font-semibold text-indigo-600" data-id="${course.id}">Edit</button>
-                            <button class="delete-course-btn font-semibold text-red-600" data-id="${course.id}">Delete</button>
+                            <button class="edit-cls-btn font-semibold text-indigo-600" data-id="${cls.id}">Edit</button>
+                            <button class="delete-cls-btn font-semibold text-red-600" data-id="${cls.id}">Delete</button>
                         </td>
                     </tr>`;
-            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No courses match the selected filters for this month.</td></tr>`;
+            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No classes match the selected filters for this month.</td></tr>`;
 
-            renderPaginationControls(paginationContainer, page, totalPages, filteredCourses.length, itemsPerPage.courses, (newPage) => {
-                appState.pagination.courses.page = newPage;
-                updateCoursesTable();
+            renderPaginationControls(paginationContainer, page, totalPages, filteredClasses.length, itemsPerPage.classes, (newPage) => {
+                appState.pagination.classes.page = newPage;
+                updateClassesTable();
             });
 
-            tableBody.querySelectorAll('.edit-course-btn').forEach(btn => {
+            tableBody.querySelectorAll('.edit-cls-btn').forEach(btn => {
                 btn.onclick = () => {
-                    const courseToEdit = monthlyCourses.find(c => c.id === btn.dataset.id);
-                    if (courseToEdit) openCourseModal(courseToEdit.date, courseToEdit);
+                    const clsToEdit = monthlyClasses.find(c => c.id === btn.dataset.id);
+                    if (clsToEdit) openClsModal(clsToEdit.date, clsToEdit);
                 };
             });
-            tableBody.querySelectorAll('.delete-course-btn').forEach(btn => {
+            tableBody.querySelectorAll('.delete-cls-btn').forEach(btn => {
                 btn.onclick = () => {
-                    const courseToDelete = monthlyCourses.find(c => c.id === btn.dataset.id);
-                    if (courseToDelete) handleDeleteCourseRequest(courseToDelete);
+                    const clsToDelete = monthlyClasses.find(c => c.id === btn.dataset.id);
+                    if (clsToDelete) handleDeleteClsRequest(clsToDelete);
                 };
             });
         };
 
         monthFilter.onchange = () => {
-            appState.selectedFilters.coursesPeriod = monthFilter.value;
-            fetchAndRenderCourses();
+            appState.selectedFilters.classesPeriod = monthFilter.value;
+            fetchAndRenderClasses();
         };
         sportTypeFilter.onchange = () => {
-            appState.selectedFilters.coursesSportTypeId = sportTypeFilter.value;
+            appState.selectedFilters.classesSportTypeId = sportTypeFilter.value;
             populateTutorFilter(tutorFilter, sportTypeFilter.value);
             tutorFilter.value = 'all';
-            appState.selectedFilters.coursesTutorId = 'all';
-            updateCoursesTable();
+            appState.selectedFilters.classesTutorId = 'all';
+            updateClassesTable();
         };
         tutorFilter.onchange = () => {
-            appState.selectedFilters.coursesTutorId = tutorFilter.value;
-            updateCoursesTable();
+            appState.selectedFilters.classesTutorId = tutorFilter.value;
+            updateClassesTable();
         };
         container.querySelectorAll('th.sortable').forEach(header => {
             header.onclick = () => {
                 const newKey = header.dataset.sortKey;
-                const currentSort = appState.coursesSort;
+                const currentSort = appState.classesSort;
                 if (currentSort.key === newKey) {
                     currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
                 } else {
                     currentSort.key = newKey;
                     currentSort.direction = 'asc';
                 }
-                updateCoursesTable();
+                updateClassesTable();
             };
         });
         
-        addCourseBtn.onclick = () => openCourseModal(getIsoDate(new Date()));
+        addClsBtn.onclick = () => openClsModal(getIsoDate(new Date()));
         
         if (isOwner) {
             exportBtn.onclick = () => {
                 exportBtn.disabled = true;
                 exportBtn.innerHTML = 'Exporting...';
                 
-                const coursesToExport = monthlyCourses.sort((a, b) => {
+                const classesToExport = monthlyClasses.sort((a, b) => {
                     const dateComparison = a.date.localeCompare(b.date);
                     if (dateComparison !== 0) return dateComparison;
                     return a.time.localeCompare(b.time);
                 });
     
-                const exportData = coursesToExport.map(course => {
-                    const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                    const tutor = appState.tutors.find(t => t.id === course.tutorId);
-                    const timeRange = getTimeRange(course.time, course.duration).split(' - ');
+                const exportData = classesToExport.map(cls => {
+                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                    const tutor = appState.tutors.find(t => t.id === cls.tutorId);
+                    const timeRange = getTimeRange(cls.time, cls.duration).split(' - ');
                     return {
-                        Date: course.date,
+                        Date: cls.date,
                         StartTime: timeRange[0] || '',
                         EndTime: timeRange[1] || '',
-                        CourseName: sportType?.name || 'Unknown',
+                        ClassName: sportType?.name || 'Unknown',
                         TutorName: tutor?.name || 'Unknown',
-                        Credits: course.credits,
-                        BookedCount: course.bookedBy ? Object.keys(course.bookedBy).length : 0,
-                        Capacity: course.maxParticipants
+                        Credits: cls.credits,
+                        BookedCount: cls.bookedBy ? Object.keys(cls.bookedBy).length : 0,
+                        Capacity: cls.maxParticipants
                     };
                 });
     
                 const selectedMonth = monthFilter.value;
-                const fileName = selectedMonth ? `courses-export_${selectedMonth}` : 'courses-export';
+                const fileName = selectedMonth ? `classes-export_${selectedMonth}` : 'classes-export';
                 exportToCsv(fileName, exportData);
                 
                 exportBtn.disabled = false;
@@ -5010,11 +5010,11 @@ Thank you for your understanding.
         }
 
         if (monthFilter.value) {
-            fetchAndRenderCourses();
+            fetchAndRenderClasses();
         } else {
-            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">No courses found in the database.</td></tr>`;
-            container.querySelector('#coursesCount').textContent = '';
-            container.querySelector('#coursesPagination').innerHTML = '';
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-500">No classes found in the database.</td></tr>`;
+            container.querySelector('#classesCount').textContent = '';
+            container.querySelector('#classesPagination').innerHTML = '';
         }
         
         const tableContainer = container.querySelector('.table-swipe-container');
@@ -5045,36 +5045,36 @@ Thank you for your understanding.
             let memberBookings = [];
 
             if (memberBookingsSnapshot.exists()) {
-                const bookedCourseIds = Object.keys(memberBookingsSnapshot.val());
-                bookingCount = bookedCourseIds.length;
+                const bookedClsIds = Object.keys(memberBookingsSnapshot.val());
+                bookingCount = bookedClsIds.length;
 
-                const coursePromises = bookedCourseIds.map(courseId => database.ref(`/courses/${courseId}`).once('value'));
-                const courseSnapshots = await Promise.all(coursePromises);
+                const clsPromises = bookedClsIds.map(clsId => database.ref(`/classes/${clsId}`).once('value'));
+                const clsSnapshots = await Promise.all(clsPromises);
 
-                memberBookings = courseSnapshots
+                memberBookings = clsSnapshots
                     .map(snap => ({ id: snap.key, ...snap.val() }))
-                    .filter(course => course.date)
+                    .filter(cls => cls.date)
                     .sort((a, b) => new Date(b.date) - new Date(a.date));
             }
             
             const historyListHTML = memberBookings.length === 0 ? '<p class="text-slate-500 text-center p-8">This member has no booking history.</p>' :
-                memberBookings.map(course => {
-                    const sportType = appState.sportTypes.find(st => st.id === course.sportTypeId);
-                    const isAttended = course.attendedBy && course.attendedBy[member.id];
+                memberBookings.map(cls => {
+                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                    const isAttended = cls.attendedBy && cls.attendedBy[member.id];
                     // --- START: CLEANED LOGIC ---
-                    const bookingDetails = course.bookedBy[member.id];
+                    const bookingDetails = cls.bookedBy[member.id];
                     const creditsUsed = bookingDetails.creditsPaid;
                     // --- END: CLEANED LOGIC ---
                     return `<div class="bg-slate-100 p-4 rounded-lg flex justify-between items-center">
                         <div>
-                            <p class="font-bold text-slate-800">${sportType?.name || 'Unknown Course'}</p>
-                            <p class="text-sm text-slate-500">${formatShortDateWithYear(course.date)} at ${getTimeRange(course.time, course.duration)}</p>
+                            <p class="font-bold text-slate-800">${sportType?.name || 'Unknown Class'}</p>
+                            <p class="text-sm text-slate-500">${formatShortDateWithYear(cls.date)} at ${getTimeRange(cls.time, cls.duration)}</p>
                             <p class="text-xs text-slate-600">Credits Used: ${creditsUsed}</p>
                             <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
                         </div>
                         ${isAttended 
                             ? `<span class="text-sm font-semibold text-green-600">COMPLETED</span>`
-                            : `<button class="cancel-booking-btn-member-history text-sm font-semibold text-red-600 hover:text-red-800" data-course-id="${course.id}" data-member-id="${member.id}">Cancel</button>`
+                            : `<button class="cancel-booking-btn-member-history text-sm font-semibold text-red-600 hover:text-red-800" data-cls-id="${cls.id}" data-member-id="${member.id}">Cancel</button>`
                         }
                     </div>`
                 }).join('');
@@ -5092,9 +5092,9 @@ Thank you for your understanding.
 
             DOMElements.memberBookingHistoryModal.querySelectorAll('.cancel-booking-btn-member-history').forEach(btn => {
                 btn.onclick = () => {
-                    const course = memberBookings.find(c => c.id === btn.dataset.courseId);
+                    const cls = memberBookings.find(c => c.id === btn.dataset.clsId);
                     const memberId = btn.dataset.memberId;
-                    handleCancelBooking(course, memberId);
+                    handleCancelBooking(cls, memberId);
                 };
             });
 
@@ -5150,7 +5150,7 @@ Thank you for your understanding.
                 if (key === 'currentUser') {
                     appState.currentUser = { ...appState.currentUser, ...val };
                 } else if (key === 'studioSettings') {
-                    if (val) appState.studioSettings = { ...appState.studioSettings, ...val, courseDefaults: { ...appState.studioSettings.courseDefaults, ...(val.courseDefaults || {}) } };
+                    if (val) appState.studioSettings = { ...appState.studioSettings, ...val, clsDefaults: { ...appState.studioSettings.clsDefaults, ...(val.clsDefaults || {}) } };
                 } else {
                     appState[key] = firebaseObjectToArray(val);
                 }
@@ -5169,7 +5169,7 @@ Thank you for your understanding.
         usersRef.on('value', dataListeners.users, (error) => console.error(`Listener error on /users`, error));
 
 
-        // --- Surgical Course Listening Strategy for Owners ---
+        // --- Surgical Class Listening Strategy for Owners ---
         let initialLoadComplete = false;
         const today = new Date();
         const daysToLookBack = appState.ownerPastDaysVisible || 0;
@@ -5178,51 +5178,51 @@ Thank you for your understanding.
         startDate.setUTCDate(today.getUTCDate() - daysToLookBack);
         const startIso = getIsoDate(startDate);
         
-        activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(startIso);
+        activeClassesRef = database.ref('/classes').orderByChild('date').startAt(startIso);
 
-        activeCoursesRef.once('value', (snapshot) => {
-            appState.courses = firebaseObjectToArray(snapshot.val());
+        activeClassesRef.once('value', (snapshot) => {
+            appState.classes = firebaseObjectToArray(snapshot.val());
             renderCurrentPage();
             initialLoadComplete = true;
-        }).catch(error => console.error("Initial course fetch failed for owner:", error));
+        }).catch(error => console.error("Initial class fetch failed for owner:", error));
 
 
         // --- START: MODIFIED LISTENER LOGIC ---
-        activeCoursesRef.on('child_changed', (snapshot) => {
+        activeClassesRef.on('child_changed', (snapshot) => {
             if (!initialLoadComplete) return;
 
-            const updatedCourse = { id: snapshot.key, ...snapshot.val() };
-            const oldCourse = appState.courses.find(c => c.id === updatedCourse.id);
+            const updatedCls = { id: snapshot.key, ...snapshot.val() };
+            const oldCls = appState.classes.find(c => c.id === updatedCls.id);
             
             // This is the intelligent check
-            const timeHasChanged = oldCourse && updatedCourse.time !== oldCourse.time;
+            const timeHasChanged = oldCls && updatedCls.time !== oldCls.time;
             
             // First, update the global state regardless of what changed
-            const index = appState.courses.findIndex(c => c.id === updatedCourse.id);
-            if (index > -1) appState.courses[index] = updatedCourse; else appState.courses.push(updatedCourse);
+            const index = appState.classes.findIndex(c => c.id === updatedCls.id);
+            if (index > -1) appState.classes[index] = updatedCls; else appState.classes.push(updatedCls);
 
             // Now, decide how to update the UI
             if (timeHasChanged) {
                 // If time changed, re-sort the entire day column
-                _reSortDayColumn(updatedCourse.date);
+                _reSortDayColumn(updatedCls.date);
             } else {
                 // Otherwise, perform the simple, surgical replacement (no flicker)
-                const courseElement = document.getElementById(updatedCourse.id);
-                if (courseElement) {
-                    courseElement.replaceWith(createCourseElement(updatedCourse));
+                const clsElement = document.getElementById(updatedCls.id);
+                if (clsElement) {
+                    clsElement.replaceWith(createClsElement(updatedCls));
                 }
                 
                 // Show booking notification if it's a new booking
-                if (oldCourse) {
-                    const oldBookedIds = Object.keys(oldCourse.bookedBy || {});
-                    const newBookedIds = Object.keys(updatedCourse.bookedBy || {});
+                if (oldCls) {
+                    const oldBookedIds = Object.keys(oldCls.bookedBy || {});
+                    const newBookedIds = Object.keys(updatedCls.bookedBy || {});
                     if (newBookedIds.length > oldBookedIds.length) {
                         const newMemberId = newBookedIds.find(id => !oldBookedIds.includes(id));
                         if (newMemberId) {
                             const member = appState.users.find(u => u.id === newMemberId);
-                            const sportType = appState.sportTypes.find(st => st.id === updatedCourse.sportTypeId);
+                            const sportType = appState.sportTypes.find(st => st.id === updatedCls.sportTypeId);
                             if (member && sportType) {
-                                showBookingNotification({ memberName: member.name, courseName: sportType.name, courseTime: updatedCourse.time, duration: updatedCourse.duration });
+                                showBookingNotification({ memberName: member.name, clsName: sportType.name, clsTime: updatedCls.time, duration: updatedCls.duration });
                             }
                         }
                     }
@@ -5231,23 +5231,23 @@ Thank you for your understanding.
         });
         // --- END: MODIFIED LISTENER LOGIC ---
 
-        activeCoursesRef.on('child_added', (snapshot) => {
+        activeClassesRef.on('child_added', (snapshot) => {
             if (!initialLoadComplete) return;
 
-            const newCourse = { id: snapshot.key, ...snapshot.val() };
-            if (!appState.courses.some(c => c.id === newCourse.id)) {
-                appState.courses.push(newCourse);
+            const newCls = { id: snapshot.key, ...snapshot.val() };
+            if (!appState.classes.some(c => c.id === newCls.id)) {
+                appState.classes.push(newCls);
                 // A full re-sort of the day is best here to place the new class correctly
-                _reSortDayColumn(newCourse.date);
+                _reSortDayColumn(newCls.date);
             }
         });
 
-        activeCoursesRef.on('child_removed', (snapshot) => {
+        activeClassesRef.on('child_removed', (snapshot) => {
             if (!initialLoadComplete) return;
-            const removedCourseId = snapshot.key;
-            appState.courses = appState.courses.filter(c => c.id !== removedCourseId);
-            const courseElement = document.getElementById(removedCourseId);
-            if (courseElement) courseElement.remove();
+            const removedClsId = snapshot.key;
+            appState.classes = appState.classes.filter(c => c.id !== removedClsId);
+            const clsElement = document.getElementById(removedClsId);
+            if (clsElement) clsElement.remove();
         });
     };
     // --- END: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
@@ -5275,41 +5275,41 @@ Thank you for your understanding.
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
 
-        // --- NEW, SURGICAL Course Listening Strategy for Members ---
+        // --- NEW, SURGICAL Class Listening Strategy for Members ---
         let initialLoadComplete = false;
         const memberId = appState.currentUser.id;
         const todayIso = getIsoDate(new Date());
-        activeCoursesRef = database.ref('/courses').orderByChild('date').startAt(todayIso);
+        activeClassesRef = database.ref('/classes').orderByChild('date').startAt(todayIso);
 
         // PHASE 1: Perform a single, initial fetch to render the page quickly.
         const initialFetchAndRender = async () => {
             try {
-                // Fetch past and future courses in parallel for speed.
+                // Fetch past and future classes in parallel for speed.
                 const pastBookingsPromise = database.ref(`/memberBookings/${memberId}`).once('value').then(snap => {
                     if (!snap.exists()) return [];
-                    const courseIds = Object.keys(snap.val());
-                    const pastCoursePromises = courseIds.map(id => database.ref(`/courses/${id}`).once('value'));
-                    return Promise.all(pastCoursePromises);
+                    const clsIds = Object.keys(snap.val());
+                    const pastClsPromises = clsIds.map(id => database.ref(`/classes/${id}`).once('value'));
+                    return Promise.all(pastClsPromises);
                 });
 
-                const futureCoursesPromise = activeCoursesRef.once('value');
-                const [pastCourseSnapshots, futureCoursesSnapshot] = await Promise.all([pastBookingsPromise, futureCoursesPromise]);
+                const futureClassesPromise = activeClassesRef.once('value');
+                const [pastClsSnapshots, futureClassesSnapshot] = await Promise.all([pastBookingsPromise, futureClassesPromise]);
 
-                const pastCourses = pastCourseSnapshots.map(snap => ({ id: snap.key, ...snap.val() })).filter(c => c.date && c.date < todayIso);
-                const futureCourses = firebaseObjectToArray(futureCoursesSnapshot.val());
+                const pastClasses = pastClsSnapshots.map(snap => ({ id: snap.key, ...snap.val() })).filter(c => c.date && c.date < todayIso);
+                const futureClasses = firebaseObjectToArray(futureClassesSnapshot.val());
 
                 // Combine and de-duplicate using a Map.
-                const allCoursesMap = new Map();
-                futureCourses.forEach(course => allCoursesMap.set(course.id, course));
-                pastCourses.forEach(course => allCoursesMap.set(course.id, course));
-                appState.courses = Array.from(allCoursesMap.values());
+                const allClassesMap = new Map();
+                futureClasses.forEach(cls => allClassesMap.set(cls.id, cls));
+                pastClasses.forEach(cls => allClassesMap.set(cls.id, cls));
+                appState.classes = Array.from(allClassesMap.values());
 
                 // Render the entire page ONCE.
                 renderCurrentPage();
                 initialLoadComplete = true;
 
             } catch (error) {
-                console.error("Initial course fetch failed for member:", error);
+                console.error("Initial class fetch failed for member:", error);
             }
         };
 
@@ -5317,55 +5317,55 @@ Thank you for your understanding.
         
         // --- START: MODIFIED LISTENER LOGIC ---
         // This listener is now smarter, just like the owner's version.
-        activeCoursesRef.on('child_changed', (snapshot) => {
+        activeClassesRef.on('child_changed', (snapshot) => {
             if (!initialLoadComplete) return;
 
-            const updatedCourse = { id: snapshot.key, ...snapshot.val() };
-            const oldCourse = appState.courses.find(c => c.id === updatedCourse.id);
+            const updatedCls = { id: snapshot.key, ...snapshot.val() };
+            const oldCls = appState.classes.find(c => c.id === updatedCls.id);
 
             // Check if the time specifically has changed.
-            const timeHasChanged = oldCourse && updatedCourse.time !== oldCourse.time;
+            const timeHasChanged = oldCls && updatedCls.time !== oldCls.time;
             
             // First, always update the central app state.
-            const index = appState.courses.findIndex(c => c.id === updatedCourse.id);
-            if (index > -1) appState.courses[index] = updatedCourse; else appState.courses.push(updatedCourse);
+            const index = appState.classes.findIndex(c => c.id === updatedCls.id);
+            if (index > -1) appState.classes[index] = updatedCls; else appState.classes.push(updatedCls);
 
             // Now, decide how to update the UI based on what changed.
             if (timeHasChanged) {
                 // If the time was edited by an admin, re-sort the entire day column.
-                _reSortDayColumn(updatedCourse.date);
+                _reSortDayColumn(updatedCls.date);
             } else {
                 // For any other change (like participant count), just replace the single element.
-                const courseElement = document.getElementById(updatedCourse.id);
-                if (courseElement) {
-                    const newCourseElement = createCourseElement(updatedCourse);
-                    courseElement.replaceWith(newCourseElement);
+                const clsElement = document.getElementById(updatedCls.id);
+                if (clsElement) {
+                    const newClsElement = createClsElement(updatedCls);
+                    clsElement.replaceWith(newClsElement);
                 }
             }
         });
 
         // This listener now correctly re-sorts the day when a new class is added.
-        activeCoursesRef.on('child_added', (snapshot) => {
+        activeClassesRef.on('child_added', (snapshot) => {
             if (!initialLoadComplete) return;
 
-            const newCourse = { id: snapshot.key, ...snapshot.val() };
-            if (!appState.courses.some(c => c.id === newCourse.id)) {
-                appState.courses.push(newCourse);
+            const newCls = { id: snapshot.key, ...snapshot.val() };
+            if (!appState.classes.some(c => c.id === newCls.id)) {
+                appState.classes.push(newCls);
                 // Re-sort the day column to place the new class in the correct time slot.
-                _reSortDayColumn(newCourse.date);
+                _reSortDayColumn(newCls.date);
             }
         });
         // --- END: MODIFIED LISTENER LOGIC ---
 
-        activeCoursesRef.on('child_removed', (snapshot) => {
+        activeClassesRef.on('child_removed', (snapshot) => {
             if (!initialLoadComplete) return;
 
-            const removedCourseId = snapshot.key;
-            appState.courses = appState.courses.filter(c => c.id !== removedCourseId);
+            const removedClsId = snapshot.key;
+            appState.classes = appState.classes.filter(c => c.id !== removedClsId);
             
-            const courseElement = document.getElementById(removedCourseId);
-            if (courseElement) {
-                courseElement.remove();
+            const clsElement = document.getElementById(removedClsId);
+            if (clsElement) {
+                clsElement.remove();
             }
         });
 
@@ -5377,16 +5377,16 @@ Thank you for your understanding.
     const detachDataListeners = () => {
         // --- START: MODIFIED DETACH LOGIC ---
         // This now correctly removes all child_* listeners attached to the ref.
-        if (activeCoursesRef) {
-            activeCoursesRef.off();
+        if (activeClassesRef) {
+            activeClassesRef.off();
         }
-        activeCoursesRef = null;
+        activeClassesRef = null;
         // --- END: MODIFIED DETACH LOGIC ---
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
-            if (key.startsWith('course_')) { // This part is now legacy but safe to keep.
+            if (key.startsWith('cls_')) { // This part is now legacy but safe to keep.
                 listenerInfo.ref.off('value', listenerInfo.listener);
-            } else if (key !== 'courses') { // We already handled 'courses' above.
+            } else if (key !== 'classes') { // We already handled 'classes' above.
                 let path = `/${key}`;
                 if (key === 'currentUser' && appState.currentUser) {
                     path = `/users/${appState.currentUser.id}`;
@@ -5525,10 +5525,10 @@ Thank you for your understanding.
                     const sourceClassEl = e.target.closest('.copy-mode-source-class');
                     if (sourceClassEl) {
                         copyActionTaken = true;
-                        const courseId = sourceClassEl.id;
-                        const courseToCopy = appState.courses.find(c => c.id === courseId);
-                        if (courseToCopy && courseToCopy.date !== targetDate) {
-                            performCopy('class', courseToCopy, targetDate);
+                        const clsId = sourceClassEl.id;
+                        const clsToCopy = appState.classes.find(c => c.id === clsId);
+                        if (clsToCopy && clsToCopy.date !== targetDate) {
+                            performCopy('class', clsToCopy, targetDate);
                         }
                     }
                 }
@@ -5537,12 +5537,12 @@ Thank you for your understanding.
             }
 
             // --- START: MODIFIED LOGIC ---
-            const addBtn = e.target.closest('.add-course-button');
+            const addBtn = e.target.closest('.add-cls-button');
             if (addBtn) {
                 const currentUser = appState.currentUser;
                 // Check if user is owner OR staff
                 if (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) {
-                    openCourseModal(addBtn.dataset.date);
+                    openClsModal(addBtn.dataset.date);
                 }
             }
             // --- END: MODIFIED LOGIC ---
