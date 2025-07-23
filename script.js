@@ -4793,7 +4793,7 @@ Thank you for your understanding.
                         <button id="addClsBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Add Class</button>
                     </div>
                 </div>
-                <div class="overflow-x-auto table-swipe-container">
+                <div class="overflow-x-auto">
                     <table class="w-full text-left min-w-[600px]">
                         <thead>
                             <tr class="border-b">
@@ -5024,13 +5024,6 @@ Thank you for your understanding.
             container.querySelector('#classesCount').textContent = '';
             container.querySelector('#classesPagination').innerHTML = '';
         }
-        
-        const tableContainer = container.querySelector('.table-swipe-container');
-        let isDown = false, startX, scrollLeft;
-        tableContainer.addEventListener('mousedown', (e) => { isDown = true; tableContainer.classList.add('swiping'); startX = e.pageX - tableContainer.offsetLeft; scrollLeft = tableContainer.scrollLeft; });
-        tableContainer.addEventListener('mouseleave', () => { isDown = false; tableContainer.classList.remove('swiping'); });
-        tableContainer.addEventListener('mouseup', () => { isDown = false; tableContainer.classList.remove('swiping'); });
-        tableContainer.addEventListener('mousemove', (e) => { if(!isDown) return; e.preventDefault(); const x = e.pageX - tableContainer.offsetLeft; const walk = (x - startX) * 2; tableContainer.scrollLeft = scrollLeft - walk; });
     }
 
     async function openMemberBookingHistoryModal(member) {
@@ -5114,12 +5107,6 @@ Thank you for your understanding.
             }
         }
     }
-    
-    // --- Data Seeding ---
-    const seedDatabaseIfEmpty = () => {
-        // This function is now empty to prevent seeding unwanted data.
-        // It's left here as a placeholder in case seeding is needed in the future.
-    };
 
     // --- Firebase Listeners ---
     const initDataListeners = () => {
@@ -5384,7 +5371,6 @@ Thank you for your understanding.
     
     const detachDataListeners = () => {
         // --- START: MODIFIED DETACH LOGIC ---
-        // This now correctly removes all child_* listeners attached to the ref.
         if (activeClassesRef) {
             activeClassesRef.off();
         }
@@ -5392,9 +5378,8 @@ Thank you for your understanding.
         // --- END: MODIFIED DETACH LOGIC ---
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
-            if (key.startsWith('cls_')) { // This part is now legacy but safe to keep.
-                listenerInfo.ref.off('value', listenerInfo.listener);
-            } else if (key !== 'classes') { // We already handled 'classes' above.
+            // The check for `classes` is now sufficient. The legacy `cls_` check is gone.
+            if (key !== 'classes') { 
                 let path = `/${key}`;
                 if (key === 'currentUser' && appState.currentUser) {
                     path = `/users/${appState.currentUser.id}`;
