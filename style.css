@@ -418,3 +418,31 @@ th.sortable:hover .sort-icon {
     opacity: 0.65;
     cursor: not-allowed;
 }
+/* --- Dev Importer Styles --- */
+.importer-file-label {
+    display: block;
+    padding: 1.25rem 1rem;
+    background-color: #f8fafc; /* slate-50 */
+    border: 2px dashed #cbd5e1; /* slate-300 */
+    border-radius: 0.75rem; /* 12px */
+    text-align: center;
+    color: #475569; /* slate-600 */
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.importer-file-label:hover {
+    border-color: #4f46e5; /* indigo-600 */
+    background-color: #eef2ff; /* indigo-50 */
+}
+/* This class will be added via JS when a file is selected */
+.importer-file-label.file-chosen {
+    border-color: #16a34a; /* green-600 */
+    background-color: #f0fdf4; /* green-50 */
+    border-style: solid;
+}
+.importer-file-label .file-name {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-weight: 600;
+    color: #15803d; /* green-700 */
+    margin-left: 0.5rem;
+}
