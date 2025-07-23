@@ -1523,19 +1523,19 @@ Thank you for your understanding.
     function createParticipantCounter(current, max, isEditable = false) {
         const fillRate = max > 0 ? current / max : 0;
         
-        let statusClass = 'status-low';
+        let statusCls = 'status-low';
         if (fillRate >= 1) {
-            statusClass = 'status-full';
-        } else if (fillRate >= 0.9) {
-            statusClass = 'status-high';
+            statusCls = 'status-full';
+        } else if (fillRate >= 0.75) {
+            statusCls = 'status-high';
         } else if (fillRate >= 0.5) {
-            statusClass = 'status-medium';
+            statusCls = 'status-medium';
         }
         
-        const editableClass = isEditable ? 'participant-counter-editable' : '';
+        const editableCls = isEditable ? 'participant-counter-editable' : '';
 
         return `
-            <div class="participant-counter ${statusClass} ${editableClass}" title="${current} of ${max} spots filled">
+            <div class="participant-counter ${statusCls} ${editableCls}" title="${current} of ${max} spots filled">
                 ${current}/${max}
             </div>
         `;
@@ -5522,10 +5522,10 @@ Thank you for your understanding.
                         }
                     }
                 } else if (type === 'class') {
-                    const sourceClassEl = e.target.closest('.copy-mode-source-class');
-                    if (sourceClassEl) {
+                    const sourceClsEl = e.target.closest('.copy-mode-source-class');
+                    if (sourceClsEl) {
                         copyActionTaken = true;
-                        const clsId = sourceClassEl.id;
+                        const clsId = sourceClsEl.id;
                         const clsToCopy = appState.classes.find(c => c.id === clsId);
                         if (clsToCopy && clsToCopy.date !== targetDate) {
                             performCopy('class', clsToCopy, targetDate);
