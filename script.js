@@ -5544,6 +5544,159 @@ Thank you for your understanding.
         auth.onAuthStateChanged(handleAuthStateChange);
     };
 
+    // --- DEVELOPER HELPER FOR CSV IMPORT ---
+    // Run this function from the browser's console by typing: _dev_importFromCSV()
+    // It will add file input controls to the page.
+    window._dev_importFromCSV = function() {
+        // Prevent creating duplicate importers
+        if (document.getElementById('dev-importer-container')) {
+            alert('Importer is already on the page.');
+            return;
+        }
+
+        // --- 1. CREATE THE UI FOR THE IMPORTER ---
+        const importerContainer = document.createElement('div');
+        importerContainer.id = 'dev-importer-container';
+        // Use Tailwind classes for a responsive, centered modal that matches the app theme
+        importerContainer.className = 'card fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-11/12 max-w-md p-6 space-y-4';
+
+        importerContainer.innerHTML = `
+            <button id="close-importer-btn" class="modal-close-btn"></button>
+            <h3 class="text-2xl font-bold text-slate-800 text-center">Dev CSV Importer</h3>
+            
+            <div class="space-y-2">
+                <label for="sports-csv" class="block text-slate-600 text-sm font-semibold">1. Sport Types CSV</label>
+                <label for="sports-csv" class="importer-file-label">
+                    <input type="file" id="sports-csv" accept=".csv" class="hidden">
+                    <span class="file-prompt">Click to choose a file...</span>
+                </label>
+            </div>
+            
+            <div class="space-y-2">
+                <label for="tutors-csv" class="block text-slate-600 text-sm font-semibold">2. Tutors CSV</label>
+                <label for="tutors-csv" class="importer-file-label">
+                    <input type="file" id="tutors-csv" accept=".csv" class="hidden">
+                    <span class="file-prompt">Click to choose a file...</span>
+                </label>
+            </div>
+
+            <button id="start-import-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition">
+                Start Import
+            </button>
+        `;
+
+        document.body.appendChild(importerContainer);
+        // Add the close icon svg to the button
+        document.getElementById('close-importer-btn').innerHTML = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
+
+        // --- 2. ADD EVENT LISTENERS ---
+        function handleFileSelect(inputId) {
+            const input = document.getElementById(inputId);
+            const label = input.parentElement;
+            const prompt = label.querySelector('.file-prompt');
+            if (input.files.length > 0) {
+                prompt.innerHTML = `File: <span class="file-name">${input.files[0].name}</span>`;
+                label.classList.add('file-chosen');
+            } else {
+                prompt.innerHTML = 'Click to choose a file...';
+                label.classList.remove('file-chosen');
+            }
+        }
+
+        document.getElementById('sports-csv').onchange = () => handleFileSelect('sports-csv');
+        document.getElementById('tutors-csv').onchange = () => handleFileSelect('tutors-csv');
+
+        document.getElementById('close-importer-btn').onclick = () => importerContainer.remove();
+
+        document.getElementById('start-import-btn').onclick = async () => {
+            const sportsFile = document.getElementById('sports-csv').files[0];
+            const tutorsFile = document.getElementById('tutors-csv').files[0];
+
+            if (!sportsFile || !tutorsFile) {
+                alert('Please select both a sports and a tutors CSV file.');
+                return;
+            }
+
+            const button = document.getElementById('start-import-btn');
+            button.textContent = 'Importing...';
+            button.disabled = true;
+
+            try {
+                const sportsData = await readFileAsText(sportsFile);
+                const tutorsData = await readFileAsText(tutorsFile);
+                const sportTypesToImport = parseSimpleCSV(sportsData);
+                const tutorsToImport = parseSimpleCSV(tutorsData);
+                await runImportLogic(sportTypesToImport, tutorsToImport);
+                alert('Import complete! Check the console for details.');
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('An error occurred during import. Check the console.');
+            } finally {
+                button.textContent = 'Start Import';
+                button.disabled = false;
+            }
+        };
+
+        // --- 3. HELPER & CORE LOGIC (Unchanged) ---
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = event => resolve(event.target.result);
+                reader.onerror = error => reject(error);
+                reader.readAsText(file);
+            });
+        }
+
+        function parseSimpleCSV(csvText) {
+            const lines = csvText.trim().split(/\r?\n/);
+            return lines.slice(1);
+        }
+
+        async function runImportLogic(sportTypesToImport, tutorsToImport) {
+            console.log('--- Starting CSV Data Import ---');
+            console.log('Importing sport types...');
+            const sportsRef = database.ref('/sportTypes');
+            const sportsSnapshot = await sportsRef.once('value');
+            const existingSports = sportsSnapshot.val() || {};
+            const existingSportNames = new Set(Object.values(existingSports).map(s => s.name.toLowerCase()));
+            
+            for (const sportString of sportTypesToImport) {
+                const [name, color] = sportString.split(',').map(p => p.trim());
+                if (!name || existingSportNames.has(name.toLowerCase())) continue;
+                await sportsRef.push({ name, color: color || CLS_COLORS[existingSportNames.size % CLS_COLORS.length] });
+                existingSportNames.add(name.toLowerCase());
+            }
+            console.log(`Finished processing ${sportTypesToImport.length} sport type rows.`);
+
+            console.log('Importing tutors...');
+            const allSportsSnapshot = await sportsRef.once('value');
+            const sportNameMap = new Map();
+            Object.entries(allSportsSnapshot.val() || {}).forEach(([id, sport]) => {
+                sportNameMap.set(sport.name.toLowerCase(), id);
+            });
+
+            const tutorsRef = database.ref('/tutors');
+            const tutorsSnapshot = await tutorsRef.once('value');
+            const existingTutors = tutorsSnapshot.val() || {};
+            const existingTutorEmails = new Set(Object.values(existingTutors).map(t => t.email?.toLowerCase()));
+            
+            for (const tutorString of tutorsToImport) {
+                const parts = tutorString.split(',').map(p => p.trim());
+                const [email, name, phone, ...skillNames] = parts;
+                if (!email || existingTutorEmails.has(email.toLowerCase())) continue;
+
+                const skills = skillNames.map(skillName => {
+                    const sportTypeId = sportNameMap.get(skillName.toLowerCase());
+                    if (sportTypeId) return { sportTypeId, salaryType: 'perCls', salaryValue: 10 };
+                    return null;
+                }).filter(Boolean);
+
+                await tutorsRef.push({ name, email, phone, skills, isEmployee: false });
+            }
+            console.log(`Finished processing ${tutorsToImport.length} tutor rows.`);
+            console.log('--- CSV Data Import Complete! ---');
+        }
+    }
     // --- Run Application ---
     init();
 });
