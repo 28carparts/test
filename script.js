@@ -864,7 +864,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function createWhatsAppMessage(member, cls) {
         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
         const tutor = appState.tutors.find(t => t.id === cls.tutorId);
-        const bookingLink = "https://www.studiopulse.app/schedule";
+        const dynamicOrigin = window.location.origin;
+        const bookingLink = `${dynamicOrigin}/schedule`;
 
         const message = `
 👋 Hi *${member.name}*,
@@ -2771,28 +2772,35 @@ Thank you for your understanding.
         const updates = {};
         let upcomingCancellations = 0;
 
-        // Find all classes this member is booked on
+        // --- 1. Cancel all upcoming, non-attended bookings ---
         const memberBookings = appState.classes.filter(c => c.bookedBy && c.bookedBy[memberId]);
-        
         memberBookings.forEach(cls => {
             const isAttended = cls.attendedBy && cls.attendedBy[memberId];
-            
-            // Only cancel upcoming, non-attended bookings
             if (!isAttended) {
                 updates[`/classes/${cls.id}/bookedBy/${memberId}`] = null;
-                updates[`/memberBookings/${memberId}/${cls.id}`] = null; // New index
+                updates[`/memberBookings/${memberId}/${cls.id}`] = null;
                 upcomingCancellations++;
             }
         });
 
-        // Anonymize the user's record instead of deleting it.
-        // This preserves their purchase history for accurate revenue calculations.
+        // --- 2. Anonymize and Archive Personally Identifiable Information (PII) ---
+        // Archive Name
         updates[`/users/${memberId}/name`] = 'Deleted Member';
-        updates[`/users/${memberId}/email`] = 'anonymized@studiopulse.app';
-        updates[`/users/${memberId}/phone`] = '';
-        updates[`/users/${memberId}/credits`] = 0;
-        updates[`/users/${memberId}/isDeleted`] = true; // Add a flag
+        updates[`/users/${memberId}/originalName`] = member.name;
 
+        // Archive Email
+        updates[`/users/${memberId}/email`] = `deleted.${memberId}@studiopulse.app`;
+        updates[`/users/${memberId}/originalEmail`] = member.email;
+
+        // Archive Phone
+        updates[`/users/${memberId}/phone`] = ''; // Clear the active phone field
+        updates[`/users/${memberId}/originalPhone`] = member.phone; // Archive it
+
+        // --- 3. Finalize the user's account status ---
+        updates[`/users/${memberId}/credits`] = 0;
+        updates[`/users/${memberId}/isDeleted`] = true;
+        
+        // --- 4. Commit all changes to the database atomically ---
         database.ref().update(updates)
             .then(() => {
                 showMessageBox(`Member ${member.name} anonymized. ${upcomingCancellations} upcoming booking(s) cancelled.`, 'success');
