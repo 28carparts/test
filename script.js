@@ -3921,11 +3921,14 @@ ${_('whatsapp_closing')}
             
             const paginatedSports = filteredSports.slice((sportPage - 1) * itemsPerPage.sports, sportPage * itemsPerPage.sports);
 
-            sportsList.innerHTML = paginatedSports.map(st => `
+            sportsList.innerHTML = paginatedSports.map(st => {
+                const sportName = getSportTypeName(st); // Get the translated name
+                return `
                 <li class="flex justify-between items-center bg-slate-100 p-2 rounded-md">
-                    <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700 font-semibold">${st.name}</span></div>
-                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">${_('btn_edit')}</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${st.name}">${_('btn_delete')}</button></div>
-                </li>`).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
+                    <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700 font-semibold">${sportName}</span></div>
+                    <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">${_('btn_edit')}</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${sportName}">${_('btn_delete')}</button></div>
+                </li>`
+            }).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
             
             renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, itemsPerPage.sports, (newPage) => {
                 appState.pagination.sports.page = newPage;
@@ -3950,9 +3953,9 @@ ${_('whatsapp_closing')}
             tutorsList.innerHTML = paginatedTutors.map(t => {
                 const skillsHtml = t.skills && t.skills.map(skill => {
                     const sportType = appState.sportTypes.find(st => st.id === skill.sportTypeId);
-                    return sportType ? `<span class="text-xs font-medium me-2 px-2.5 py-0.5 rounded-full" style="background-color:${sportType.color}20; color:${sportType.color};">${sportType.name}</span>` : '';
+                    // Use the getSportTypeName helper here
+                    return sportType ? `<span class="text-xs font-medium me-2 px-2.5 py-0.5 rounded-full" style="background-color:${sportType.color}20; color:${sportType.color};">${getSportTypeName(sportType)}</span>` : '';
                 }).join('');
-
                 return `
                  <li class="flex justify-between items-center bg-slate-100 p-3 rounded-md min-h-[68px]">
                     <div>
@@ -4212,7 +4215,7 @@ ${_('whatsapp_closing')}
     function addSkillRow(container, skill = null) {
         const skillRow = document.createElement('div');
         skillRow.className = 'tutor-skill-row p-3 bg-slate-100 rounded-lg space-y-2 border border-slate-200 relative';
-        const availableSports = appState.sportTypes.map(st => `<option value="${st.id}" ${skill && skill.sportTypeId === st.id ? 'selected' : ''}>${st.name}</option>`).join('');
+        const availableSports = appState.sportTypes.map(st => `<option value="${st.id}" ${skill && skill.sportTypeId === st.id ? 'selected' : ''}>${getSportTypeName(st)}</option>`).join('');
 
         skillRow.innerHTML = `
             <button type="button" class="remove-skill-btn absolute -top-2 -right-2 bg-red-500 text-white h-5 w-5 rounded-full text-xs flex items-center justify-center">&times;</button>
