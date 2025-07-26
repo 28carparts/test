@@ -359,7 +359,7 @@ th.sortable:hover .sort-icon {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative; /* For positioning the indicator lines */
+    position: relative; /* Crucial for positioning the indicator */
 }
 .dial-header {
     padding: 1rem 1.5rem;
@@ -370,25 +370,22 @@ th.sortable:hover .sort-icon {
     flex-shrink: 0;
     z-index: 10;
 }
-/* The new indicator is now two pseudo-elements for the top and bottom lines */
-.numeric-dial-modal-content::before,
-.numeric-dial-modal-content::after {
-    content: '';
+/* This is the new static indicator with arrows */
+.dial-selection-indicator {
     position: absolute;
+    top: 50%;
     left: 1.5rem;
     right: 1.5rem;
-    height: 2px;
-    background-color: #c7d2fe; /* indigo-200 */
+    height: 3.75rem; /* 60px, height of the selected item */
+    transform: translateY(-50%);
     z-index: 1;
-    pointer-events: none; /* Allows clicks to go through to the numbers */
-}
-.numeric-dial-modal-content::before {
-    /* Position the top line. Calc: 50% of container height - half of the selected item height */
-    top: calc(50% - 1.875rem);
-}
-.numeric-dial-modal-content::after {
-    /* Position the bottom line. Calc: 50% of container height + half of the selected item height */
-    top: calc(50% + 1.875rem);
+    pointer-events: none; /* Allows clicks/drags to pass through to the numbers */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.5rem; /* 24px */
+    font-weight: 700;
+    color: #818cf8; /* indigo-400 */
 }
 .embla-dial {
     height: 16rem; /* 256px, fixed height for the scroll area */
@@ -414,14 +411,16 @@ th.sortable:hover .sort-icon {
     font-weight: 500;
     color: #94a3b8; /* slate-400 */
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease-out;
     opacity: 0.7;
+    transform: scale(0.8);
 }
-.embla-dial__slide--selected {
+/* This style is applied by the observer to the centered slide */
+.embla-dial__slide--active {
     color: #4f46e5; /* indigo-600 */
     font-weight: 700;
-    font-size: 1.875rem; /* 30px */
     opacity: 1;
+    transform: scale(1);
 }
 .cls-block-restricted {
     opacity: 0.65;
