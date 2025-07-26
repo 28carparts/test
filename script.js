@@ -1447,18 +1447,16 @@ ${_('whatsapp_closing')}
         openModal(modal);
     }
 
-    // --- REDESIGNED Embla-Powered openNumericDialModal Function ---
+    // --- REDESIGNED "Drag Free" openNumericDialModal Function ---
     function openNumericDialModal(title, currentValue, min, max, onConfirm) {
         const modalContainer = DOMElements.numericDialModal;
         if (!modalContainer) return;
 
         let optionsHTML = '';
-        // Create all the number "slides" for the carousel
         for (let i = min; i <= max; i++) {
             optionsHTML += `<div class="embla-dial__slide" data-value="${i}">${i}</div>`;
         }
 
-        // New HTML structure using Embla classes
         modalContainer.innerHTML = `
             <div class="numeric-dial-modal-content modal-content">
                 <div class="dial-header">
@@ -1466,7 +1464,6 @@ ${_('whatsapp_closing')}
                     <h3 class="text-lg font-bold text-slate-800">${title}</h3>
                     <button type="button" class="confirm-btn text-lg text-indigo-600 hover:text-indigo-800 font-bold">${_('btn_done')}</button>
                 </div>
-                <div class="dial-snap-indicator"></div>
                 <div class="embla-dial">
                     <div class="embla-dial__container">${optionsHTML}</div>
                 </div>
@@ -1479,32 +1476,60 @@ ${_('whatsapp_closing')}
         
         let selectedValue = currentValue;
 
-        // Initialize Embla Carousel for a vertical axis
         const emblaApi = EmblaCarousel(emblaNode, {
             axis: 'y',
-            startIndex: currentValue - min, // Embla is 0-indexed, our values are not
+            startIndex: currentValue - min,
             align: 'center',
-            containScroll: false
+            dragFree: true, // <-- The key change for smooth, gliding scroll
+            containScroll: 'trimSnaps'
         });
 
         const slides = emblaApi.slideNodes();
 
-        // Helper function to update the visual style and internal state
-        const updateSelectedState = () => {
-            const selectedIndex = emblaApi.selectedScrollSnap();
-            selectedValue = parseInt(slides[selectedIndex].dataset.value, 10);
+        // Finds the slide closest to the center after a scroll ends
+        const findClosestSnap = () => {
+            const viewportCenter = emblaApi.internalEngine().scrollBody.edgeGap.start;
+            let closestDistance = Infinity;
+            let closestIndex = -1;
 
-            slides.forEach((slide, index) => {
-                slide.classList.toggle('embla-dial__slide--selected', index === selectedIndex);
+            emblaApi.scrollSnapList().forEach((snap, index) => {
+                const distance = Math.abs(viewportCenter - snap);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = index;
+                }
+            });
+            return closestIndex;
+        };
+        
+        // Updates the visual style and the internal state
+        const updateSelection = (index) => {
+            selectedValue = parseInt(slides[index].dataset.value, 10);
+            slides.forEach((slide, i) => {
+                slide.classList.toggle('embla-dial__slide--selected', i === index);
             });
         };
 
         // --- Event Handlers ---
-        
-        // This event is the SOURCE OF TRUTH. It fires after a scroll/swipe settles.
-        emblaApi.on('select', updateSelectedState);
-        
-        // Allow clicking on a number to scroll to it
+
+        // This is the source of truth for "dragFree" mode. It fires when the gliding stops.
+        emblaApi.on('settle', () => {
+            const closestIndex = findClosestSnap();
+            if (closestIndex !== -1) {
+                updateSelection(closestIndex);
+            }
+        });
+
+        // When the user resizes the window, re-center the current selection
+        emblaApi.on('resize', () => {
+            const currentIndex = slides.findIndex(slide => slide.dataset.value == selectedValue);
+            if (currentIndex !== -1) {
+                emblaApi.scrollTo(currentIndex, true); // true = instant, no animation
+                updateSelection(currentIndex);
+            }
+        });
+
+        // Clicking a slide scrolls it to the center
         viewportNode.addEventListener('click', (e) => {
             const target = e.target.closest('.embla-dial__slide');
             if (target) {
@@ -1514,23 +1539,25 @@ ${_('whatsapp_closing')}
         });
 
         const closeModalAndCleanup = () => {
-            emblaApi.destroy(); // IMPORTANT: Prevents memory leaks
+            emblaApi.destroy();
             closeModal(modalContainer);
         };
 
         confirmBtn.onclick = () => {
+            // Before confirming, snap to the closest slide to finalize selection
+            const closestIndex = findClosestSnap();
+            if (closestIndex !== -1) {
+                 emblaApi.scrollTo(closestIndex);
+                 selectedValue = parseInt(slides[closestIndex].dataset.value, 10);
+            }
             onConfirm(selectedValue);
             closeModalAndCleanup();
         };
-        cancelBtn.onclick = () => {
-            closeModalAndCleanup();
-        };
+        cancelBtn.onclick = closeModalAndCleanup;
 
-        // --- Final Initialization ---
         openModal(modalContainer);
-        
-        // Set the initial state correctly on load
-        updateSelectedState();
+        // Set the initial state
+        updateSelection(emblaApi.selectedScrollSnap());
     }
 
     function handleClsFormSubmit(e) {
