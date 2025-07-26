@@ -1471,64 +1471,66 @@ ${_('whatsapp_closing')}
             
         const optionsContainer = modalContainer.querySelector('.dial-options-container');
         let selectedValue = currentValue;
-        let debounceTimer;
+        let observer; // Define the observer variable
 
-        // CORRECTED: This listener now ONLY updates the state and style.
-        // It NEVER triggers a scroll on its own, letting CSS snapping do its job.
-        optionsContainer.addEventListener('scroll', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                const containerRect = optionsContainer.getBoundingClientRect();
-                const containerCenter = containerRect.top + (containerRect.height / 2);
-
-                let closestElement = null;
-                let minDistance = Infinity;
-
-                optionsContainer.querySelectorAll('.dial-option').forEach(option => {
-                    const optionRect = option.getBoundingClientRect();
-                    const optionCenter = optionRect.top + (optionRect.height / 2);
-                    const distance = Math.abs(containerCenter - optionCenter);
-
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestElement = option;
-                    }
-                });
-
-                if (closestElement) {
-                    selectedValue = parseInt(closestElement.dataset.value, 10);
-                    if (!closestElement.classList.contains('selected')) {
-                        optionsContainer.querySelector('.selected')?.classList.remove('selected');
-                        closestElement.classList.add('selected');
-                    }
-                    // The problematic scrollIntoView() line has been REMOVED from here.
-                }
-            }, 150);
-        });
-
-        // The click handler is where programmatic scrolling BELONGS.
+        // The click handler is for explicit, user-initiated scrolling.
         optionsContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.dial-option');
             if (target) {
-                selectedValue = parseInt(target.dataset.value, 10);
-                optionsContainer.querySelector('.selected')?.classList.remove('selected');
-                target.classList.add('selected');
                 target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
 
-        modalContainer.querySelector('.confirm-btn').onclick = () => {
-            onConfirm(selectedValue);
+        // --- The IntersectionObserver Logic (The Real Fix) ---
+        const observerCallback = (entries) => {
+            entries.forEach(entry => {
+                // We only care about the element that is currently intersecting our center-line.
+                if (entry.isIntersecting) {
+                    selectedValue = parseInt(entry.target.dataset.value, 10);
+                    
+                    // Update the visual style
+                    optionsContainer.querySelector('.selected')?.classList.remove('selected');
+                    entry.target.classList.add('selected');
+                }
+            });
+        };
+
+        observer = new IntersectionObserver(observerCallback, {
+            root: optionsContainer,
+            // This margin creates a 0px-high horizontal "detection line" in the vertical center.
+            rootMargin: '-50% 0px -50% 0px',
+            threshold: 0 // Fire as soon as any part of an element crosses the line
+        });
+
+        // Tell the observer to watch every single option.
+        optionsContainer.querySelectorAll('.dial-option').forEach(option => {
+            observer.observe(option);
+        });
+        // --- End of IntersectionObserver Logic ---
+
+        const confirmBtn = modalContainer.querySelector('.confirm-btn');
+        const cancelBtn = modalContainer.querySelector('.cancel-btn');
+
+        const closeModalAndCleanup = () => {
+            if (observer) {
+                observer.disconnect(); // IMPORTANT: Prevents memory leaks
+            }
             closeModal(modalContainer);
         };
-        modalContainer.querySelector('.cancel-btn').onclick = () => {
-            closeModal(modalContainer);
+
+        confirmBtn.onclick = () => {
+            onConfirm(selectedValue);
+            closeModalAndCleanup();
+        };
+        cancelBtn.onclick = () => {
+            closeModalAndCleanup();
         };
 
         openModal(modalContainer);
         const initialSelected = optionsContainer.querySelector('.selected');
         if (initialSelected) {
-            initialSelected.scrollIntoView({ block: 'center' });
+            // Scroll the initial value into view on load
+            initialSelected.scrollIntoView({ block: 'center', behavior: 'instant' });
         }
     }
 
