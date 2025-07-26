@@ -1453,8 +1453,8 @@ ${_('whatsapp_closing')}
 
         let optionsHTML = '';
         for (let i = min; i <= max; i++) {
-            // Each option is now an Embla slide
-            optionsHTML += `<div class="embla-dial__slide dial-option" data-value="${i}">${i}</div>`;
+            const isSelected = (i === currentValue);
+            optionsHTML += `<div class="dial-option ${isSelected ? 'selected' : ''}" data-value="${i}">${i}</div>`;
         }
 
         modalContainer.innerHTML = `
@@ -1464,101 +1464,66 @@ ${_('whatsapp_closing')}
                     <h3 class="text-lg font-bold text-slate-800">${title}</h3>
                     <button type="button" class="confirm-btn text-lg text-indigo-600 hover:text-indigo-800 font-bold">${_('btn_done')}</button>
                 </div>
-                
-                <div class="embla-dial">
-                    <div class="embla-dial__viewport">
-                        <div class="embla-dial__container">
-                            ${optionsHTML}
-                        </div>
-                    </div>
+                <div class="dial-options-container">
+                    ${optionsHTML}
                 </div>
             </div>`;
             
-        const viewportNode = modalContainer.querySelector('.embla-dial__viewport');
-        let emblaApi;
+        const optionsContainer = modalContainer.querySelector('.dial-options-container');
         let selectedValue = currentValue;
+        let debounceTimer;
 
-        const findClosestSlideAndSnap = () => {
-            if (!emblaApi) return;
-            const viewportCenter = viewportNode.getBoundingClientRect().top + viewportNode.offsetHeight / 2;
-            let closestSlideIndex = -1;
-            let minDistance = Infinity;
+        optionsContainer.addEventListener('scroll', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const containerRect = optionsContainer.getBoundingClientRect();
+                const containerCenter = containerRect.top + (containerRect.height / 2);
 
-            emblaApi.slideNodes().forEach((slideNode, index) => {
-                const slideCenter = slideNode.getBoundingClientRect().top + slideNode.offsetHeight / 2;
-                const distance = Math.abs(viewportCenter - slideCenter);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestSlideIndex = index;
+                let closestElement = null;
+                let minDistance = Infinity;
+
+                optionsContainer.querySelectorAll('.dial-option').forEach(option => {
+                    const optionRect = option.getBoundingClientRect();
+                    const optionCenter = optionRect.top + (optionRect.height / 2);
+                    const distance = Math.abs(containerCenter - optionCenter);
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestElement = option;
+                    }
+                });
+
+                if (closestElement) {
+                    selectedValue = parseInt(closestElement.dataset.value);
+                    if (!closestElement.classList.contains('selected')) {
+                        optionsContainer.querySelector('.selected')?.classList.remove('selected');
+                        closestElement.classList.add('selected');
+                        closestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 }
-            });
-            
-            if (closestSlideIndex !== -1) {
-                emblaApi.scrollTo(closestSlideIndex);
-                selectedValue = parseInt(emblaApi.slideNodes()[closestSlideIndex].dataset.value, 10);
-            }
-        };
-        
-        const updateSelectedClass = () => {
-            if (!emblaApi) return;
-            const viewportCenter = viewportNode.getBoundingClientRect().top + viewportNode.offsetHeight / 2;
-            let closestSlide = null;
-            let minDistance = Infinity;
-
-            emblaApi.slideNodes().forEach(slide => {
-                const slideCenter = slide.getBoundingClientRect().top + slide.offsetHeight / 2;
-                const distance = Math.abs(viewportCenter - slideCenter);
-
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestSlide = slide;
-                }
-            });
-            
-            if (closestSlide && !closestSlide.classList.contains('selected')) {
-                modalContainer.querySelector('.dial-option.selected')?.classList.remove('selected');
-                closestSlide.classList.add('selected');
-            }
-        };
-        
-        emblaApi = EmblaCarousel(viewportNode, { 
-            axis: 'y', 
-            dragFree: true,
-            startIndex: currentValue - min,
+            }, 150);
         });
-        
-        // When the scroll movement ends, find the closest slide and snap to it.
-        emblaApi.on('settle', findClosestSlideAndSnap);
-        
-        // As the user scrolls, visually highlight the slide that is currently in the center.
-        emblaApi.on('scroll', updateSelectedClass);
-        
-        // When a snap is complete (e.g. after 'settle' or on initial load), ensure the correct slide is highlighted.
-        emblaApi.on('select', updateSelectedClass);
 
-        openModal(modalContainer);
-
-        // After the modal is visible, re-initialize Embla to get correct dimensions and set the initial selected item.
-        setTimeout(() => {
-            if (emblaApi) {
-                emblaApi.reInit();
-                updateSelectedClass();
+        optionsContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('.dial-option');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
-        }, 100);
-        
-        const destroyEmbla = () => {
-            if (emblaApi) emblaApi.destroy();
-        };
+        });
 
         modalContainer.querySelector('.confirm-btn').onclick = () => {
             onConfirm(selectedValue);
             closeModal(modalContainer);
-            destroyEmbla();
         };
         modalContainer.querySelector('.cancel-btn').onclick = () => {
             closeModal(modalContainer);
-            destroyEmbla();
         };
+
+        openModal(modalContainer);
+        const initialSelected = optionsContainer.querySelector('.selected');
+        if (initialSelected) {
+            initialSelected.scrollIntoView({ block: 'center' });
+        }
     }
 
     function handleClsFormSubmit(e) {
