@@ -349,17 +349,17 @@ th.sortable:hover .sort-icon {
     outline-offset: 2px;
     box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
 }
-/* --- New Embla-Powered Numeric Dial --- */
+/* --- Redesigned "Picker Wheel" Numeric Dial --- */
 .numeric-dial-modal-content {
     background-color: #f8fafc; /* slate-50 */
     width: 100%;
-    max-height: 50vh; /* Limit height on tall screens */
+    max-height: 50vh;
     border-radius: 1.5rem;
     box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative; /* For the snap indicator */
+    position: relative; /* For positioning the indicator lines */
 }
 .dial-header {
     padding: 1rem 1.5rem;
@@ -370,27 +370,40 @@ th.sortable:hover .sort-icon {
     flex-shrink: 0;
     z-index: 10;
 }
-/* This is the visual line that indicates the snap position */
-.dial-snap-indicator {
+/* The new indicator is now two pseudo-elements for the top and bottom lines */
+.numeric-dial-modal-content::before,
+.numeric-dial-modal-content::after {
+    content: '';
     position: absolute;
-    top: 50%;
     left: 1.5rem;
     right: 1.5rem;
-    height: 3.75rem; /* 60px, height of the selected item */
-    transform: translateY(-50%);
-    background-color: #eef2ff; /* indigo-50 */
-    border-radius: 0.75rem;
-    border: 2px solid #818cf8; /* indigo-400 */
-    z-index: 0;
+    height: 2px;
+    background-color: #c7d2fe; /* indigo-200 */
+    z-index: 1;
+    pointer-events: none; /* Allows clicks to go through to the numbers */
+}
+.numeric-dial-modal-content::before {
+    /* Position the top line. Calc: 50% of container height - half of the selected item height */
+    top: calc(50% - 1.875rem);
+}
+.numeric-dial-modal-content::after {
+    /* Position the bottom line. Calc: 50% of container height + half of the selected item height */
+    top: calc(50% + 1.875rem);
 }
 .embla-dial {
     height: 16rem; /* 256px, fixed height for the scroll area */
     overflow: hidden;
+    /* This mask creates the fading effect at the top and bottom */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
 }
 .embla-dial__container {
     display: flex;
-    flex-direction: column; /* Vertical axis */
+    flex-direction: column;
     height: 100%;
+    /* This padding ensures the first and last numbers can reach the center */
+    padding-top: calc(8rem - 1.875rem); /* Half container height - half item height */
+    padding-bottom: calc(8rem - 1.875rem);
 }
 .embla-dial__slide {
     flex: 0 0 3.75rem; /* 60px, each slide has a fixed height */
@@ -402,12 +415,13 @@ th.sortable:hover .sort-icon {
     color: #94a3b8; /* slate-400 */
     cursor: pointer;
     transition: all 0.3s ease;
+    opacity: 0.7;
 }
-/* Style for the slide that is currently selected/snapped */
 .embla-dial__slide--selected {
     color: #4f46e5; /* indigo-600 */
     font-weight: 700;
     font-size: 1.875rem; /* 30px */
+    opacity: 1;
 }
 .cls-block-restricted {
     opacity: 0.65;
