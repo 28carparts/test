@@ -1473,6 +1473,8 @@ ${_('whatsapp_closing')}
         let selectedValue = currentValue;
         let debounceTimer;
 
+        // REFINED: This handler now only updates the state after a scroll settles.
+        // It no longer triggers its own scrollIntoView, preventing conflicts.
         optionsContainer.addEventListener('scroll', () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -1494,19 +1496,24 @@ ${_('whatsapp_closing')}
                 });
 
                 if (closestElement) {
-                    selectedValue = parseInt(closestElement.dataset.value);
+                    selectedValue = parseInt(closestElement.dataset.value, 10);
                     if (!closestElement.classList.contains('selected')) {
                         optionsContainer.querySelector('.selected')?.classList.remove('selected');
                         closestElement.classList.add('selected');
-                        closestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }
             }, 150);
         });
 
+        // REFINED: The click handler is now the primary way to explicitly set a value.
         optionsContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.dial-option');
             if (target) {
+                // Update the state immediately on click
+                selectedValue = parseInt(target.dataset.value, 10);
+                optionsContainer.querySelector('.selected')?.classList.remove('selected');
+                target.classList.add('selected');
+                // Then, ask the browser to smoothly center it.
                 target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
@@ -1822,9 +1829,9 @@ ${_('whatsapp_closing')}
                 participantDialTrigger.addEventListener('click', (e) => {
                     e.stopPropagation();
                     openNumericDialModal(
-                        'Set Max Participants',
+                        _('title_set_max_participants'),
                         cls.maxParticipants,
-                        1, 100,
+                        1, 50,
                         (newMax) => {
                             saveSchedulePosition();
                             database.ref(`/classes/${cls.id}/maxParticipants`).set(newMax);
