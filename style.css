@@ -381,9 +381,15 @@ th.sortable:hover .sort-icon {
     flex-shrink: 0;
 }
 .dial-options-container {
-    overflow-y: scroll;
+    height: 16rem; /* h-64 - Give it a fixed height */
+    overflow-y: auto; /* Use auto instead of scroll for consistency */
     padding: 0.5rem 0;
     -webkit-overflow-scrolling: touch;
+    scroll-snap-type: y mandatory; /* Enforce snapping to items */
+    /* This is the fix: It creates an invisible padding for scrolling calculations,
+       allowing the first and last items to be centered. */
+    scroll-padding-top: calc(8rem - 1.875rem); /* (container_height / 2) - (item_height / 2) */
+    scroll-padding-bottom: calc(8rem - 1.875rem);
 }
 .dial-option {
     padding: 0.75rem 1.5rem;
@@ -393,6 +399,7 @@ th.sortable:hover .sort-icon {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
+    scroll-snap-align: center; /* This tells the item to snap to the center */
 }
 .dial-option.selected {
     color: #4f46e5; /* indigo-600 */
