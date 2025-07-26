@@ -1447,16 +1447,18 @@ ${_('whatsapp_closing')}
         openModal(modal);
     }
 
+    // --- REDESIGNED Embla-Powered openNumericDialModal Function ---
     function openNumericDialModal(title, currentValue, min, max, onConfirm) {
         const modalContainer = DOMElements.numericDialModal;
         if (!modalContainer) return;
 
         let optionsHTML = '';
+        // Create all the number "slides" for the carousel
         for (let i = min; i <= max; i++) {
-            const isSelected = (i === currentValue);
-            optionsHTML += `<div class="dial-option ${isSelected ? 'selected' : ''}" data-value="${i}">${i}</div>`;
+            optionsHTML += `<div class="embla-dial__slide" data-value="${i}">${i}</div>`;
         }
 
+        // New HTML structure using Embla classes
         modalContainer.innerHTML = `
             <div class="numeric-dial-modal-content modal-content">
                 <div class="dial-header">
@@ -1464,57 +1466,55 @@ ${_('whatsapp_closing')}
                     <h3 class="text-lg font-bold text-slate-800">${title}</h3>
                     <button type="button" class="confirm-btn text-lg text-indigo-600 hover:text-indigo-800 font-bold">${_('btn_done')}</button>
                 </div>
-                <div class="dial-options-container">
-                    ${optionsHTML}
+                <div class="dial-snap-indicator"></div>
+                <div class="embla-dial">
+                    <div class="embla-dial__container">${optionsHTML}</div>
                 </div>
             </div>`;
             
-        const optionsContainer = modalContainer.querySelector('.dial-options-container');
+        const emblaNode = modalContainer.querySelector('.embla-dial');
+        const viewportNode = emblaNode.querySelector('.embla-dial__container');
+        const confirmBtn = modalContainer.querySelector('.confirm-btn');
+        const cancelBtn = modalContainer.querySelector('.cancel-btn');
+        
         let selectedValue = currentValue;
-        let observer; // Define the observer variable
 
-        // The click handler is for explicit, user-initiated scrolling.
-        optionsContainer.addEventListener('click', (e) => {
-            const target = e.target.closest('.dial-option');
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+        // Initialize Embla Carousel for a vertical axis
+        const emblaApi = EmblaCarousel(emblaNode, {
+            axis: 'y',
+            startIndex: currentValue - min, // Embla is 0-indexed, our values are not
+            align: 'center',
+            containScroll: false
         });
 
-        // --- The IntersectionObserver Logic (The Real Fix) ---
-        const observerCallback = (entries) => {
-            entries.forEach(entry => {
-                // We only care about the element that is currently intersecting our center-line.
-                if (entry.isIntersecting) {
-                    selectedValue = parseInt(entry.target.dataset.value, 10);
-                    
-                    // Update the visual style
-                    optionsContainer.querySelector('.selected')?.classList.remove('selected');
-                    entry.target.classList.add('selected');
-                }
+        const slides = emblaApi.slideNodes();
+
+        // Helper function to update the visual style and internal state
+        const updateSelectedState = () => {
+            const selectedIndex = emblaApi.selectedScrollSnap();
+            selectedValue = parseInt(slides[selectedIndex].dataset.value, 10);
+
+            slides.forEach((slide, index) => {
+                slide.classList.toggle('embla-dial__slide--selected', index === selectedIndex);
             });
         };
 
-        observer = new IntersectionObserver(observerCallback, {
-            root: optionsContainer,
-            // This margin creates a 0px-high horizontal "detection line" in the vertical center.
-            rootMargin: '-50% 0px -50% 0px',
-            threshold: 0 // Fire as soon as any part of an element crosses the line
+        // --- Event Handlers ---
+        
+        // This event is the SOURCE OF TRUTH. It fires after a scroll/swipe settles.
+        emblaApi.on('select', updateSelectedState);
+        
+        // Allow clicking on a number to scroll to it
+        viewportNode.addEventListener('click', (e) => {
+            const target = e.target.closest('.embla-dial__slide');
+            if (target) {
+                const index = slides.indexOf(target);
+                emblaApi.scrollTo(index);
+            }
         });
-
-        // Tell the observer to watch every single option.
-        optionsContainer.querySelectorAll('.dial-option').forEach(option => {
-            observer.observe(option);
-        });
-        // --- End of IntersectionObserver Logic ---
-
-        const confirmBtn = modalContainer.querySelector('.confirm-btn');
-        const cancelBtn = modalContainer.querySelector('.cancel-btn');
 
         const closeModalAndCleanup = () => {
-            if (observer) {
-                observer.disconnect(); // IMPORTANT: Prevents memory leaks
-            }
+            emblaApi.destroy(); // IMPORTANT: Prevents memory leaks
             closeModal(modalContainer);
         };
 
@@ -1526,12 +1526,11 @@ ${_('whatsapp_closing')}
             closeModalAndCleanup();
         };
 
+        // --- Final Initialization ---
         openModal(modalContainer);
-        const initialSelected = optionsContainer.querySelector('.selected');
-        if (initialSelected) {
-            // Scroll the initial value into view on load
-            initialSelected.scrollIntoView({ block: 'center', behavior: 'instant' });
-        }
+        
+        // Set the initial state correctly on load
+        updateSelectedState();
     }
 
     function handleClsFormSubmit(e) {
