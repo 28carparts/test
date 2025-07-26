@@ -1473,8 +1473,8 @@ ${_('whatsapp_closing')}
         let selectedValue = currentValue;
         let debounceTimer;
 
-        // REFINED: This handler now only updates the state after a scroll settles.
-        // It no longer triggers its own scrollIntoView, preventing conflicts.
+        // CORRECTED: This listener now ONLY updates the state and style.
+        // It NEVER triggers a scroll on its own, letting CSS snapping do its job.
         optionsContainer.addEventListener('scroll', () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -1501,19 +1501,18 @@ ${_('whatsapp_closing')}
                         optionsContainer.querySelector('.selected')?.classList.remove('selected');
                         closestElement.classList.add('selected');
                     }
+                    // The problematic scrollIntoView() line has been REMOVED from here.
                 }
             }, 150);
         });
 
-        // REFINED: The click handler is now the primary way to explicitly set a value.
+        // The click handler is where programmatic scrolling BELONGS.
         optionsContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.dial-option');
             if (target) {
-                // Update the state immediately on click
                 selectedValue = parseInt(target.dataset.value, 10);
                 optionsContainer.querySelector('.selected')?.classList.remove('selected');
                 target.classList.add('selected');
-                // Then, ask the browser to smoothly center it.
                 target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
