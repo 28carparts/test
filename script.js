@@ -1446,8 +1446,8 @@ ${_('whatsapp_closing')}
         form.onsubmit = handleClsFormSubmit;
         openModal(modal);
     }
-
-    // --- REDESIGNED "Drag Free" openNumericDialModal Function ---
+    
+    // --- REDESIGNED "Picker Wheel" openNumericDialModal Function ---
     function openNumericDialModal(title, currentValue, min, max, onConfirm) {
         const modalContainer = DOMElements.numericDialModal;
         if (!modalContainer) return;
@@ -1457,12 +1457,17 @@ ${_('whatsapp_closing')}
             optionsHTML += `<div class="embla-dial__slide" data-value="${i}">${i}</div>`;
         }
 
+        // New HTML structure with the static indicator
         modalContainer.innerHTML = `
             <div class="numeric-dial-modal-content modal-content">
                 <div class="dial-header">
                     <button type="button" class="cancel-btn text-lg text-slate-500 hover:text-slate-700 font-semibold">${_('btn_cancel')}</button>
                     <h3 class="text-lg font-bold text-slate-800">${title}</h3>
                     <button type="button" class="confirm-btn text-lg text-indigo-600 hover:text-indigo-800 font-bold">${_('btn_done')}</button>
+                </div>
+                <div class="dial-selection-indicator">
+                    <span><</span>
+                    <span>></span>
                 </div>
                 <div class="embla-dial">
                     <div class="embla-dial__container">${optionsHTML}</div>
@@ -1475,57 +1480,45 @@ ${_('whatsapp_closing')}
         const cancelBtn = modalContainer.querySelector('.cancel-btn');
         
         let selectedValue = currentValue;
+        let observer;
 
         const emblaApi = EmblaCarousel(emblaNode, {
             axis: 'y',
             startIndex: currentValue - min,
             align: 'center',
-            dragFree: true, // <-- The key change for smooth, gliding scroll
+            dragFree: true,
             containScroll: 'trimSnaps'
         });
 
         const slides = emblaApi.slideNodes();
 
-        // Finds the slide closest to the center after a scroll ends
-        const findClosestSnap = () => {
-            const viewportCenter = emblaApi.internalEngine().scrollBody.edgeGap.start;
-            let closestDistance = Infinity;
-            let closestIndex = -1;
-
-            emblaApi.scrollSnapList().forEach((snap, index) => {
-                const distance = Math.abs(viewportCenter - snap);
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestIndex = index;
+        // --- IntersectionObserver: The Authoritative State Manager ---
+        const observerCallback = (entries) => {
+            entries.forEach(entry => {
+                // Find the entry that is currently intersecting the center-line
+                if (entry.isIntersecting) {
+                    selectedValue = parseInt(entry.target.dataset.value, 10);
+                    slides.forEach(slide => slide.classList.remove('embla-dial__slide--active'));
+                    entry.target.classList.add('embla-dial__slide--active');
                 }
             });
-            return closestIndex;
         };
         
-        // Updates the visual style and the internal state
-        const updateSelection = (index) => {
-            selectedValue = parseInt(slides[index].dataset.value, 10);
-            slides.forEach((slide, i) => {
-                slide.classList.toggle('embla-dial__slide--selected', i === index);
-            });
-        };
+        observer = new IntersectionObserver(observerCallback, {
+            root: emblaNode, // Observe intersections within the embla container
+            rootMargin: '-50% 0px -50% 0px', // A 0px-high horizontal line in the vertical center
+            threshold: 0
+        });
+        
+        slides.forEach(slide => observer.observe(slide));
 
         // --- Event Handlers ---
 
-        // This is the source of truth for "dragFree" mode. It fires when the gliding stops.
+        // After a free-scroll, gently snap to the currently observed value
         emblaApi.on('settle', () => {
-            const closestIndex = findClosestSnap();
-            if (closestIndex !== -1) {
-                updateSelection(closestIndex);
-            }
-        });
-
-        // When the user resizes the window, re-center the current selection
-        emblaApi.on('resize', () => {
-            const currentIndex = slides.findIndex(slide => slide.dataset.value == selectedValue);
-            if (currentIndex !== -1) {
-                emblaApi.scrollTo(currentIndex, true); // true = instant, no animation
-                updateSelection(currentIndex);
+            const targetIndex = slides.findIndex(slide => slide.dataset.value == selectedValue);
+            if (targetIndex !== -1 && emblaApi.selectedScrollSnap() !== targetIndex) {
+                emblaApi.scrollTo(targetIndex);
             }
         });
 
@@ -1539,25 +1532,21 @@ ${_('whatsapp_closing')}
         });
 
         const closeModalAndCleanup = () => {
+            if (observer) observer.disconnect();
             emblaApi.destroy();
             closeModal(modalContainer);
         };
 
         confirmBtn.onclick = () => {
-            // Before confirming, snap to the closest slide to finalize selection
-            const closestIndex = findClosestSnap();
-            if (closestIndex !== -1) {
-                 emblaApi.scrollTo(closestIndex);
-                 selectedValue = parseInt(slides[closestIndex].dataset.value, 10);
-            }
             onConfirm(selectedValue);
             closeModalAndCleanup();
         };
         cancelBtn.onclick = closeModalAndCleanup;
 
         openModal(modalContainer);
-        // Set the initial state
-        updateSelection(emblaApi.selectedScrollSnap());
+        
+        // Set initial position instantly without animation
+        emblaApi.scrollTo(currentValue - min, true);
     }
 
     function handleClsFormSubmit(e) {
