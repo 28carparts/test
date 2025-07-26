@@ -349,17 +349,28 @@ th.sortable:hover .sort-icon {
     outline-offset: 2px;
     box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
 }
-/* --- START: Redesigned "Picker Wheel" Numeric Dial --- */
+
+/* --- Custom Numeric Dial Modal --- */
 .numeric-dial-modal-content {
     background-color: #f8fafc; /* slate-50 */
     width: 100%;
     max-height: 50vh;
-    border-radius: 1.5rem;
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
+    border-bottom-left-radius: 1.5rem;
+    border-bottom-right-radius: 1.5rem;
     box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative; /* Crucial for positioning the indicator */
+    transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+.numeric-dial-modal-content.open {
+     opacity: 1;
+     transform: scale(1);
 }
 .dial-header {
     padding: 1rem 1.5rem;
@@ -368,61 +379,41 @@ th.sortable:hover .sort-icon {
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
-    z-index: 10;
 }
-/* This is the new static indicator with arrows */
-.dial-selection-indicator {
-    position: absolute;
-    top: 50%;
-    left: 1.5rem;
-    right: 1.5rem;
-    height: 3.75rem; /* 60px, height of the selected item */
-    transform: translateY(-50%);
-    z-index: 1;
-    pointer-events: none; /* Allows clicks/drags to pass through to the numbers */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 1.5rem; /* 24px */
+.dial-options-container {
+    overflow-y: scroll;
+    padding: 0.5rem 0;
+    -webkit-overflow-scrolling: touch;
+}
+.dial-option {
+    padding: 0.75rem 1.5rem;
+    text-align: center;
+    font-size: 1.25rem; /* 20px */
+    color: #94a3b8; /* slate-400 */
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.dial-option.selected {
+    color: #4f46e5; /* indigo-600 */
     font-weight: 700;
-    color: #818cf8; /* indigo-400 */
-}
-.embla-dial {
-    height: 16rem; /* 256px, fixed height for the scroll area */
-    overflow: hidden;
-    /* This mask creates the fading effect at the top and bottom */
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
-}
-.embla-dial__container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    /* This padding ensures the first and last numbers can reach the center */
-    padding-top: calc(8rem - 1.875rem); /* Half container height - half item height */
-    padding-bottom: calc(8rem - 1.875rem);
-}
-.embla-dial__slide {
-    flex: 0 0 3.75rem; /* 60px, each slide has a fixed height */
+    font-size: 1.875rem; /* 30px, makes the selected number larger */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem; /* 20px */
-    font-weight: 500;
-    color: #94a3b8; /* slate-400 */
-    cursor: pointer;
-    transition: all 0.2s ease-out;
-    opacity: 0.7;
-    transform: scale(0.8);
 }
-/* This style is applied by the observer to the centered slide */
-.embla-dial__slide--active {
-    color: #4f46e5; /* indigo-600 */
+/* Add the indicators to the selected item itself */
+.dial-option.selected::before,
+.dial-option.selected::after {
+    content: '<';
+    font-size: 1.5rem; /* 24px */
     font-weight: 700;
-    opacity: 1;
-    transform: scale(1);
+    color: #818cf8; /* indigo-400 */
+    margin: 0 0.75rem; /* 12px margin on left and right */
 }
-/* --- END: Redesigned "Picker Wheel" Numeric Dial --- */
+.dial-option.selected::after {
+    content: '>';
+}
 .cls-block-restricted {
     opacity: 0.65;
     cursor: not-allowed;
