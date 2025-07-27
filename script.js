@@ -19,7 +19,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- App State & Constants ---
     const MEMBER_PAST_DAYS = 0; 
     const CLS_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#FF007F', '#00BFFF', '#32CD32', '#FFD700', '#8A2BE2', '#FF4500', '#20B2AA', '#DAA520', '#4682B4', '#FF69B4', '#7CFC00', '#ADFF2F', '#DC143C', '#BA55D3'];
-    
+    const EYE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const EYE_SLASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`;
+
     let appState = { 
         classes: [],  
         tutors: [], 
@@ -139,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
         appState.currentLanguage = lang;
         localStorage.setItem('studioPulseLanguage', lang);
         updateUIText();
+        updatePasswordStrengthUI(); // Trigger UI update for password strength text
     
         // Update active state on language selectors
         document.querySelectorAll('.lang-selector').forEach(selector => {
@@ -163,6 +166,103 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // --- Utility & Helper Functions ---
+    const validateForm = (formElement) => {
+        const requiredInputs = formElement.querySelectorAll('input[required]');
+        for (const input of requiredInputs) {
+            if (!input.value.trim()) {
+                return false;
+            }
+        }
+        return true;
+    };
+    
+    const checkPasswordStrength = (password) => {
+        if (!password) return null;
+
+        // 1. Length Check is the highest priority
+        if (password.length < 6) {
+            return { color: 'bg-red-500', width: '20%', textKey: 'password_strength_very_weak' };
+        }
+
+        // 2. Count character types for passwords that meet the length requirement
+        let types = 0;
+        if (/\d/.test(password)) types++; // Numbers
+        if (/[a-z]/.test(password)) types++; // Lowercase letters
+        if (/[A-Z]/.test(password)) types++; // Uppercase letters
+        if (/[^A-Za-z0-9]/.test(password)) types++; // Special characters
+
+        // 3. Categorize based on the number of character types used
+        switch (types) {
+            case 1: // Weak (e.g., "password" or "1234567")
+                return { color: 'bg-orange-500', width: '40%', textKey: 'password_strength_weak' };
+            case 2: // Fair (e.g., "password123" or "Password")
+                return { color: 'bg-yellow-400', width: '60%', textKey: 'password_strength_fair' };
+            case 3: // Good (e.g., "Password123")
+                return { color: 'bg-lime-500', width: '80%', textKey: 'password_strength_good' };
+            case 4: // Excellent (e.g., "Password123!")
+                return { color: 'bg-green-500', width: '100%', textKey: 'password_strength_excellent' };
+            default: // This case should not be reached but serves as a safe fallback
+                return { color: 'bg-red-500', width: '20%', textKey: 'password_strength_very_weak' };
+        }
+    };
+
+    const updatePasswordStrengthUI = () => {
+        // Target elements specifically within the registration form to avoid conflicts
+        const registerForm = document.getElementById('registerForm');
+        if (!registerForm) return;
+
+        const container = registerForm.querySelector('#password-strength-container');
+        const passwordInput = registerForm.querySelector('#registerPassword');
+        
+        // Exit if the indicator elements aren't on the page (e.g., user is on the login form)
+        if (!container || !passwordInput) return;
+
+        const bar = container.querySelector('#password-strength-bar');
+        const text = container.querySelector('#password-strength-text');
+        const password = passwordInput.value;
+
+        // This function's only job is to update the UI based on the password value.
+        // It does not control its own visibility.
+        const strength = checkPasswordStrength(password);
+        
+        bar.className = 'h-full rounded-full transition-all duration-300';
+        const textColors = {
+            'bg-red-500': 'text-red-500',
+            'bg-orange-500': 'text-orange-500',
+            'bg-yellow-400': 'text-yellow-500',
+            'bg-lime-500': 'text-lime-600', // NEW
+            'bg-green-500': 'text-green-600'
+        };
+
+        if (strength) {
+            bar.style.width = strength.width;
+            bar.classList.add(strength.color);
+            text.textContent = _(strength.textKey);
+            text.className = `text-xs font-bold ${textColors[strength.color] || 'text-slate-500'}`;
+        }
+    };
+
+    const setupPasswordToggle = (inputId) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        const toggleBtn = input.nextElementSibling;
+        if (!toggleBtn || !toggleBtn.classList.contains('password-toggle-btn')) return;
+        
+        // Set initial state
+        toggleBtn.innerHTML = EYE_ICON_SVG;
+
+        toggleBtn.addEventListener('click', () => {
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggleBtn.innerHTML = EYE_SLASH_ICON_SVG;
+            } else {
+                input.type = 'password';
+                toggleBtn.innerHTML = EYE_ICON_SVG;
+            }
+        });
+    };
+    
     const showMessageBox = (message, type = 'success', duration = 3000) => {
         DOMElements.messageBox.textContent = message;
         const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-sky-500' };
@@ -487,7 +587,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- Auth & UI Visibility ---
     const handleLogin = (email, password) => {
-        const loginButton = document.querySelector('#loginForm button[type="submit"]');
+        const loginForm = document.getElementById('loginForm');
+        if (!validateForm(loginForm)) {
+            showMessageBox(_('error_required_field'), 'error');
+            return;
+        }
+
+        const loginButton = loginForm.querySelector('button[type="submit"]');
         loginButton.disabled = true;
         loginButton.textContent = _('status_logging_in');
 
@@ -503,7 +609,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const handleRegistration = (formData) => {
         const { name, email, password, confirmPassword, phone } = formData;
-        const registerButton = document.querySelector('#registerForm button[type="submit"]');
+        const registerForm = document.getElementById('registerForm');
+        const registerButton = registerForm.querySelector('button[type="submit"]');
 
         // --- START: MODIFIED LOGIC ---
 
@@ -512,16 +619,20 @@ document.addEventListener('DOMContentLoaded', function() {
         registerButton.textContent = _('status_checking');
 
         // 2. Perform validation checks.
+        if (!validateForm(registerForm)) {
+            showMessageBox(_('error_required_field'), 'error');
+            registerButton.disabled = false;
+            registerButton.textContent = _('auth_register_button');
+            return;
+        }
         if (password.length < 6) {
             showMessageBox(_('error_password_length'), 'error');
-            // 3. If validation fails, re-enable the button and return.
             registerButton.disabled = false;
             registerButton.textContent = _('auth_register_button');
             return;
         }
         if (password !== confirmPassword) {
             showMessageBox(_('error_password_mismatch'), 'error');
-            // 3. If validation fails, re-enable the button and return.
             registerButton.disabled = false;
             registerButton.textContent = _('auth_register_button');
             return;
@@ -561,8 +672,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error');
             })
             .finally(() => {
-                // This 'finally' block now correctly handles re-enabling the button
-                // only after a Firebase API call attempt.
                 registerButton.disabled = false;
                 registerButton.textContent = _('auth_register_button');
             });
@@ -1674,7 +1783,6 @@ ${_('whatsapp_closing')}
             };
         } else if (isMonthlyMember && isRestrictedForMonthly) {
             el.classList.add('cls-block-restricted');
-            showMessageBox(_('status_not_available'), 'info');
         } else if (isBookedByCurrentUser) {
             el.classList.add('booked-by-member');
         } else if (appState.currentUser && !isFull) {
@@ -2537,15 +2645,24 @@ ${_('whatsapp_closing')}
                 <form id="changePasswordForm" class="space-y-4">
                     <div>
                         <label for="currentPassword" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_current_password')}</label>
-                        <input type="password" id="currentPassword" required class="form-input">
+                        <div class="relative">
+                            <input type="password" id="currentPassword" required class="form-input pr-10">
+                            <button type="button" class="password-toggle-btn" aria-label="Show password"></button>
+                        </div>
                     </div>
                     <div>
                         <label for="newPassword" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_new_password')}</label>
-                        <input type="password" id="newPassword" required class="form-input">
+                        <div class="relative">
+                            <input type="password" id="newPassword" required class="form-input pr-10">
+                            <button type="button" class="password-toggle-btn" aria-label="Show password"></button>
+                        </div>
                     </div>
                     <div>
                         <label for="confirmNewPassword" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_confirm_new_password')}</label>
-                        <input type="password" id="confirmNewPassword" required class="form-input">
+                        <div class="relative">
+                            <input type="password" id="confirmNewPassword" required class="form-input pr-10">
+                            <button type="button" class="password-toggle-btn" aria-label="Show password"></button>
+                        </div>
                     </div>
                     <div class="flex justify-center mt-8">
                         <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg">${_('btn_change_password')}</button>
@@ -2555,6 +2672,12 @@ ${_('whatsapp_closing')}
         `;
         const form = DOMElements.changePasswordModal.querySelector('#changePasswordForm');
         form.onsubmit = handleChangePasswordSubmit;
+        
+        // Initialize toggles after the modal content is created
+        setupPasswordToggle('currentPassword');
+        setupPasswordToggle('newPassword');
+        setupPasswordToggle('confirmNewPassword');
+        
         openModal(DOMElements.changePasswordModal);
     }
 
@@ -5710,16 +5833,11 @@ ${_('whatsapp_closing')}
         const forgotPasswordLink = document.getElementById('forgotPasswordLink');
         const loginContainer = document.getElementById('login-form-container');
         const registerContainer = document.getElementById('register-form-container');
+        
+        const registerPasswordInput = registerForm.querySelector('#registerPassword');
+        const confirmPasswordInput = registerForm.querySelector('#confirmRegisterPassword');
+        const strengthContainer = registerForm.querySelector('#password-strength-container');
 
-        // --- REPLACE THIS BLOCK ---
-        const langSelectors = document.querySelectorAll('.lang-selector');
-        langSelectors.forEach(selector => {
-            selector.onclick = (e) => {
-                e.preventDefault();
-                setLanguage(selector.dataset.lang);
-            };
-        });
-        // --- WITH THIS LINE ---
         setupLanguageToggles();
 
         loginForm.onsubmit = (e) => {
@@ -5732,8 +5850,8 @@ ${_('whatsapp_closing')}
             const formData = {
                 name: registerForm.querySelector('#registerName').value,
                 email: registerForm.querySelector('#registerEmail').value,
-                password: registerForm.querySelector('#registerPassword').value,
-                confirmPassword: registerForm.querySelector('#confirmRegisterPassword').value,
+                password: registerPasswordInput.value,
+                confirmPassword: confirmPasswordInput.value,
                 phone: constructPhoneNumber(
                     registerForm.querySelector('#registerCountryCode').value,
                     registerForm.querySelector('#registerPhone').value
@@ -5741,6 +5859,23 @@ ${_('whatsapp_closing')}
             };
             handleRegistration(formData);
         };
+        
+        registerPasswordInput.addEventListener('input', () => {
+            if (strengthContainer) {
+                strengthContainer.classList.toggle('hidden', !registerPasswordInput.value);
+                updatePasswordStrengthUI();
+            }
+        });
+        
+        confirmPasswordInput.addEventListener('focus', () => {
+            if (strengthContainer) strengthContainer.classList.add('hidden');
+        });
+        
+        registerPasswordInput.addEventListener('focus', () => {
+            if (strengthContainer && registerPasswordInput.value) {
+                strengthContainer.classList.remove('hidden');
+            }
+        });
         
         showRegisterLink.onclick = (e) => {
             e.preventDefault();
@@ -5763,6 +5898,11 @@ ${_('whatsapp_closing')}
                     .catch(error => showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error'));
             }
         };
+
+        // Initialize all password toggles on the auth page
+        setupPasswordToggle('loginPassword');
+        setupPasswordToggle('registerPassword');
+        setupPasswordToggle('confirmRegisterPassword');
     };
 
     // --- Initialization ---
