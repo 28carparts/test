@@ -141,7 +141,13 @@ document.addEventListener('DOMContentLoaded', function() {
         appState.currentLanguage = lang;
         localStorage.setItem('studioPulseLanguage', lang);
         updateUIText();
-        updatePasswordStrengthUI(); // Trigger UI update for password strength text
+        // --- CHANGE START: Add a guard to prevent unnecessary UI updates ---
+        // Only update the password strength UI if the registration form is visible
+        const registerFormContainer = document.getElementById('register-form-container');
+        if (registerFormContainer && !registerFormContainer.classList.contains('hidden')) {
+            updatePasswordStrengthUI();
+        }
+        // --- CHANGE END ---
     
         // Update active state on language selectors
         document.querySelectorAll('.lang-selector').forEach(selector => {
@@ -206,31 +212,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    const updatePasswordStrengthUI = () => {
-        // Target elements specifically within the registration form to avoid conflicts
-        const registerForm = document.getElementById('registerForm');
-        if (!registerForm) return;
+    // Replace the old updatePasswordStrengthUI function with this new one.
+    const updatePasswordStrengthUI = (formElement) => {
+        // Exit if the form doesn't exist.
+        if (!formElement) return;
 
-        const container = registerForm.querySelector('#password-strength-container');
-        const passwordInput = registerForm.querySelector('#registerPassword');
-        
-        // Exit if the indicator elements aren't on the page (e.g., user is on the login form)
+        // Find the indicator elements *within the specified form*.
+        const container = formElement.querySelector('.password-strength-container');
+        const passwordInput = formElement.querySelector('.password-strength-input');
+
+        // Exit if the indicator elements aren't in this form.
         if (!container || !passwordInput) return;
 
-        const bar = container.querySelector('#password-strength-bar');
-        const text = container.querySelector('#password-strength-text');
+        const bar = container.querySelector('.password-strength-bar');
+        const text = container.querySelector('.password-strength-text');
         const password = passwordInput.value;
 
-        // This function's only job is to update the UI based on the password value.
-        // It does not control its own visibility.
         const strength = checkPasswordStrength(password);
         
-        bar.className = 'h-full rounded-full transition-all duration-300';
+        bar.className = 'password-strength-bar h-full rounded-full transition-all duration-300'; // Reset classes
         const textColors = {
             'bg-red-500': 'text-red-500',
             'bg-orange-500': 'text-orange-500',
             'bg-yellow-400': 'text-yellow-500',
-            'bg-lime-500': 'text-lime-600', // NEW
+            'bg-lime-500': 'text-lime-600',
             'bg-green-500': 'text-green-600'
         };
 
@@ -238,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
             bar.style.width = strength.width;
             bar.classList.add(strength.color);
             text.textContent = _(strength.textKey);
-            text.className = `text-xs font-bold ${textColors[strength.color] || 'text-slate-500'}`;
+            text.className = `password-strength-text text-xs font-bold ${textColors[strength.color] || 'text-slate-500'}`;
         }
     };
 
@@ -2653,9 +2658,21 @@ ${_('whatsapp_closing')}
                     <div>
                         <label for="newPassword" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_new_password')}</label>
                         <div class="relative">
-                            <input type="password" id="newPassword" required class="form-input pr-10">
+                            <!-- ADDED 'password-strength-input' class -->
+                            <input type="password" id="newPassword" required class="form-input pr-10 password-strength-input">
                             <button type="button" class="password-toggle-btn" aria-label="Show password"></button>
                         </div>
+                        <!-- START: INJECTED PASSWORD STRENGTH INDICATOR HTML -->
+                        <div class="password-strength-container mt-2 h-7 hidden">
+                            <div class="h-2 bg-slate-200 rounded-full mb-1">
+                                <div class="password-strength-bar h-full rounded-full transition-all duration-300"></div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span data-lang-key="auth_password_strength" class="text-xs font-semibold text-slate-500"></span>
+                                <span class="password-strength-text text-xs font-bold"></span>
+                            </div>
+                        </div>
+                        <!-- END: INJECTED HTML -->
                     </div>
                     <div>
                         <label for="confirmNewPassword" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_confirm_new_password')}</label>
@@ -2678,7 +2695,31 @@ ${_('whatsapp_closing')}
         setupPasswordToggle('newPassword');
         setupPasswordToggle('confirmNewPassword');
         
+        // START: ADDED EVENT LISTENERS FOR THE MODAL'S INDICATOR
+        const newPasswordInput = form.querySelector('#newPassword');
+        const confirmNewPasswordInput = form.querySelector('#confirmNewPassword');
+        const strengthContainer = form.querySelector('.password-strength-container');
+        
+        newPasswordInput.addEventListener('input', () => {
+            if (strengthContainer) {
+                strengthContainer.classList.toggle('hidden', !newPasswordInput.value);
+                updatePasswordStrengthUI(form);
+            }
+        });
+        
+        confirmNewPasswordInput.addEventListener('focus', () => {
+            if (strengthContainer) strengthContainer.classList.add('hidden');
+        });
+
+        newPasswordInput.addEventListener('focus', () => {
+            if (strengthContainer && newPasswordInput.value) {
+                strengthContainer.classList.remove('hidden');
+            }
+        });
+        // END: ADDED EVENT LISTENERS
+
         openModal(DOMElements.changePasswordModal);
+        updateUIText(); // Translate the newly added text
     }
 
     function handleChangePasswordSubmit(e) {
@@ -5834,9 +5875,10 @@ ${_('whatsapp_closing')}
         const loginContainer = document.getElementById('login-form-container');
         const registerContainer = document.getElementById('register-form-container');
         
+        // Get elements from within the registration form
         const registerPasswordInput = registerForm.querySelector('#registerPassword');
         const confirmPasswordInput = registerForm.querySelector('#confirmRegisterPassword');
-        const strengthContainer = registerForm.querySelector('#password-strength-container');
+        const strengthContainer = registerForm.querySelector('.password-strength-container'); // Use class selector
 
         setupLanguageToggles();
 
@@ -5863,7 +5905,8 @@ ${_('whatsapp_closing')}
         registerPasswordInput.addEventListener('input', () => {
             if (strengthContainer) {
                 strengthContainer.classList.toggle('hidden', !registerPasswordInput.value);
-                updatePasswordStrengthUI();
+                // Pass the form element to the reusable function
+                updatePasswordStrengthUI(registerForm); 
             }
         });
         
