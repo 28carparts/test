@@ -80,17 +80,20 @@
                 <div>
                     <label data-lang-key="auth_password" for="registerPassword" class="block text-slate-600 text-sm font-semibold mb-2">Password</label>
                     <div class="relative">
-                        <input type="password" id="registerPassword" required class="form-input pr-10" data-lang-key="placeholder_password" placeholder="••••••••">
+                        <!-- 1. ADDED the 'password-strength-input' class -->
+                        <input type="password" id="registerPassword" required class="form-input pr-10 password-strength-input" data-lang-key="placeholder_password" placeholder="••••••••">
                         <button type="button" class="password-toggle-btn" aria-label="Show password"></button>
                     </div>
                     <!-- Password Strength Indicator -->
-                    <div id="password-strength-container" class="mt-2 h-7 hidden">
+                    <!-- 2. CHANGED the container ID to a class -->
+                    <div class="password-strength-container mt-2 h-7 hidden">
                         <div class="h-2 bg-slate-200 rounded-full mb-1">
-                            <div id="password-strength-bar" class="h-full rounded-full transition-all duration-300"></div>
+                            <!-- 3. CHANGED the bar and text IDs to classes -->
+                            <div class="password-strength-bar h-full rounded-full transition-all duration-300"></div>
                         </div>
                         <div class="flex justify-between items-center">
                             <span data-lang-key="auth_password_strength" class="text-xs font-semibold text-slate-500">Password Strength</span>
-                            <span id="password-strength-text" class="text-xs font-bold"></span>
+                            <span class="password-strength-text text-xs font-bold"></span>
                         </div>
                     </div>
                 </div>
