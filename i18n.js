@@ -118,6 +118,14 @@ const LANG_PACK = {
         'error_could_not_load_booking_history': 'Could not load booking history. Please try again.',
         'status_please_wait': 'Please wait...',
 
+        // --- Password Strength ---
+        'auth_password_strength': 'Password Strength',
+        'password_strength_very_weak': 'Very Weak',
+        'password_strength_weak': 'Weak',
+        'password_strength_fair': 'Fair',
+        'password_strength_good': 'Good',
+        'password_strength_excellent': 'Excellent',
+
         // --- Auth Page ---
         'auth_welcome_to': 'Welcome to',
         'auth_login': 'Login',
@@ -149,6 +157,7 @@ const LANG_PACK = {
         'prompt_password_reset': 'Please enter your email address to receive a password reset link:',
         'success_password_reset_sent': 'Password reset email sent to {email}',
         'error_auth_no_db_entry': 'Authentication error. User profile not found. Logging out.',
+        'error_required_field': 'Please fill out all required fields.',
 
         // --- Navigation ---
         'nav_schedule': 'Schedule',
@@ -558,6 +567,14 @@ const LANG_PACK = {
         'error_could_not_load_booking_history': '無法載入預約記錄，請再試一次。',
         'status_please_wait': '請稍候...',
 
+        // --- Password Strength ---
+        'auth_password_strength': '密碼強度',
+        'password_strength_very_weak': '非常弱',
+        'password_strength_weak': '弱',
+        'password_strength_fair': '中等',
+        'password_strength_good': '良好',
+        'password_strength_excellent': '極佳',
+
         // --- Auth Page ---
         'auth_welcome_to': '歡迎來到',
         'auth_login': '登入',
@@ -589,6 +606,7 @@ const LANG_PACK = {
         'prompt_password_reset': '請輸入您的電子郵件地址以接收密碼重設連結：',
         'success_password_reset_sent': '密碼重設郵件已發送到 {email}',
         'error_auth_no_db_entry': '驗證錯誤。找不到用戶個人資料。正在登出。',
+        'error_required_field': '請填寫所有必填欄位。',
 
         // --- Navigation ---
         'nav_schedule': '時間表',
