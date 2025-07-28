@@ -1169,7 +1169,7 @@ ${_('whatsapp_closing')}
         return message;
     }
 
-    function openUpdateNotifyModal(originalCls, newClsData, onConfirm) {
+    function openUpdateNotifyModal(originalCls, newClsData, onConfirm, onCancel = null) {
         const bookedMemberIds = originalCls.bookedBy ? Object.keys(originalCls.bookedBy) : [];
         const bookedMembers = bookedMemberIds.map(id => appState.users.find(u => u.id === id)).filter(Boolean);
 
@@ -1240,18 +1240,26 @@ ${_('whatsapp_closing')}
         // --- END OF FIX ---
         
         modal.querySelector('#final-confirm-btn').onclick = onConfirm;
-        
+    
+        const closeBtn = modal.querySelector('.modal-close-btn');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                // Execute the onCancel callback if it was provided
+                if (onCancel) {
+                    onCancel();
+                }
+                closeModal(modal); // Then close the modal as usual
+            };
+        }
         openModal(modal);
     }
 
-    function handleClsUpdateRequest(originalCls, newClsData) {
+    function handleClsUpdateRequest(originalCls, newClsData, onCancel = null) {
         const bookedMemberIds = originalCls.bookedBy ? Object.keys(originalCls.bookedBy) : [];
 
-        // Determine if a notification-worthy change has occurred
         const hasRelevantChanges = (newClsData.time && newClsData.time !== originalCls.time) || 
                                    (newClsData.tutorId && newClsData.tutorId !== originalCls.tutorId);
 
-        // The actual database update logic, wrapped in a reusable function
         const performUpdate = () => {
             const finalClsData = { ...originalCls, ...newClsData };
             database.ref(`/classes/${originalCls.id}`).set(finalClsData) // Use set() to ensure a clean update
@@ -1264,13 +1272,12 @@ ${_('whatsapp_closing')}
                 });
         };
 
-        // If no one is booked OR no important details changed, update the DB directly.
         if (bookedMemberIds.length === 0 || !hasRelevantChanges) {
             performUpdate();
-        } 
-        // Otherwise, show the notification modal, passing `performUpdate` as the final confirmation step.
-        else {
-            openUpdateNotifyModal(originalCls, newClsData, performUpdate);
+        } else {
+            // We need to slightly modify the openUpdateNotifyModal logic.
+            // The modal's 'X' button needs to trigger our new onCancel callback.
+            openUpdateNotifyModal(originalCls, newClsData, performUpdate, onCancel); // Pass onCancel through
         }
     }
 
@@ -2036,10 +2043,18 @@ ${_('whatsapp_closing')}
                     timeSlotEl.textContent = getTimeRange(localClsTime, cls.duration);
 
                     clearTimeout(timeChangeDebounce);
-                    // New wheel event logic
                     timeChangeDebounce = setTimeout(() => {
                         saveSchedulePosition();
-                        handleClsUpdateRequest(cls, { time: localClsTime });
+                        
+                        // --- THIS IS THE FIX ---
+                        // Create a function that knows how to revert the UI for THIS specific element
+                        const revertUICallback = () => {
+                            timeSlotEl.textContent = getTimeRange(cls.time, cls.duration);
+                        };
+
+                        // Pass the original time and the revert callback to the gatekeeper
+                        handleClsUpdateRequest(cls, { time: localClsTime }, revertUICallback);
+                        // --- END OF FIX ---
                     }, 1500);
                 });
             }
@@ -2050,10 +2065,18 @@ ${_('whatsapp_closing')}
                 timeInput.addEventListener('change', () => {
                     let timeChangeDebounce;
                     clearTimeout(timeChangeDebounce);
-                    // New change event logic
                     timeChangeDebounce = setTimeout(() => {
                         saveSchedulePosition();
-                        handleClsUpdateRequest(cls, { time: timeInput.value });
+
+                        // --- THIS IS THE FIX ---
+                        // Create a revert callback for the mobile time input as well
+                        const revertUICallback = () => {
+                            // For the mobile input, we just need to reset its value
+                            timeInput.value = cls.time;
+                        };
+
+                        handleClsUpdateRequest(cls, { time: timeInput.value }, revertUICallback);
+                        // --- END OF FIX ---
                     }, 1500);
                 });
             }
