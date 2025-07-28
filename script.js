@@ -1094,7 +1094,7 @@ ${_('whatsapp_body_1')}
 *${_('whatsapp_time')}:* ${getTimeRange(cls.time, cls.duration)}
 *${_('whatsapp_tutor')}:* ${tutor.name}
 
-${_('whatsapp_apology')}
+${_('whatsapp_apology')} ${_('whatsapp_refund_info')}
 
 ${_('whatsapp_cta')}
 ${bookingLink}
@@ -1126,6 +1126,154 @@ ${_('whatsapp_closing')}
         document.body.removeChild(textArea);
     }
     
+    function createUpdateWhatsAppMessage(member, originalCls, newClsData) {
+        const sportType = appState.sportTypes.find(st => st.id === originalCls.sportTypeId);
+        const originalTutor = appState.tutors.find(t => t.id === originalCls.tutorId);
+        
+        let changesSummary = '';
+
+        // Check if time changed
+        if (newClsData.time && newClsData.time !== originalCls.time) {
+            const originalTime = getTimeRange(originalCls.time, originalCls.duration);
+            const newTime = getTimeRange(newClsData.time, newClsData.duration || originalCls.duration);
+            changesSummary += `*${_('whatsapp_time')}:* ~${originalTime}~ -> *${newTime}*\n`;
+        }
+
+        // Check if tutor changed
+        if (newClsData.tutorId && newClsData.tutorId !== originalCls.tutorId) {
+            const newTutor = appState.tutors.find(t => t.id === newClsData.tutorId);
+            changesSummary += `*${_('whatsapp_tutor')}:* ~${originalTutor.name}~ -> *${newTutor.name}*\n`;
+        }
+
+        const bookingLink = `${window.location.origin}/schedule`;
+
+        // The indentation of the text lines has been removed to fix the formatting issue.
+        // The message now uses the new/revised i18n keys for better clarity.
+        const message = `${_('whatsapp_greeting').replace('{name}', member.name)}
+
+${_('whatsapp_body_update')}
+
+*${_('whatsapp_class')}:* ${getSportTypeName(sportType)}
+*${_('whatsapp_date')}:* ${formatShortDateWithYear(originalCls.date)}
+
+${_('whatsapp_changes_header')}
+${changesSummary.trim()}
+
+${_('whatsapp_apology')} ${_('whatsapp_cancellation_option')}
+
+${_('whatsapp_cta')}
+${bookingLink}
+
+${_('whatsapp_closing')}
+        `.trim();
+        return message;
+    }
+
+    function openUpdateNotifyModal(originalCls, newClsData, onConfirm) {
+        const bookedMemberIds = originalCls.bookedBy ? Object.keys(originalCls.bookedBy) : [];
+        const bookedMembers = bookedMemberIds.map(id => appState.users.find(u => u.id === id)).filter(Boolean);
+
+        DOMElements.deleteClsNotifyModal.innerHTML = `
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-slate-800">${_('title_notify_members_update')}</h2>
+                    <p class="text-slate-500 mt-2 mb-6">${_('notify_members_update_instructions').replace('{count}', bookedMembers.length)}</p>
+                </div>
+                <div id="notify-members-list" class="space-y-3 max-h-60 overflow-y-auto p-4 bg-slate-50 rounded-lg">
+                    ${bookedMembers.map(member => `
+                        <div class="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm" data-member-id="${member.id}">
+                            <div class="flex-grow">
+                                <span class="font-semibold text-slate-700 member-name">${member.name}</span>
+                                <span class="copy-phone-number text-sm text-slate-500 cursor-pointer hover:text-indigo-600 transition" 
+                                      data-phone-digits="${member.phone ? member.phone.replace(/\D/g, '').slice(-8) : ''}" 
+                                      title="${_('tooltip_copy_number')}">
+                                    ${formatDisplayPhoneNumber(member.phone)}
+                                </span>
+                            </div>
+                            <button class="copy-notify-msg-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-full transition">${_('btn_copy_whatsapp')}</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="flex justify-center mt-8">
+                    <button type="button" id="final-confirm-btn" class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg transition opacity-50 cursor-not-allowed" disabled>${_('btn_confirm_update')}</button>
+                </div>
+            </div>`;
+
+        const modal = DOMElements.deleteClsNotifyModal;
+        
+        modal.querySelectorAll('.copy-notify-msg-btn').forEach(btn => {
+            btn.onclick = () => {
+                const memberItem = btn.closest('[data-member-id]');
+                const memberId = memberItem.dataset.memberId;
+                const member = appState.users.find(u => u.id === memberId);
+                
+                const message = createUpdateWhatsAppMessage(member, originalCls, newClsData);
+                copyTextToClipboard(message, _('success_text_copied').replace('{text}', 'WhatsApp message'));
+
+                memberItem.querySelector('.member-name').classList.add('notified-member');
+                btn.textContent = _('btn_copied');
+                btn.disabled = true;
+                btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                btn.classList.add('bg-slate-300', 'cursor-default');
+
+                const allNotified = modal.querySelectorAll('.copy-notify-msg-btn:not(:disabled)').length === 0;
+                if (allNotified) {
+                    const finalConfirmBtn = modal.querySelector('#final-confirm-btn');
+                    finalConfirmBtn.disabled = false;
+                    finalConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            };
+        });
+
+        // --- THIS IS THE FIX ---
+        // Add the missing event listener to all phone number spans in the modal.
+        modal.querySelectorAll('.copy-phone-number').forEach(span => {
+            span.onclick = (e) => {
+                e.stopPropagation(); // Prevents other click events from firing
+                const phoneNumber = span.dataset.phoneDigits;
+                if (phoneNumber) {
+                    copyTextToClipboard(phoneNumber, _('success_text_copied').replace('{text}', formatDigitsWithSpaces(phoneNumber)));
+                }
+            };
+        });
+        // --- END OF FIX ---
+        
+        modal.querySelector('#final-confirm-btn').onclick = onConfirm;
+        
+        openModal(modal);
+    }
+
+    function handleClsUpdateRequest(originalCls, newClsData) {
+        const bookedMemberIds = originalCls.bookedBy ? Object.keys(originalCls.bookedBy) : [];
+
+        // Determine if a notification-worthy change has occurred
+        const hasRelevantChanges = (newClsData.time && newClsData.time !== originalCls.time) || 
+                                   (newClsData.tutorId && newClsData.tutorId !== originalCls.tutorId);
+
+        // The actual database update logic, wrapped in a reusable function
+        const performUpdate = () => {
+            const finalClsData = { ...originalCls, ...newClsData };
+            database.ref(`/classes/${originalCls.id}`).set(finalClsData) // Use set() to ensure a clean update
+                .then(() => {
+                    showMessageBox(_('success_class_updated'), 'success');
+                    closeModal(DOMElements.clsModal);
+                    closeModal(DOMElements.deleteClsNotifyModal);
+                }).catch(error => {
+                    showMessageBox(_('error_update_failed').replace('{error}', error.message), 'error');
+                });
+        };
+
+        // If no one is booked OR no important details changed, update the DB directly.
+        if (bookedMemberIds.length === 0 || !hasRelevantChanges) {
+            performUpdate();
+        } 
+        // Otherwise, show the notification modal, passing `performUpdate` as the final confirmation step.
+        else {
+            openUpdateNotifyModal(originalCls, newClsData, performUpdate);
+        }
+    }
+
     // --- Class, Booking, and Member List Modals (Refactored) ---
     async function openJoinedMembersModal(cls) {
         if (appState.copyMode.active) return;
@@ -1679,28 +1827,19 @@ ${_('whatsapp_closing')}
         let promise;
 
         if (clsId) {
-            // --- THIS IS THE CRITICAL EDITING LOGIC ---
             const originalCls = appState.classes.find(c => c.id === clsId);
             if (!originalCls) {
                 showMessageBox(_('error_could_not_find_original_class'), 'error');
                 submitBtn.disabled = false;
                 return;
             }
-
-            // 1. Preserve existing booking and attendance data
-            const finalClsData = {
-                ...originalCls,       // Start with the original class data (including bookedBy)
-                ...newClsDataFromForm // Overwrite with new values from the form
-            };
-
-            // 2. THE FIX: The automatic refund logic that was here has been completely removed.
-            //    We no longer issue refunds when a class price is lowered. The cancellation
-            //    process will correctly use the original 'creditsPaid' value.
-
-            updates[`/classes/${clsId}`] = finalClsData;
-            updates[`/clsMonths/${monthIndexKey}`] = true;
-            promise = database.ref().update(updates);
-
+            
+            // Defer all logic to our new gatekeeper function
+            handleClsUpdateRequest(originalCls, newClsDataFromForm);
+            
+            // The gatekeeper now handles UI feedback, so we can re-enable the button.
+            submitBtn.disabled = false;
+            
         } else {
             // This is a NEW class, so the logic is simpler
             const newClsKey = database.ref('/classes').push().key;
@@ -1897,7 +2036,11 @@ ${_('whatsapp_closing')}
                     timeSlotEl.textContent = getTimeRange(localClsTime, cls.duration);
 
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/classes/${cls.id}/time`).set(localClsTime); }, 1500);
+                    // New wheel event logic
+                    timeChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        handleClsUpdateRequest(cls, { time: localClsTime });
+                    }, 1500);
                 });
             }
 
@@ -1907,7 +2050,11 @@ ${_('whatsapp_closing')}
                 timeInput.addEventListener('change', () => {
                     let timeChangeDebounce;
                     clearTimeout(timeChangeDebounce);
-                    timeChangeDebounce = setTimeout(() => { saveSchedulePosition(); database.ref(`/classes/${cls.id}/time`).set(timeInput.value); }, 1500);
+                    // New change event logic
+                    timeChangeDebounce = setTimeout(() => {
+                        saveSchedulePosition();
+                        handleClsUpdateRequest(cls, { time: timeInput.value });
+                    }, 1500);
                 });
             }
 
