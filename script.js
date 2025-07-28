@@ -267,11 +267,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     };
-    
+
     const showMessageBox = (message, type = 'success', duration = 3000) => {
         DOMElements.messageBox.textContent = message;
         const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-sky-500' };
-        DOMElements.messageBox.className = `fixed bottom-6 right-6 text-white px-6 py-3 rounded-lg shadow-xl z-50 animate-bounce ${colors[type] || colors.info}`;
+        
+        // Combined fix:
+        // 1. Z-index is now z-[100] to be above all modals.
+        // 2. Responsive classes added: full-width on mobile, toast on desktop.
+        const responsiveClasses = 'left-6 right-6 text-center sm:left-auto sm:w-auto sm:max-w-md sm:text-left';
+        
+        DOMElements.messageBox.className = `fixed bottom-6 text-white px-6 py-3 rounded-lg shadow-xl z-[100] animate-bounce ${responsiveClasses} ${colors[type] || colors.info}`;
+
         DOMElements.messageBox.classList.remove('hidden');
         setTimeout(() => DOMElements.messageBox.classList.add('hidden'), duration);
     };
@@ -298,7 +305,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // We use the existing showMessageBox but with custom HTML
         const messageBox = DOMElements.messageBox;
         messageBox.innerHTML = message; // Use innerHTML to render the <strong> tags
-        messageBox.className = `fixed bottom-6 right-6 text-white px-6 py-3 rounded-lg shadow-xl z-50 animate-bounce bg-sky-500`;
+        
+        // Combined fix:
+        // 1. Z-index is now z-[100] to be above all modals.
+        // 2. Responsive classes added: full-width on mobile, toast on desktop.
+        const responsiveClasses = 'left-6 right-6 text-center sm:left-auto sm:w-auto sm:max-w-md sm:text-left';
+        messageBox.className = `fixed bottom-6 text-white px-6 py-3 rounded-lg shadow-xl z-[100] animate-bounce bg-sky-500 ${responsiveClasses}`;
+        
         messageBox.classList.remove('hidden');
         setTimeout(() => messageBox.classList.add('hidden'), 5000); // Show for 5 seconds
     };
@@ -1720,11 +1733,20 @@ ${_('whatsapp_closing')}
         const modalContainer = DOMElements.numericDialModal;
         if (!modalContainer) return;
 
+        // --- The spacer logic from before is still correct ---
         let optionsHTML = '';
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
+
         for (let i = min; i <= max; i++) {
             const isSelected = (i === currentValue);
             optionsHTML += `<div class="dial-option ${isSelected ? 'selected' : ''}" data-value="${i}">${i}</div>`;
         }
+        
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
+        optionsHTML += '<div class="dial-option dial-spacer"> </div>';
 
         modalContainer.innerHTML = `
             <div class="numeric-dial-modal-content modal-content">
@@ -1751,7 +1773,7 @@ ${_('whatsapp_closing')}
                 let closestElement = null;
                 let minDistance = Infinity;
 
-                optionsContainer.querySelectorAll('.dial-option').forEach(option => {
+                optionsContainer.querySelectorAll('.dial-option[data-value]').forEach(option => {
                     const optionRect = option.getBoundingClientRect();
                     const optionCenter = optionRect.top + (optionRect.height / 2);
                     const distance = Math.abs(containerCenter - optionCenter);
@@ -1767,14 +1789,17 @@ ${_('whatsapp_closing')}
                     if (!closestElement.classList.contains('selected')) {
                         optionsContainer.querySelector('.selected')?.classList.remove('selected');
                         closestElement.classList.add('selected');
-                        closestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // --- THIS LINE IS THE FIX: Remove the programmatic scroll ---
+                        // By removing this, we no longer fight the user's native scroll.
+                        // closestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }
             }, 150);
         });
 
         optionsContainer.addEventListener('click', (e) => {
-            const target = e.target.closest('.dial-option');
+            const target = e.target.closest('.dial-option[data-value]');
+            // The click handler *should* still scroll the item to the center.
             if (target) {
                 target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
