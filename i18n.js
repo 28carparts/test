@@ -395,6 +395,19 @@ const LANG_PACK = {
         'whatsapp_changes_header': 'The following details have been changed:',
         'whatsapp_cancellation_option': 'If you can no longer make it, you can cancel your booking via the app.🙏',
 
+        // --- QR Code ---
+        'nav_check_in': 'Check-In',
+        'title_qr_code': 'Your Check-In Code',
+        'check_in_title': 'Class Check-In',
+        'check_in_prompt': 'Point your camera at a member\'s QR code.',
+        'check_in_scanning': 'Scanning...',
+        'check_in_success': 'Success! {name} is checked in for {class}.',
+        'check_in_error_not_booked': 'Error: {name} is not booked for any class today.',
+        'check_in_error_already_checked_in': 'Notice: {name} is already checked in for {class}.',
+        'check_in_error_no_booking_found': 'No booking found for today. Please select a class.',
+        'check_in_select_class_title': 'Multiple Bookings Found',
+        'check_in_select_class_prompt': 'Please select which class to check {name} into:',
+
         // --- CSV Export Labels ---
         'export_header_name': 'Name',
         'export_header_email': 'Email',
@@ -850,6 +863,19 @@ const LANG_PACK = {
         'whatsapp_body_update': '這是來自 StudioPulse 關於您已預約課程的更新通知：',
         'whatsapp_changes_header': '以下是課程的變更詳情：',
         'whatsapp_cancellation_option': '如果您無法參加更新後的課程，可以隨時透過App取消預約。🙏',
+
+        // --- QR Code ---
+        'nav_check_in': '簽到',
+        'title_qr_code': '您的簽到QR Code',
+        'check_in_title': '課程簽到',
+        'check_in_prompt': '請將相機對準會員的QR Code。',
+        'check_in_scanning': '掃描中...',
+        'check_in_success': '成功！{name} 已簽到 {class}。',
+        'check_in_error_not_booked': '錯誤：{name} 今天沒有預約任何課程。',
+        'check_in_error_already_checked_in': '注意：{name} 已經簽到過 {class}。',
+        'check_in_error_no_booking_found': '今天找不到預約。請選擇一堂課。',
+        'check_in_select_class_title': '找到多筆預約',
+        'check_in_select_class_prompt': '請選擇要為 {name} 簽到哪一堂課：',
 
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
