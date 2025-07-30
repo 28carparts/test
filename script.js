@@ -2616,7 +2616,23 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        const memberBookings = appState.classes.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => new Date(b.date) - new Date(a.date));
+        // --- START OF FIX: Multi-level Sorting Logic ---
+        const memberBookings = appState.classes
+            .filter(c => c.bookedBy && c.bookedBy[member.id])
+            .sort((a, b) => {
+                // Primary Sort: Compare dates in descending order
+                const dateComparison = b.date.localeCompare(a.date);
+                
+                // If the dates are different, sort by date
+                if (dateComparison !== 0) {
+                    return dateComparison;
+                }
+                
+                // Secondary Sort: If dates are the same, compare times in ascending order
+                return a.time.localeCompare(b.time);
+            });
+        // --- END OF FIX ---
+
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
         const paymentHistory = firebaseObjectToArray(member.paymentHistory);
 
@@ -2665,12 +2681,10 @@ ${_('whatsapp_closing')}
                         </div>
                     </div>
 
-                    <!-- START: ADDED QR CODE SECTION -->
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
                     </div>
-                    <!-- END: ADDED QR CODE SECTION -->
 
                     ${member.monthlyPlan ? `
                     <div class="card p-6">
@@ -2761,20 +2775,18 @@ ${_('whatsapp_closing')}
                 </div>
             </div>`;
 
-        // --- START: ADDED QR CODE GENERATION LOGIC ---
         const qrCodeContainer = container.querySelector('#qrCodeContainer');
         if (qrCodeContainer) {
-            qrCodeContainer.innerHTML = ''; // Clear previous QR code
+            qrCodeContainer.innerHTML = '';
             new QRCode(qrCodeContainer, {
                 text: member.id,
-                width: 192, // 48 * 4 (Tailwind size)
+                width: 192,
                 height: 192,
-                colorDark: "#1e293b", // slate-800
+                colorDark: "#1e293b",
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.H
             });
         }
-        // --- END: ADDED QR CODE GENERATION LOGIC ---
 
         setupLanguageToggles();
         updateUIText();
