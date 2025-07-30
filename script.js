@@ -4012,9 +4012,11 @@ ${_('whatsapp_closing')}
                     <h2 class="text-2xl font-bold text-slate-800 mb-2">${_('check_in_title')}</h2>
                     <p class="text-slate-500 mb-4">${_('check_in_prompt')}</p>
                 </div>
-                <div id="qrScannerContainer" class="bg-slate-900">
-                    <div id="qr-reader"></div>
-                </div>
+                
+                <!-- START OF FIX: Simplified the nested divs into a single one -->
+                <div id="qr-reader" class="bg-slate-900"></div>
+                <!-- END OF FIX -->
+                
                 <div id="checkInResult" class="min-h-[4rem]"></div>
             </div>
         `;
@@ -4030,9 +4032,7 @@ ${_('whatsapp_closing')}
         html5QrCode = new Html5Qrcode("qr-reader");
         const config = { fps: 10, qrbox: { width: 250, height: 250 } };
         
-        // Start scanning. If it fails, log the error.
         html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => { 
-            // This is the error callback, we can ignore parse errors.
         }).catch(err => {
             console.error("Unable to start QR scanner", err);
             const resultEl = document.getElementById("checkInResult");
