@@ -113,7 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
         filterModal: document.getElementById('filterModal'),
         goToDateModal: document.getElementById('goToDateModal'),
         numericDialModal: document.getElementById('numericDialModal'),
-        cancelCopyBtn: document.getElementById('cancelCopyBtn')
+        cancelCopyBtn: document.getElementById('cancelCopyBtn'),
+        checkInModal: document.getElementById('checkInModal')
     };
 
     // --- START: NEW LANGUAGE FUNCTIONS ---
@@ -735,13 +736,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 `<button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_admin')}</button>`,
                 `<button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>`
             ];
-
+            
+            // --- START: MODIFIED SECTION ---
+            navButtonsHTML.splice(1, 0, `<button id="navCheckInBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>`);
             navButtonsHTML.splice(2, 0, `<button id="navGoToBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_goto')}</button>`);
 
             if (isOwner) {
-                navButtonsHTML.splice(3, 0, `<button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_salary')}</button>`);
-                navButtonsHTML.splice(4, 0, `<button data-page="statistics" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_statistics')}</button>`);
+                navButtonsHTML.splice(4, 0, `<button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_salary')}</button>`);
+                navButtonsHTML.splice(5, 0, `<button data-page="statistics" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_statistics')}</button>`);
             }
+            // --- END: MODIFIED SECTION ---
 
             mobileNavContainer.innerHTML = navButtonsHTML.map(btn => `<div class="embla-nav__slide">${btn}</div>`).join('');
             desktopNavContainer.innerHTML = navButtonsHTML.join('');
@@ -790,6 +794,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     openFilterModal();
                 };
+            // --- START: ADDED SECTION ---
+            } else if (btn.id === 'navCheckInBtn') {
+                btn.onclick = openCheckInModal;
+            // --- END: ADDED SECTION ---
             } else if (btn.id === 'navGoToBtn') {
                 btn.onclick = openGoToDateModal;
             } else if (btn.dataset.page) {
@@ -2614,7 +2622,7 @@ ${_('whatsapp_closing')}
 
         container.innerHTML = `
             <div class="w-full max-w-screen-lg mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="md:col-span-1">
+                <div class="md:col-span-1 space-y-8">
                     <div class="card p-6 text-center">
                         <h2 class="text-2xl font-bold text-slate-800">${member.name}</h2>
                         <p class="text-slate-500">${member.email}</p>
@@ -2657,8 +2665,15 @@ ${_('whatsapp_closing')}
                         </div>
                     </div>
 
+                    <!-- START: ADDED QR CODE SECTION -->
+                    <div class="card p-6 text-center">
+                        <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
+                        <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
+                    </div>
+                    <!-- END: ADDED QR CODE SECTION -->
+
                     ${member.monthlyPlan ? `
-                    <div class="card p-6 mt-8">
+                    <div class="card p-6">
                         <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_payment_history')}</h4>
                         <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
                             ${paymentHistory.length > 0
@@ -2687,7 +2702,7 @@ ${_('whatsapp_closing')}
                             }
                         </div>
                     </div>` : `
-                    <div class="card p-6 mt-8">
+                    <div class="card p-6">
                         <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_purchase_history')}</h4>
                         <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
                             ${purchaseHistory.length > 0 
@@ -2745,6 +2760,21 @@ ${_('whatsapp_closing')}
                     </div>
                 </div>
             </div>`;
+
+        // --- START: ADDED QR CODE GENERATION LOGIC ---
+        const qrCodeContainer = container.querySelector('#qrCodeContainer');
+        if (qrCodeContainer) {
+            qrCodeContainer.innerHTML = ''; // Clear previous QR code
+            new QRCode(qrCodeContainer, {
+                text: member.id,
+                width: 192, // 48 * 4 (Tailwind size)
+                height: 192,
+                colorDark: "#1e293b", // slate-800
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+        // --- END: ADDED QR CODE GENERATION LOGIC ---
 
         setupLanguageToggles();
         updateUIText();
@@ -3916,7 +3946,111 @@ ${_('whatsapp_closing')}
             closeModal(DOMElements.memberModal);
         }).catch(error => showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error'));
     }
-    
+
+    let html5QrCode = null; // To hold the scanner instance
+
+    function openCheckInModal() {
+        DOMElements.checkInModal.innerHTML = `
+            <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">${_('check_in_title')}</h2>
+                    <p class="text-slate-500 mb-4">${_('check_in_prompt')}</p>
+                </div>
+                <div id="qrScannerContainer" class="bg-slate-900">
+                    <div id="qr-reader"></div>
+                </div>
+                <div id="checkInResult" class="min-h-[4rem]"></div>
+            </div>
+        `;
+        openModal(DOMElements.checkInModal);
+        
+        const onScanSuccess = (decodedText, decodedResult) => {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.pause();
+                handleCheckIn(decodedText);
+            }
+        };
+
+        html5QrCode = new Html5Qrcode("qr-reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        
+        // Start scanning. If it fails, log the error.
+        html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => { 
+            // This is the error callback, we can ignore parse errors.
+        }).catch(err => {
+            console.error("Unable to start QR scanner", err);
+            const resultEl = document.getElementById("checkInResult");
+            if(resultEl) resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">Could not start camera. Please check permissions.</div>`;
+        });
+    }
+
+    async function handleCheckIn(memberId) {
+        const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
+        resultEl.innerHTML = `<p class="text-center font-semibold text-slate-500 p-4">${_('check_in_scanning')}</p>`;
+        
+        const member = appState.users.find(u => u.id === memberId);
+        if (!member) {
+            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('error_member_not_found')}</div>`;
+            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            return;
+        }
+
+        const today = getIsoDate(new Date());
+        const memberBookingsToday = appState.classes.filter(cls => 
+            cls.date === today && cls.bookedBy && cls.bookedBy[memberId]
+        );
+
+        if (memberBookingsToday.length === 0) {
+            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_not_booked').replace('{name}', member.name)}</div>`;
+            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            return;
+        }
+
+        const checkInMember = (clsId) => {
+            const cls = appState.classes.find(c => c.id === clsId);
+            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+
+            if (cls.attendedBy && cls.attendedBy[memberId]) {
+                 resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                 setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+                 return;
+            }
+
+            database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
+                .then(() => {
+                    resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                    setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
+                });
+        };
+
+        if (memberBookingsToday.length === 1) {
+            checkInMember(memberBookingsToday[0].id);
+        } else {
+            // Handle multiple bookings
+            const classOptions = memberBookingsToday.map(cls => {
+                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
+                    <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
+                </button>`;
+            }).join('');
+            
+            resultEl.innerHTML = `
+                <div class="p-4 bg-slate-50 rounded-lg">
+                    <h4 class="font-bold text-center mb-2">${_('check_in_select_class_title')}</h4>
+                    <p class="text-sm text-center text-slate-600 mb-4">${_('check_in_select_class_prompt').replace('{name}', member.name)}</p>
+                    <div class="space-y-2">${classOptions}</div>
+                </div>
+            `;
+            
+            resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
+                btn.onclick = () => {
+                    checkInMember(btn.dataset.clsId);
+                };
+            });
+        }
+    }
+
     async function recalculateMonthlyPlans() {
         showMessageBox(_('info_recalculation_started'), 'info', 5000);
 
@@ -6184,9 +6318,17 @@ ${_('whatsapp_closing')}
             const closeButton = e.target.closest('.modal-close-btn');
             if (closeButton) {
                 const modalToClose = closeButton.closest('.modal-backdrop');
-                if (modalToClose) closeModal(modalToClose);
+                if (modalToClose) {
+                    // --- START: ADDED LOGIC ---
+                    if (modalToClose.id === 'checkInModal' && html5QrCode && html5QrCode.isScanning) {
+                        html5QrCode.stop().catch(err => console.error("Failed to stop scanner on close.", err));
+                        html5QrCode = null;
+                    }
+                    // --- END: ADDED LOGIC ---
+                    closeModal(modalToClose);
+                }
                 return;
-            } 
+            }
 
             if (appState.copyMode.active) {
                 let copyActionTaken = false;
