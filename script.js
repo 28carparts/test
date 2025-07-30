@@ -2685,7 +2685,22 @@ ${_('whatsapp_closing')}
                     playSuccessSound();
                     if (navigator.vibrate) navigator.vibrate(200);
 
-                    renderAccountPage(container); // Re-render to update the "My Bookings" list
+                    // --- START OF FIX ---
+                    // 1. REMOVE the line that causes the infinite loop:
+                    // renderAccountPage(container); // This line is now deleted.
+
+                    // 2. ADD surgical DOM update instead:
+                    const bookingRow = container.querySelector(`[data-cls-id="${cls.id}"]`);
+                    if (bookingRow) {
+                        const cancelButton = bookingRow.querySelector('.cancel-booking-btn-dash');
+                        if (cancelButton) {
+                            const completedBadge = document.createElement('span');
+                            completedBadge.className = 'text-sm font-semibold text-green-600';
+                            completedBadge.textContent = _('status_completed');
+                            cancelButton.replaceWith(completedBadge);
+                        }
+                    }
+                    // --- END OF FIX ---
 
                     const resultContainer = document.getElementById('qrCodeResultContainer');
                     if (resultContainer) {
