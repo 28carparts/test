@@ -2617,7 +2617,7 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // --- START: Re-instating the real-time listener logic ---
+        // --- START: THIS IS THE CRITICAL LOGIC THAT WAS MISSING ---
         // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
@@ -2660,7 +2660,7 @@ ${_('whatsapp_closing')}
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
-        // --- END: Re-instating the real-time listener logic ---
+        // --- END: THIS IS THE CRITICAL LOGIC THAT WAS MISSING ---
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
