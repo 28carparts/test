@@ -2638,17 +2638,32 @@ ${_('whatsapp_closing')}
                         navigator.vibrate(200);
                     }
 
-                    // --- START OF FIX: Display the success message on the member's screen ---
-                    const resultContainer = document.getElementById('memberCheckInResultContainer');
-                    if (resultContainer) {
+                    // --- START OF FIX: Display the message inside the QR code container ---
+                    const qrCodeContainer = document.getElementById('qrCodeContainer');
+                    if (qrCodeContainer) {
                         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                         const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
                         
-                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                        // Temporarily replace the QR code with the success message
+                        qrCodeContainer.innerHTML = `
+                            <div class="h-full w-full flex items-center justify-center p-4">
+                                <div class="check-in-result-banner check-in-success">${message}</div>
+                            </div>
+                        `;
                         
-                        // Clear the message after 3 seconds
+                        // After 3 seconds, clear the message and regenerate the QR code
                         setTimeout(() => {
-                            resultContainer.innerHTML = '';
+                            if (qrCodeContainer) { // Check if the element still exists
+                                qrCodeContainer.innerHTML = ''; // Clear the message
+                                new QRCode(qrCodeContainer, { // Re-create the QR code
+                                    text: member.id,
+                                    width: 192,
+                                    height: 192,
+                                    colorDark: "#1e293b",
+                                    colorLight: "#ffffff",
+                                    correctLevel: QRCode.CorrectLevel.H
+                                });
+                            }
                         }, 3000);
                     }
                     // --- END OF FIX ---
@@ -2787,9 +2802,6 @@ ${_('whatsapp_closing')}
                 <div class="md:col-span-2">
                     <div class="card p-6">
                         <h3 class="text-2xl font-bold text-slate-800 mb-4">${_('header_my_bookings')} (${memberBookings.length})</h3>
-                        <!-- START OF FIX: Add a container for the check-in message -->
-                        <div id="memberCheckInResultContainer" class="mb-4"></div>
-                        <!-- END OF FIX -->
                         <div class="space-y-3 max-h-[60vh] overflow-y-auto">
                             ${memberBookings.length === 0 ? `<p class="text-slate-500">${_('no_booking_history')}</p>` :
                             memberBookings.map(cls => {
