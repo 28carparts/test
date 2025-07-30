@@ -407,6 +407,7 @@ const LANG_PACK = {
         'check_in_error_no_booking_found': 'No booking found for today. Please select a class.',
         'check_in_select_class_title': 'Multiple Bookings Found',
         'check_in_select_class_prompt': 'Please select which class to check {name} into:',
+        'check_in_error_all_checked_in': 'Complete! {name} has already checked in for all their classes today.',
 
         // --- CSV Export Labels ---
         'export_header_name': 'Name',
@@ -876,6 +877,7 @@ const LANG_PACK = {
         'check_in_error_no_booking_found': '今天找不到預約。請選擇一堂課。',
         'check_in_select_class_title': '找到多筆預約',
         'check_in_select_class_prompt': '請選擇要為 {name} 簽到哪一堂課：',
+        'check_in_error_all_checked_in': '完成！{name} 今天的所有課程都已簽到。',
 
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
