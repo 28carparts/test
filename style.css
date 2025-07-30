@@ -414,6 +414,9 @@ th.sortable:hover .sort-icon {
 .dial-option.selected::after {
     content: '>';
 }
+.dial-spacer {
+    visibility: hidden;
+}
 .cls-block-restricted {
     opacity: 0.65;
     cursor: not-allowed;
@@ -457,4 +460,43 @@ th.sortable:hover .sort-icon {
 }
 .password-toggle-btn:hover {
     color: #4f46e5; /* indigo-600 */
+}
+
+/* --- QR Code & Check-In Styles --- */
+#qrCodeContainer {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#qrScannerContainer {
+    width: 100%;
+    max-width: 500px;
+    border-radius: 1rem;
+    overflow: hidden;
+    border: 4px solid white;
+}
+
+.check-in-result-banner {
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    margin-top: 1rem;
+}
+.check-in-success {
+    background-color: #dcfce7; /* green-100 */
+    color: #166534; /* green-800 */
+}
+.check-in-error {
+    background-color: #fee2e2; /* red-100 */
+    color: #991b1b; /* red-800 */
+}
+.check-in-notice {
+    background-color: #ffedd5; /* orange-100 */
+    color: #9a3412; /* orange-800 */
 }
