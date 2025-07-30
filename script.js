@@ -2617,13 +2617,10 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // --- START OF FIX: Set up real-time listeners for check-in feedback ---
-
-        // 1. Clean up any old listeners from previous page views
+        // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
 
-        // 2. Find today's classes that the member is booked for but has not yet attended
         const today = getIsoDate(new Date());
         const todaysUnattendedBookings = appState.classes.filter(cls => 
             cls.date === today && 
@@ -2631,28 +2628,38 @@ ${_('whatsapp_closing')}
             !(cls.attendedBy && cls.attendedBy[member.id])
         );
 
-        // 3. For each of those classes, create a specific listener
         todaysUnattendedBookings.forEach(cls => {
             const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
             
             const listener = checkInRef.on('value', (snapshot) => {
-                // 4. When the value becomes 'true', play feedback and clean up this specific listener
                 if (snapshot.val() === true) {
                     playSuccessSound();
                     if (navigator.vibrate) {
                         navigator.vibrate(200);
                     }
-                    // The page will automatically re-render via other listeners,
-                    // showing the "COMPLETED" status.
-                    checkInRef.off('value', listener); // Stop listening to this class
+
+                    // --- START OF FIX: Display the success message on the member's screen ---
+                    const resultContainer = document.getElementById('memberCheckInResultContainer');
+                    if (resultContainer) {
+                        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                        const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
+                        
+                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                        
+                        // Clear the message after 3 seconds
+                        setTimeout(() => {
+                            resultContainer.innerHTML = '';
+                        }, 3000);
+                    }
+                    // --- END OF FIX ---
+
+                    checkInRef.off('value', listener);
                     delete memberCheckInListeners[cls.id];
                 }
             });
 
-            // 5. Store the listener so we can clean it up if the user navigates away
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
-        // --- END OF FIX ---
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
@@ -2780,6 +2787,9 @@ ${_('whatsapp_closing')}
                 <div class="md:col-span-2">
                     <div class="card p-6">
                         <h3 class="text-2xl font-bold text-slate-800 mb-4">${_('header_my_bookings')} (${memberBookings.length})</h3>
+                        <!-- START OF FIX: Add a container for the check-in message -->
+                        <div id="memberCheckInResultContainer" class="mb-4"></div>
+                        <!-- END OF FIX -->
                         <div class="space-y-3 max-h-[60vh] overflow-y-auto">
                             ${memberBookings.length === 0 ? `<p class="text-slate-500">${_('no_booking_history')}</p>` :
                             memberBookings.map(cls => {
