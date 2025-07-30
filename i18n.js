@@ -408,6 +408,8 @@ const LANG_PACK = {
         'check_in_select_class_title': 'Multiple Bookings Found',
         'check_in_select_class_prompt': 'Please select which class to check {name} into:',
         'check_in_error_all_checked_in': 'Complete! {name} has already checked in for all their classes today.',
+        'self_check_in_title': 'Select Your Class',
+        'self_check_in_prompt': 'You have multiple bookings today. Please choose which class to check in for.',
 
         // --- CSV Export Labels ---
         'export_header_name': 'Name',
@@ -878,6 +880,8 @@ const LANG_PACK = {
         'check_in_select_class_title': '找到多筆預約',
         'check_in_select_class_prompt': '請選擇要為 {name} 簽到哪一堂課：',
         'check_in_error_all_checked_in': '完成！{name} 今天的所有課程都已簽到。',
+        'self_check_in_title': '選擇您的課程',
+        'self_check_in_prompt': '您今天有多筆預約，請選擇要簽到的課程。',
 
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
