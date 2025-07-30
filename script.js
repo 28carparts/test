@@ -2638,31 +2638,18 @@ ${_('whatsapp_closing')}
                         navigator.vibrate(200);
                     }
 
-                    // --- START OF FIX: Display the message inside the QR code container ---
-                    const qrCodeContainer = document.getElementById('qrCodeContainer');
-                    if (qrCodeContainer) {
+                    // --- START OF FIX: Target the new container below the QR code ---
+                    const resultContainer = document.getElementById('qrCodeResultContainer');
+                    if (resultContainer) {
                         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                         const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
                         
-                        // Temporarily replace the QR code with the success message
-                        qrCodeContainer.innerHTML = `
-                            <div class="h-full w-full flex items-center justify-center p-4">
-                                <div class="check-in-result-banner check-in-success">${message}</div>
-                            </div>
-                        `;
+                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
                         
-                        // After 3 seconds, clear the message and regenerate the QR code
+                        // Clear the message after 3 seconds
                         setTimeout(() => {
-                            if (qrCodeContainer) { // Check if the element still exists
-                                qrCodeContainer.innerHTML = ''; // Clear the message
-                                new QRCode(qrCodeContainer, { // Re-create the QR code
-                                    text: member.id,
-                                    width: 192,
-                                    height: 192,
-                                    colorDark: "#1e293b",
-                                    colorLight: "#ffffff",
-                                    correctLevel: QRCode.CorrectLevel.H
-                                });
+                            if (resultContainer) { // Check if element still exists
+                               resultContainer.innerHTML = '';
                             }
                         }, 3000);
                     }
@@ -2734,10 +2721,13 @@ ${_('whatsapp_closing')}
                         </div>
                     </div>
 
+                    <!-- START OF FIX: The HTML structure is changed here -->
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
+                        <div id="qrCodeResultContainer" class="mt-4 min-h-[4rem]"></div>
                     </div>
+                    <!-- END OF FIX -->
 
                     ${member.monthlyPlan ? `
                     <div class="card p-6">
