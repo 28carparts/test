@@ -3985,6 +3985,31 @@ ${_('whatsapp_closing')}
         });
     }
 
+    function playSuccessSound() {
+        // Use the modern Web Audio API for a clean, file-free sound
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!audioCtx) return; // Exit if the browser doesn't support it
+
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        // Connect the parts: oscillator -> gain (volume) -> speakers
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // Configure the sound (a short, pleasant beep)
+        oscillator.type = 'sine'; // A smooth, clean tone
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A high 'A' note
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // Start with a low volume
+
+        // Fade the sound out quickly to avoid a harsh "click"
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
+
+        // Play the sound now and stop it after 0.15 seconds
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.15);
+    }
+
     async function handleCheckIn(memberId) {
         const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
         resultEl.innerHTML = `<p class="text-center font-semibold text-slate-500 p-4">${_('check_in_scanning')}</p>`;
@@ -3997,12 +4022,25 @@ ${_('whatsapp_closing')}
         }
 
         const today = getIsoDate(new Date());
-        const memberBookingsToday = appState.classes.filter(cls => 
+        
+        // --- START OF FIX #1: Logic to separate total bookings from unattended bookings ---
+        const allBookingsToday = appState.classes.filter(cls => 
             cls.date === today && cls.bookedBy && cls.bookedBy[memberId]
         );
+        
+        const unattendedBookingsToday = allBookingsToday.filter(cls => 
+            !(cls.attendedBy && cls.attendedBy[memberId])
+        );
+        // --- END OF FIX #1 ---
 
-        if (memberBookingsToday.length === 0) {
+        if (allBookingsToday.length === 0) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_not_booked').replace('{name}', member.name)}</div>`;
+            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            return;
+        }
+        
+        if (unattendedBookingsToday.length === 0) {
+            resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_all_checked_in').replace('{name}', member.name)}</div>`;
             setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
             return;
         }
@@ -4010,7 +4048,8 @@ ${_('whatsapp_closing')}
         const checkInMember = (clsId) => {
             const cls = appState.classes.find(c => c.id === clsId);
             const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-
+            
+            // This check is now redundant because of the new filter above, but we keep it as a safeguard.
             if (cls.attendedBy && cls.attendedBy[memberId]) {
                  resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
                  setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
@@ -4019,16 +4058,23 @@ ${_('whatsapp_closing')}
 
             database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
                 .then(() => {
+                    // --- START OF FIX #2: Add sound and vibration on success ---
+                    playSuccessSound();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200); // Vibrate for 200ms on success
+                    }
+                    // --- END OF FIX #2 ---
+
                     resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
                     setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
                 });
         };
 
-        if (memberBookingsToday.length === 1) {
-            checkInMember(memberBookingsToday[0].id);
+        if (unattendedBookingsToday.length === 1) {
+            checkInMember(unattendedBookingsToday[0].id);
         } else {
-            // Handle multiple bookings
-            const classOptions = memberBookingsToday.map(cls => {
+            // Handle multiple bookings, but now only show the unattended ones
+            const classOptions = unattendedBookingsToday.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                 return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
                     <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
