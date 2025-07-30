@@ -5430,21 +5430,15 @@ ${_('whatsapp_closing')}
         if (periods.length > 0) {
             monthFilter.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString(getLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
             
-            // --- START: NEW LOGIC BLOCK ---
-            const currentMonthPeriod = getIsoDate(new Date()).substring(0, 7); // e.g., "2024-07"
+            const currentMonthPeriod = getIsoDate(new Date()).substring(0, 7);
 
             if (appState.selectedFilters.classesPeriod && periods.includes(appState.selectedFilters.classesPeriod)) {
-                // Priority 1: Use the last selected filter if it's still valid
                 monthFilter.value = appState.selectedFilters.classesPeriod;
             } else if (periods.includes(currentMonthPeriod)) {
-                // Priority 2: Default to the CURRENT month if it exists in the list
                 monthFilter.value = currentMonthPeriod;
             } else {
-                // Priority 3: Fallback to the newest available month
                 monthFilter.value = periods[0];
             }
-            // --- END: NEW LOGIC BLOCK ---
-
         } else {
             monthFilter.innerHTML = '<option value="">No Months Available</option>';
         }
@@ -5532,7 +5526,7 @@ ${_('whatsapp_closing')}
                 lastDate = cls.date;
 
                 return `
-                    <tr class="border-b border-slate-100 ${isNewDay && index > 0 ? 'day-divider' : ''}">
+                    <tr class="border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${isNewDay && index > 0 ? 'day-divider' : ''}" data-date="${cls.date}">
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
                         <td class="p-2">${formatShortDateWithYear(cls.date)}<br><span class="text-sm text-slate-500">${getTimeRange(cls.time, cls.duration)}</span></td>
                         <td class="p-2 font-semibold">${getSportTypeName(sportType)}</td>
@@ -5549,19 +5543,6 @@ ${_('whatsapp_closing')}
             renderPaginationControls(paginationContainer, page, totalPages, filteredClasses.length, itemsPerPage.classes, (newPage) => {
                 appState.pagination.classes.page = newPage;
                 updateClassesTable();
-            });
-
-            tableBody.querySelectorAll('.edit-cls-btn').forEach(btn => {
-                btn.onclick = () => {
-                    const clsToEdit = monthlyClasses.find(c => c.id === btn.dataset.id);
-                    if (clsToEdit) openClsModal(clsToEdit.date, clsToEdit);
-                };
-            });
-            tableBody.querySelectorAll('.delete-cls-btn').forEach(btn => {
-                btn.onclick = () => {
-                    const clsToDelete = monthlyClasses.find(c => c.id === btn.dataset.id);
-                    if (clsToDelete) handleDeleteClsRequest(clsToDelete);
-                };
             });
         };
 
@@ -5606,7 +5587,7 @@ ${_('whatsapp_closing')}
                     if (dateComparison !== 0) return dateComparison;
                     return a.time.localeCompare(b.time);
                 });
-    
+
                 const exportData = classesToExport.map(cls => {
                     const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                     const tutor = appState.tutors.find(t => t.id === cls.tutorId);
@@ -5631,6 +5612,52 @@ ${_('whatsapp_closing')}
                 exportBtn.innerHTML = exportBtnDefaultHTML;
             };
         }
+
+        tableBody.addEventListener('click', (e) => {
+            const editBtn = e.target.closest('.edit-cls-btn');
+            if (editBtn) {
+                const clsToEdit = monthlyClasses.find(c => c.id === editBtn.dataset.id);
+                if (clsToEdit) openClsModal(clsToEdit.date, clsToEdit);
+                return;
+            }
+
+            const deleteBtn = e.target.closest('.delete-cls-btn');
+            if (deleteBtn) {
+                const clsToDelete = monthlyClasses.find(c => c.id === deleteBtn.dataset.id);
+                if (clsToDelete) handleDeleteClsRequest(clsToDelete);
+                return;
+            }
+
+            const row = e.target.closest('tr[data-date]');
+            if (row) {
+                const date = row.dataset.date;
+                if (date) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const targetDate = new Date(date);
+                    targetDate.setHours(0, 0, 0, 0);
+
+                    const daysDifference = Math.round((today - targetDate) / (1000 * 60 * 60 * 24));
+                    const currentLookBack = appState.ownerPastDaysVisible;
+
+                    // --- START OF FIX ---
+                    // Check if the required look-back period is greater than what we currently have.
+                    if (daysDifference > currentLookBack) {
+                        // If it is, update the state to expand the view.
+                        appState.ownerPastDaysVisible = daysDifference + 7;
+
+                        // This is the crucial step: Re-initialize the data listeners.
+                        // This tells Firebase to fetch data for the newly visible past dates.
+                        detachDataListeners();
+                        initDataListeners();
+                    }
+                    // --- END OF FIX ---
+
+                    appState.scrollToDateOnNextLoad = date;
+                    switchPage('schedule');
+                }
+            }
+        });
 
         if (monthFilter.value) {
             fetchAndRenderClasses();
