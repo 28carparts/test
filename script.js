@@ -2617,6 +2617,7 @@ ${_('whatsapp_closing')}
             return;
         };
         
+        // --- START: Re-instating the real-time listener logic ---
         // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
@@ -2638,7 +2639,6 @@ ${_('whatsapp_closing')}
                         navigator.vibrate(200);
                     }
 
-                    // --- START OF FIX: Target the new container below the QR code ---
                     const resultContainer = document.getElementById('qrCodeResultContainer');
                     if (resultContainer) {
                         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
@@ -2646,14 +2646,12 @@ ${_('whatsapp_closing')}
                         
                         resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
                         
-                        // Clear the message after 3 seconds
                         setTimeout(() => {
-                            if (resultContainer) { // Check if element still exists
+                            if (resultContainer) {
                                resultContainer.innerHTML = '';
                             }
                         }, 3000);
                     }
-                    // --- END OF FIX ---
 
                     checkInRef.off('value', listener);
                     delete memberCheckInListeners[cls.id];
@@ -2662,6 +2660,7 @@ ${_('whatsapp_closing')}
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
+        // --- END: Re-instating the real-time listener logic ---
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
@@ -2721,13 +2720,11 @@ ${_('whatsapp_closing')}
                         </div>
                     </div>
 
-                    <!-- START OF FIX: The HTML structure is changed here -->
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
                         <div id="qrCodeResultContainer" class="mt-4 min-h-[4rem]"></div>
                     </div>
-                    <!-- END OF FIX -->
 
                     ${member.monthlyPlan ? `
                     <div class="card p-6">
