@@ -4144,78 +4144,70 @@ ${_('whatsapp_closing')}
             setTimeout(() => { if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume(); }, 2500);
             return;
         }
-        
-        // Case 1: Only ONE unattended booking. Check them in directly.
-        if (unattendedBookingsToday.length === 1) {
-            const clsToCheckIn = unattendedBookingsToday[0];
-            const sportType = appState.sportTypes.find(st => st.id === clsToCheckIn.sportTypeId);
+
+        // This helper function centralizes the logic for marking a member as attended.
+        const checkInMember = (clsId) => {
+            const cls = appState.classes.find(c => c.id === clsId);
+            if (!cls) return;
+
+            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
             
-            database.ref(`/classes/${clsToCheckIn.id}/attendedBy/${memberId}`).set(true)
+            database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
                 .then(() => {
+                    // IMPORTANT: When a choice is made, remove the prompt for the other device.
+                    database.ref(`/checkInPrompts/${memberId}`).remove();
+
                     playSuccessSound();
                     if (navigator.vibrate) navigator.vibrate(200);
 
                     resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                    
                     setTimeout(() => {
                         if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
                         resultEl.innerHTML = '';
                     }, 2500);
                 });
+        };
+        
+        // Case 1: Only ONE unattended booking. Check them in directly.
+        if (unattendedBookingsToday.length === 1) {
+            checkInMember(unattendedBookingsToday[0].id);
         } 
-        // Case 2: MULTIPLE unattended bookings. Prompt the member to choose.
+        // Case 2: MULTIPLE unattended bookings. Prompt BOTH staff and member.
         else {
+            // A. Prepare the choices payload
             const classChoices = unattendedBookingsToday.map(cls => ({
                 id: cls.id,
                 sportTypeId: cls.sportTypeId,
                 time: cls.time,
                 duration: cls.duration
             }));
-            
-            const promptRef = database.ref(`/checkInPrompts/${memberId}`);
-            
-            // Write the prompt for the member's device to see
-            await promptRef.set(classChoices);
 
-            // Show a "waiting" message on the staff's scanner
+            // B. Display the selection UI on the STAFF's scanner modal
+            const classOptionsHTML = classChoices.map(choice => {
+                const sportType = appState.sportTypes.find(st => st.id === choice.sportTypeId);
+                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg transition" data-cls-id="${choice.id}">
+                    <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(choice.time, choice.duration)}
+                </button>`;
+            }).join('');
+            
             resultEl.innerHTML = `
-                <div class="p-4 bg-slate-50 rounded-lg text-center">
-                    <h4 class="font-bold">${_('check_in_select_class_title')}</h4>
-                    <p class="text-slate-600 mt-2">Waiting for ${member.name} to select a class on their device...</p>
+                <div class="p-4 bg-slate-50 rounded-lg">
+                    <h4 class="font-bold text-center mb-2">${_('check_in_select_class_title')}</h4>
+                    <p class="text-sm text-center text-slate-600 mb-4">${_('check_in_select_class_prompt').replace('{name}', member.name)}</p>
+                    <div class="space-y-2">${classOptionsHTML}</div>
                 </div>
             `;
-
-            // Listen for the prompt to be removed (which happens when the member chooses)
-            promptRef.on('value', (snapshot) => {
-                if (!snapshot.exists()) {
-                    promptRef.off(); // Clean up this listener
-
-                    // Find out WHICH class was just checked in to show the correct message
-                    database.ref('/classes').orderByChild('date').equalTo(today).once('value', (todayClassesSnap) => {
-                        let checkedInClsName = "a class";
-                        todayClassesSnap.forEach(clsSnap => {
-                            const cls = {id: clsSnap.key, ...clsSnap.val()};
-                            // Check if this class belongs to the member and was just marked as attended
-                            if (cls.attendedBy && cls.attendedBy[memberId] && classChoices.some(c => c.id === cls.id)) {
-                                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                                 if (sportType) {
-                                     checkedInClsName = getSportTypeName(sportType);
-                                 }
-                            }
-                        });
-                        
-                        playSuccessSound();
-                        if (navigator.vibrate) navigator.vibrate(200);
-
-                        // Show a specific success message on the staff's side
-                        resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', checkedInClsName)}</div>`;
-                    
-                        setTimeout(() => {
-                            if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
-                            resultEl.innerHTML = '';
-                        }, 2500);
-                    });
-                }
+            
+            // C. Add event listeners for the STAFF's UI
+            resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
+                btn.onclick = () => {
+                    checkInMember(btn.dataset.clsId);
+                };
             });
+
+            // D. Simultaneously send the prompt to the MEMBER's device
+            await database.ref(`/checkInPrompts/${memberId}`).set(classChoices);
         }
     }
 
