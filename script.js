@@ -115,7 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
         goToDateModal: document.getElementById('goToDateModal'),
         numericDialModal: document.getElementById('numericDialModal'),
         cancelCopyBtn: document.getElementById('cancelCopyBtn'),
-        checkInModal: document.getElementById('checkInModal')
+        checkInModal: document.getElementById('checkInModal'),
+        memberCheckInSelectModal: document.getElementById('memberCheckInSelectModal')
     };
 
     // --- START: NEW LANGUAGE FUNCTIONS ---
@@ -2659,6 +2660,19 @@ ${_('whatsapp_closing')}
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
+
+        // --- START: NEWLY ADDED LOGIC ---
+        // Listen for a prompt from a staff member's scanner
+        const checkInPromptRef = database.ref(`/checkInPrompts/${member.id}`);
+        const promptListener = checkInPromptRef.on('value', (snapshot) => {
+            if (snapshot.exists()) {
+                const choices = snapshot.val();
+                openMemberCheckInSelectModal(member, choices);
+            }
+        });
+        // Add to the cleanup object to prevent memory leaks on logout
+        memberCheckInListeners[`prompt_${member.id}`] = { ref: checkInPromptRef, listener: promptListener };
+        // --- END: NEWLY ADDED LOGIC ---
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
@@ -2721,9 +2735,7 @@ ${_('whatsapp_closing')}
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
-                        <!-- START OF FIX: The min-h-[4rem] class has been removed -->
                         <div id="qrCodeResultContainer" class="mt-4"></div>
-                        <!-- END OF FIX -->
                     </div>
 
                     ${member.monthlyPlan ? `
@@ -4037,6 +4049,44 @@ ${_('whatsapp_closing')}
         });
     }
 
+    function openMemberCheckInSelectModal(member, choices) {
+        const modal = DOMElements.memberCheckInSelectModal;
+        // Prevent opening the modal if it's already visible
+        if (!modal || !modal.classList.contains('hidden')) return;
+
+        const classOptionsHTML = choices.map(choice => {
+            const sportType = appState.sportTypes.find(st => st.id === choice.sportTypeId);
+            return `<button class="w-full text-left p-4 bg-slate-100 hover:bg-indigo-100 rounded-lg transition-colors" data-cls-id="${choice.id}">
+                <strong class="text-lg text-slate-800">${getSportTypeName(sportType)}</strong>
+                <p class="text-slate-600">${getTimeRange(choice.time, choice.duration)}</p>
+            </button>`;
+        }).join('');
+
+        modal.innerHTML = `
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                <h2 class="text-2xl font-bold text-slate-800 text-center mb-2">${_('check_in_select_class_title')}</h2>
+                <p class="text-slate-500 text-center mb-6">${_('check_in_select_class_prompt').replace('{name}', member.name)}</p>
+                <div class="space-y-3 max-h-[50vh] overflow-y-auto">
+                    ${classOptionsHTML}
+                </div>
+            </div>
+        `;
+
+        openModal(modal);
+
+        modal.querySelectorAll('button[data-cls-id]').forEach(btn => {
+            btn.onclick = () => {
+                const clsId = btn.dataset.clsId;
+                // Mark the class as attended
+                database.ref(`/classes/${clsId}/attendedBy/${member.id}`).set(true);
+                // Clean up the prompt from the database
+                database.ref(`/checkInPrompts/${member.id}`).remove();
+                // Close the selection modal
+                closeModal(modal);
+            };
+        });
+    }
+
     function playSuccessSound() {
         // Use the modern Web Audio API for a clean, file-free sound
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -4069,7 +4119,7 @@ ${_('whatsapp_closing')}
         const member = appState.users.find(u => u.id === memberId);
         if (!member) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('error_member_not_found')}</div>`;
-            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            setTimeout(() => { if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume(); }, 2500);
             return;
         }
 
@@ -4079,68 +4129,92 @@ ${_('whatsapp_closing')}
             cls.date === today && cls.bookedBy && cls.bookedBy[memberId]
         );
         
-        // --- START OF FIX: Added the .sort() method here ---
         const unattendedBookingsToday = allBookingsToday
             .filter(cls => !(cls.attendedBy && cls.attendedBy[memberId]))
-            .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time, e.g., "09:00" before "18:00"
-        // --- END OF FIX ---
+            .sort((a, b) => a.time.localeCompare(b.time));
 
         if (allBookingsToday.length === 0) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_not_booked').replace('{name}', member.name)}</div>`;
-            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            setTimeout(() => { if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume(); }, 2500);
             return;
         }
         
         if (unattendedBookingsToday.length === 0) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_all_checked_in').replace('{name}', member.name)}</div>`;
-            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            setTimeout(() => { if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume(); }, 2500);
             return;
         }
-
-        const checkInMember = (clsId) => {
-            const cls = appState.classes.find(c => c.id === clsId);
-            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+        
+        // Case 1: Only ONE unattended booking. Check them in directly.
+        if (unattendedBookingsToday.length === 1) {
+            const clsToCheckIn = unattendedBookingsToday[0];
+            const sportType = appState.sportTypes.find(st => st.id === clsToCheckIn.sportTypeId);
             
-            if (cls.attendedBy && cls.attendedBy[memberId]) {
-                 resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
-                 setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
-                 return;
-            }
-
-            database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
+            database.ref(`/classes/${clsToCheckIn.id}/attendedBy/${memberId}`).set(true)
                 .then(() => {
                     playSuccessSound();
-                    if (navigator.vibrate) {
-                        navigator.vibrate(200);
-                    }
+                    if (navigator.vibrate) navigator.vibrate(200);
 
                     resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
-                    setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
+                    setTimeout(() => {
+                        if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
+                        resultEl.innerHTML = '';
+                    }, 2500);
                 });
-        };
-
-        if (unattendedBookingsToday.length === 1) {
-            checkInMember(unattendedBookingsToday[0].id);
-        } else {
-            const classOptions = unattendedBookingsToday.map(cls => {
-                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
-                    <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
-                </button>`;
-            }).join('');
+        } 
+        // Case 2: MULTIPLE unattended bookings. Prompt the member to choose.
+        else {
+            const classChoices = unattendedBookingsToday.map(cls => ({
+                id: cls.id,
+                sportTypeId: cls.sportTypeId,
+                time: cls.time,
+                duration: cls.duration
+            }));
             
+            const promptRef = database.ref(`/checkInPrompts/${memberId}`);
+            
+            // Write the prompt for the member's device to see
+            await promptRef.set(classChoices);
+
+            // Show a "waiting" message on the staff's scanner
             resultEl.innerHTML = `
-                <div class="p-4 bg-slate-50 rounded-lg">
-                    <h4 class="font-bold text-center mb-2">${_('check_in_select_class_title')}</h4>
-                    <p class="text-sm text-center text-slate-600 mb-4">${_('check_in_select_class_prompt').replace('{name}', member.name)}</p>
-                    <div class="space-y-2">${classOptions}</div>
+                <div class="p-4 bg-slate-50 rounded-lg text-center">
+                    <h4 class="font-bold">${_('check_in_select_class_title')}</h4>
+                    <p class="text-slate-600 mt-2">Waiting for ${member.name} to select a class on their device...</p>
                 </div>
             `;
-            
-            resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
-                btn.onclick = () => {
-                    checkInMember(btn.dataset.clsId);
-                };
+
+            // Listen for the prompt to be removed (which happens when the member chooses)
+            promptRef.on('value', (snapshot) => {
+                if (!snapshot.exists()) {
+                    promptRef.off(); // Clean up this listener
+
+                    // Find out WHICH class was just checked in to show the correct message
+                    database.ref('/classes').orderByChild('date').equalTo(today).once('value', (todayClassesSnap) => {
+                        let checkedInClsName = "a class";
+                        todayClassesSnap.forEach(clsSnap => {
+                            const cls = {id: clsSnap.key, ...clsSnap.val()};
+                            // Check if this class belongs to the member and was just marked as attended
+                            if (cls.attendedBy && cls.attendedBy[memberId] && classChoices.some(c => c.id === cls.id)) {
+                                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                                 if (sportType) {
+                                     checkedInClsName = getSportTypeName(sportType);
+                                 }
+                            }
+                        });
+                        
+                        playSuccessSound();
+                        if (navigator.vibrate) navigator.vibrate(200);
+
+                        // Show a specific success message on the staff's side
+                        resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', checkedInClsName)}</div>`;
+                    
+                        setTimeout(() => {
+                            if (html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
+                            resultEl.innerHTML = '';
+                        }, 2500);
+                    });
+                }
             });
         }
     }
