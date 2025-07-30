@@ -2617,7 +2617,6 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // --- START: THIS IS THE CRITICAL LOGIC THAT WAS MISSING ---
         // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
@@ -2660,7 +2659,6 @@ ${_('whatsapp_closing')}
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
-        // --- END: THIS IS THE CRITICAL LOGIC THAT WAS MISSING ---
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
@@ -2723,7 +2721,9 @@ ${_('whatsapp_closing')}
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
-                        <div id="qrCodeResultContainer" class="mt-4 min-h-[4rem]"></div>
+                        <!-- START OF FIX: The min-h-[4rem] class has been removed -->
+                        <div id="qrCodeResultContainer" class="mt-4"></div>
+                        <!-- END OF FIX -->
                     </div>
 
                     ${member.monthlyPlan ? `
