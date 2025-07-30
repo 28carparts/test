@@ -82,8 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
         classesSort: {
             key: 'date',
             direction: 'asc'
-        },
-        checkInPromptListener: null
+        }
     };
     let emblaApi = null;
     let navEmblaApi = null;
@@ -116,8 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
         goToDateModal: document.getElementById('goToDateModal'),
         numericDialModal: document.getElementById('numericDialModal'),
         cancelCopyBtn: document.getElementById('cancelCopyBtn'),
-        checkInModal: document.getElementById('checkInModal'),
-        selfCheckInModal: document.getElementById('selfCheckInModal')
+        checkInModal: document.getElementById('checkInModal')
     };
 
     // --- START: NEW LANGUAGE FUNCTIONS ---
@@ -2622,60 +2620,13 @@ ${_('whatsapp_closing')}
         // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
-        if (appState.checkInPromptListener) {
-            appState.checkInPromptListener.ref.off('value', appState.checkInPromptListener.listener);
-            appState.checkInPromptListener = null;
-        }
-
-        // --- NEW LISTENER for the check-in signal ---
-        const checkInPromptRef = database.ref(`/users/${member.id}/checkInPrompt`);
-        const promptListener = checkInPromptRef.on('value', (snapshot) => {
-            const promptData = snapshot.val();
-            const selfModal = DOMElements.selfCheckInModal;
-
-            if (promptData && promptData.status === 'pending') {
-                const classesToChooseFrom = promptData.classes
-                    .map(clsId => appState.classes.find(c => c.id === clsId))
-                    .filter(Boolean) // Filter out any classes that might not exist
-                    .sort((a,b) => a.time.localeCompare(b.time));
-
-                const classOptionsHTML = classesToChooseFrom.map(cls => {
-                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                    return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg transition" data-cls-id="${cls.id}">
-                        <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
-                    </button>`;
-                }).join('');
-                
-                selfModal.innerHTML = `
-                    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
-                        <div class="text-center">
-                            <h2 class="text-2xl font-bold text-slate-800 mb-2">${_('self_check_in_title')}</h2>
-                            <p class="text-slate-500 mb-6">${_('self_check_in_prompt')}</p>
-                        </div>
-                        <div class="space-y-2">${classOptionsHTML}</div>
-                    </div>
-                `;
-
-                selfModal.querySelectorAll('button[data-cls-id]').forEach(btn => {
-                    btn.onclick = () => {
-                        checkInMember(btn.dataset.clsId, member.id);
-                        // The modal will close automatically when the prompt is removed from DB.
-                    };
-                });
-                openModal(selfModal);
-            } else {
-                // If prompt is cleared or doesn't exist, ensure the modal is closed.
-                if (!selfModal.classList.contains('hidden')) {
-                    closeModal(selfModal);
-                }
-            }
-        });
-        // Store the listener so we can detach it later
-        appState.checkInPromptListener = { ref: checkInPromptRef, listener: promptListener };
-
 
         const today = getIsoDate(new Date());
-        const todaysUnattendedBookings = appState.classes.filter(cls => cls.date === today && cls.bookedBy && cls.bookedBy[member.id] && !(cls.attendedBy && cls.attendedBy[member.id])).sort((a, b) => a.time.localeCompare(b.time));
+        const todaysUnattendedBookings = appState.classes.filter(cls => 
+            cls.date === today && 
+            cls.bookedBy && cls.bookedBy[member.id] &&
+            !(cls.attendedBy && cls.attendedBy[member.id])
+        );
 
         todaysUnattendedBookings.forEach(cls => {
             const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
@@ -2683,41 +2634,42 @@ ${_('whatsapp_closing')}
             const listener = checkInRef.on('value', (snapshot) => {
                 if (snapshot.val() === true) {
                     playSuccessSound();
-                    if (navigator.vibrate) navigator.vibrate(200);
-
-                    // --- START OF FIX ---
-                    // 1. REMOVE the line that causes the infinite loop:
-                    // renderAccountPage(container); // This line is now deleted.
-
-                    // 2. ADD surgical DOM update instead:
-                    const bookingRow = container.querySelector(`[data-cls-id="${cls.id}"]`);
-                    if (bookingRow) {
-                        const cancelButton = bookingRow.querySelector('.cancel-booking-btn-dash');
-                        if (cancelButton) {
-                            const completedBadge = document.createElement('span');
-                            completedBadge.className = 'text-sm font-semibold text-green-600';
-                            completedBadge.textContent = _('status_completed');
-                            cancelButton.replaceWith(completedBadge);
-                        }
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
                     }
-                    // --- END OF FIX ---
 
                     const resultContainer = document.getElementById('qrCodeResultContainer');
                     if (resultContainer) {
                         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                         const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
+                        
                         resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
-                        setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
+                        
+                        setTimeout(() => {
+                            if (resultContainer) {
+                               resultContainer.innerHTML = '';
+                            }
+                        }, 3000);
                     }
 
                     checkInRef.off('value', listener);
                     delete memberCheckInListeners[cls.id];
                 }
             });
+
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
         });
         
-        const memberBookings = appState.classes.filter(c => c.bookedBy && c.bookedBy[member.id]).sort((a, b) => { const dateComparison = b.date.localeCompare(a.date); if (dateComparison !== 0) return dateComparison; return a.time.localeCompare(b.time); });
+        const memberBookings = appState.classes
+            .filter(c => c.bookedBy && c.bookedBy[member.id])
+            .sort((a, b) => {
+                const dateComparison = b.date.localeCompare(a.date);
+                if (dateComparison !== 0) {
+                    return dateComparison;
+                }
+                return a.time.localeCompare(b.time);
+            });
+
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
         const paymentHistory = firebaseObjectToArray(member.paymentHistory);
 
@@ -2729,14 +2681,28 @@ ${_('whatsapp_closing')}
                         <p class="text-slate-500">${member.email}</p>
                         <hr class="my-6">
                         <div class="space-y-4 text-left">
-                            ${member.monthlyPlan ? `
+                            ${member.monthlyPlan 
+                                ? `
                                    <div><p data-lang-key="label_join_date" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
                                    <div><p data-lang-key="label_plan" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800"><span class="bg-green-100 text-green-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span></p></div>
-                                   <div><p data-lang-key="label_renews_every_month" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${(() => { if (!member.planStartDate) return _('label_na'); const day = parseInt(member.planStartDate.split('-')[2]); const suffix = getOrdinalSuffix(day); return _('label_on_the_day').replace('{day}', day).replace('{suffix}', suffix); })()}</p></div>
-                                   <div><p data-lang-key="label_next_payment_due" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</p></div>` : `
+                                   <div><p data-lang-key="label_renews_every_month" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${
+                                        (() => {
+                                            if (!member.planStartDate) return _('label_na');
+                                            const day = parseInt(member.planStartDate.split('-')[2]);
+                                            const suffix = getOrdinalSuffix(day);
+                                            return _('label_on_the_day')
+                                                .replace('{day}', day)
+                                                .replace('{suffix}', suffix);
+                                        })()
+                                   }</p></div>
+                                   <div><p data-lang-key="label_next_payment_due" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</p></div>`
+                                : `
                                    <div><p data-lang-key="label_join_date" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.joinDate)}</p></div>
-                                   <div><p data-lang-key="label_credits_remaining" class="text-sm text-slate-500"></p><p class="font-bold text-3xl text-indigo-600"><span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span></p></div>
-                                   <div><p data-lang-key="label_credits_expire" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.expiryDate)}</p></div>`}
+                                   <div><p data-lang-key="label_credits_remaining" class="text-sm text-slate-500"></p><p class="font-bold text-3xl text-indigo-600">
+                                       <span class="bg-yellow-100 text-yellow-800 text-base font-medium me-2 px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span>
+                                   </p></div>
+                                   <div><p data-lang-key="label_credits_expire" class="text-sm text-slate-500"></p><p class="font-bold text-lg text-slate-800">${formatShortDateWithYear(member.expiryDate)}</p></div>`
+                            }
                         </div>
                          <div class="mt-8 space-y-4">
                             <button id="editProfileBtn" data-lang-key="btn_edit_profile" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition"></button>
@@ -2745,33 +2711,145 @@ ${_('whatsapp_closing')}
                         <hr class="my-6">
                         <div class="flex justify-between items-center">
                             <h4 data-lang-key="label_language" class="font-semibold text-slate-600"></h4>
-                            <div class="text-base"><a href="#" class="lang-selector font-semibold" data-lang="zh-TW" data-lang-key="lang_selector_zh"></a> | <a href="#" class="lang-selector font-semibold" data-lang="en" data-lang-key="lang_selector_en"></a></div>
+                            <div class="text-base">
+                                <a href="#" class="lang-selector font-semibold" data-lang="zh-TW" data-lang-key="lang_selector_zh"></a> | 
+                                <a href="#" class="lang-selector font-semibold" data-lang="en" data-lang-key="lang_selector_en"></a>
+                            </div>
                         </div>
                     </div>
+
                     <div class="card p-6 text-center">
                         <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
                         <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
+                        <!-- START OF FIX: The min-h-[4rem] class has been removed -->
                         <div id="qrCodeResultContainer" class="mt-4"></div>
+                        <!-- END OF FIX -->
                     </div>
-                    ${member.monthlyPlan ? `<div class="card p-6"><h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_payment_history')}</h4><div class="space-y-2 text-sm max-h-40 overflow-y-auto">${paymentHistory.length > 0 ? paymentHistory.filter(p => p.status !== 'deleted').sort((a,b) => new Date(b.date) - new Date(a.date)).map(p => { const monthUnit = p.monthsPaid === 1 ? _('label_month_singular') : _('label_month_plural'); const entryText = _('history_payment_entry').replace('{amount}', formatCurrency(p.amount)).replace('{quantity}', p.monthsPaid).replace('{unit}', monthUnit); let auditMessage = ''; if (p.lastModifiedBy) { const actionKey = (p.date === p.lastModifiedAt ? 'audit_added_by' : 'audit_edited_by'); auditMessage = `<span class="text-xs text-slate-500 mt-1">${_(actionKey).replace('{name}', p.lastModifiedBy).replace('{date}', formatShortDateWithYear(p.lastModifiedAt))}</span>`; } return `<div class="text-slate-600 bg-slate-50 p-2 rounded-md"><div><strong>${formatShortDateWithYear(p.date)}:</strong> ${entryText}</div>${auditMessage}</div>`; }).join('') : `<p class="text-sm text-slate-500 text-center">${_('no_payment_history')}</p>`}</div></div>` : `<div class="card p-6"><h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_purchase_history')}</h4><div class="space-y-2 text-sm max-h-40 overflow-y-auto">${purchaseHistory.length > 0 ? purchaseHistory.filter(p => p.status !== 'deleted').sort((a,b) => new Date(b.date) - new Date(a.date)).map(p => { const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural'); const entryText = _('history_purchase_entry').replace('{amount}', formatCurrency(p.amount)).replace('{quantity}', p.credits).replace('{unit}', creditsUnit); let auditMessage = ''; if (p.lastModifiedBy) { const actionKey = (p.date === p.lastModifiedAt ? 'audit_added_by' : 'audit_edited_by'); auditMessage = `<span class="text-xs text-slate-500 mt-1">${_(actionKey).replace('{name}', p.lastModifiedBy).replace('{date}', formatShortDateWithYear(p.lastModifiedAt))}</span>`; } return `<div class="text-slate-600 bg-slate-50 p-2 rounded-md"><div><strong>${formatShortDateWithYear(p.date)}:</strong> ${entryText}</div>${auditMessage}</div>`; }).join('') : `<p class="text-sm text-slate-500 text-center">${_('no_purchase_history')}</p>`}</div></div>`}
+
+                    ${member.monthlyPlan ? `
+                    <div class="card p-6">
+                        <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_payment_history')}</h4>
+                        <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
+                            ${paymentHistory.length > 0
+                                ? paymentHistory
+                                    .filter(p => p.status !== 'deleted')
+                                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                                    .map(p => {
+                                        const monthUnit = p.monthsPaid === 1 ? _('label_month_singular') : _('label_month_plural');
+                                        const entryText = _('history_payment_entry')
+                                            .replace('{amount}', formatCurrency(p.amount))
+                                            .replace('{quantity}', p.monthsPaid)
+                                            .replace('{unit}', monthUnit);
+                                        let auditMessage = '';
+                                        if (p.lastModifiedBy) {
+                                            const actionKey = (p.date === p.lastModifiedAt ? 'audit_added_by' : 'audit_edited_by');
+                                            auditMessage = `<span class="text-xs text-slate-500 mt-1">${_(actionKey).replace('{name}', p.lastModifiedBy).replace('{date}', formatShortDateWithYear(p.lastModifiedAt))}</span>`;
+                                        }
+                                        return `
+                                            <div class="text-slate-600 bg-slate-50 p-2 rounded-md">
+                                                <div><strong>${formatShortDateWithYear(p.date)}:</strong> ${entryText}</div>
+                                                ${auditMessage}
+                                            </div>
+                                        `;
+                                    }).join('')
+                                : `<p class="text-sm text-slate-500 text-center">${_('no_payment_history')}</p>`
+                            }
+                        </div>
+                    </div>` : `
+                    <div class="card p-6">
+                        <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_purchase_history')}</h4>
+                        <div class="space-y-2 text-sm max-h-40 overflow-y-auto">
+                            ${purchaseHistory.length > 0 
+                                ? purchaseHistory
+                                    .filter(p => p.status !== 'deleted')
+                                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                                    .map(p => {
+                                        const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural');
+                                        const entryText = _('history_purchase_entry')
+                                            .replace('{amount}', formatCurrency(p.amount))
+                                            .replace('{quantity}', p.credits)
+                                            .replace('{unit}', creditsUnit);
+                                        let auditMessage = '';
+                                        if (p.lastModifiedBy) {
+                                            const actionKey = (p.date === p.lastModifiedAt ? 'audit_added_by' : 'audit_edited_by');
+                                            auditMessage = `<span class="text-xs text-slate-500 mt-1">${_(actionKey).replace('{name}', p.lastModifiedBy).replace('{date}', formatShortDateWithYear(p.lastModifiedAt))}</span>`;
+                                        }
+                                        return `
+                                            <div class="text-slate-600 bg-slate-50 p-2 rounded-md">
+                                                <div><strong>${formatShortDateWithYear(p.date)}:</strong> ${entryText}</div>
+                                                ${auditMessage}
+                                            </div>
+                                        `;
+                                    }).join('') 
+                                : `<p class="text-sm text-slate-500 text-center">${_('no_purchase_history')}</p>`
+                            }
+                        </div>
+                    </div>`}
                 </div>
                 <div class="md:col-span-2">
-                    <div class="card p-6"><h3 class="text-2xl font-bold text-slate-800 mb-4">${_('header_my_bookings')} (${memberBookings.length})</h3><div class="space-y-3 max-h-[60vh] overflow-y-auto">${memberBookings.length === 0 ? `<p class="text-slate-500">${_('no_booking_history')}</p>` : memberBookings.map(cls => { const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId); const isAttended = cls.attendedBy && cls.attendedBy[member.id]; const isHighlighted = cls.id === appState.highlightBookingId; const bookingDetails = cls.bookedBy[member.id]; const creditsUsed = bookingDetails.creditsPaid; return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-cls-id="${cls.id}"><div><p class="font-bold text-slate-800">${getSportTypeName(sportType)}</p><p class="text-sm text-slate-500">${_('template_datetime_at').replace('{date}', formatShortDateWithYear(cls.date)).replace('{time}', getTimeRange(cls.time, cls.duration))}</p><p class="text-xs text-slate-600">${_('label_credits_used')} ${creditsUsed}</p><p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p></div>${isAttended ? `<span class="text-sm font-semibold text-green-600">${_('status_completed')}</span>` : `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-cls-id="${cls.id}">${_('btn_cancel')}</button>`}</div>` }).join('')}</div></div>
+                    <div class="card p-6">
+                        <h3 class="text-2xl font-bold text-slate-800 mb-4">${_('header_my_bookings')} (${memberBookings.length})</h3>
+                        <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                            ${memberBookings.length === 0 ? `<p class="text-slate-500">${_('no_booking_history')}</p>` :
+                            memberBookings.map(cls => {
+                                const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                                const isAttended = cls.attendedBy && cls.attendedBy[member.id];
+                                const isHighlighted = cls.id === appState.highlightBookingId;
+                                const bookingDetails = cls.bookedBy[member.id];
+                                const creditsUsed = bookingDetails.creditsPaid;
+                                return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-cls-id="${cls.id}">
+                                    <div>
+                                        <p class="font-bold text-slate-800">${getSportTypeName(sportType)}</p>
+                                        <p class="text-sm text-slate-500">${_('template_datetime_at').replace('{date}', formatShortDateWithYear(cls.date)).replace('{time}', getTimeRange(cls.time, cls.duration))}</p>
+                                        <p class="text-xs text-slate-600">${_('label_credits_used')} ${creditsUsed}</p>
+                                        <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
+                                    </div>
+                                    ${isAttended 
+                                        ? `<span class="text-sm font-semibold text-green-600">${_('status_completed')}</span>`
+                                        : `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-cls-id="${cls.id}">${_('btn_cancel')}</button>`
+                                    }
+                                </div>`
+                            }).join('')}
+                        </div>
+                    </div>
                 </div>
             </div>`;
 
         const qrCodeContainer = container.querySelector('#qrCodeContainer');
         if (qrCodeContainer) {
             qrCodeContainer.innerHTML = '';
-            new QRCode(qrCodeContainer, { text: member.id, width: 192, height: 192, colorDark: "#1e293b", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+            new QRCode(qrCodeContainer, {
+                text: member.id,
+                width: 192,
+                height: 192,
+                colorDark: "#1e293b",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
         }
 
         setupLanguageToggles();
         updateUIText();
         setLanguage(appState.currentLanguage, false);
 
-        container.querySelectorAll('.cancel-booking-btn-dash').forEach(btn => { btn.onclick = () => { const cls = appState.classes.find(c => c.id === btn.dataset.clsId); handleCancelBooking(cls); }; });
-        if (appState.highlightBookingId) { const elementToScrollTo = container.querySelector(`[data-cls-id="${appState.highlightBookingId}"]`); if (elementToScrollTo) { elementToScrollTo.scrollIntoView({ behavior: 'smooth', block: 'center' }); } appState.highlightBookingId = null; }
+        container.querySelectorAll('.cancel-booking-btn-dash').forEach(btn => {
+            btn.onclick = () => {
+                const cls = appState.classes.find(c => c.id === btn.dataset.clsId);
+                handleCancelBooking(cls);
+            };
+        });
+
+        if (appState.highlightBookingId) {
+            const elementToScrollTo = container.querySelector(`[data-cls-id="${appState.highlightBookingId}"]`);
+            if (elementToScrollTo) {
+                elementToScrollTo.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+            appState.highlightBookingId = null;
+        }
+
         container.querySelector('#editProfileBtn').onclick = () => openEditMemberAccountModal(member);
         container.querySelector('#changePasswordBtn').onclick = () => openChangePasswordModal();
     }
@@ -3984,19 +4062,6 @@ ${_('whatsapp_closing')}
         oscillator.stop(audioCtx.currentTime + 0.15);
     }
 
-    function checkInMember(clsId, memberId) {
-        const cls = appState.classes.find(c => c.id === clsId);
-        if (!cls) return;
-
-        // Perform the check-in
-        database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
-            .then(() => {
-                // After success, clear the prompt signal from the database for this member.
-                // This tells all devices (staff and member) that a choice has been made.
-                database.ref(`/users/${memberId}/checkInPrompt`).remove();
-            });
-    }
-
     async function handleCheckIn(memberId) {
         const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
         resultEl.innerHTML = `<p class="text-center font-semibold text-slate-500 p-4">${_('check_in_scanning')}</p>`;
@@ -4009,11 +4074,16 @@ ${_('whatsapp_closing')}
         }
 
         const today = getIsoDate(new Date());
-        const allBookingsToday = appState.classes.filter(cls => cls.date === today && cls.bookedBy && cls.bookedBy[memberId]);
-        const unattendedBookingsToday = allBookingsToday.filter(cls => !(cls.attendedBy && cls.attendedBy[memberId])).sort((a, b) => a.time.localeCompare(b.time));
-
-        // Clear any previous prompt for this member before proceeding
-        await database.ref(`/users/${memberId}/checkInPrompt`).remove();
+        
+        const allBookingsToday = appState.classes.filter(cls => 
+            cls.date === today && cls.bookedBy && cls.bookedBy[memberId]
+        );
+        
+        // --- START OF FIX: Added the .sort() method here ---
+        const unattendedBookingsToday = allBookingsToday
+            .filter(cls => !(cls.attendedBy && cls.attendedBy[memberId]))
+            .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time, e.g., "09:00" before "18:00"
+        // --- END OF FIX ---
 
         if (allBookingsToday.length === 0) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_not_booked').replace('{name}', member.name)}</div>`;
@@ -4027,20 +4097,34 @@ ${_('whatsapp_closing')}
             return;
         }
 
-        if (unattendedBookingsToday.length === 1) {
-            // Only one class, check-in is automatic. No signal needed.
-            const clsToCheckIn = unattendedBookingsToday[0];
-            checkInMember(clsToCheckIn.id, memberId);
+        const checkInMember = (clsId) => {
+            const cls = appState.classes.find(c => c.id === clsId);
+            const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+            
+            if (cls.attendedBy && cls.attendedBy[memberId]) {
+                 resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                 setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+                 return;
+            }
 
-            // Provide immediate feedback on the staff's screen
-            const sportType = appState.sportTypes.find(st => st.id === clsToCheckIn.sportTypeId);
-            resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
-            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = ''; }, 2500);
+            database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
+                .then(() => {
+                    playSuccessSound();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+
+                    resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                    setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
+                });
+        };
+
+        if (unattendedBookingsToday.length === 1) {
+            checkInMember(unattendedBookingsToday[0].id);
         } else {
-            // Multiple classes. Show prompt on staff screen AND send signal to member.
             const classOptions = unattendedBookingsToday.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg transition" data-cls-id="${cls.id}">
+                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
                     <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
                 </button>`;
             }).join('');
@@ -4055,20 +4139,9 @@ ${_('whatsapp_closing')}
             
             resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
                 btn.onclick = () => {
-                    checkInMember(btn.dataset.clsId, memberId);
-                    // After staff makes a choice, clear the modal and resume scanning
-                    resultEl.innerHTML = '';
-                    if (html5QrCode) html5QrCode.resume();
+                    checkInMember(btn.dataset.clsId);
                 };
             });
-            
-            // --- THIS IS THE NEW SIGNAL ---
-            const promptData = {
-                status: 'pending',
-                timestamp: Date.now(),
-                classes: unattendedBookingsToday.map(c => c.id) // Send class IDs to member
-            };
-            await database.ref(`/users/${memberId}/checkInPrompt`).set(promptData);
         }
     }
 
@@ -6184,11 +6257,6 @@ ${_('whatsapp_closing')}
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
         // --- END OF FIX ---
-
-        if (appState.checkInPromptListener) {
-            appState.checkInPromptListener.ref.off('value', appState.checkInPromptListener.listener);
-            appState.checkInPromptListener = null;
-        }        
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
             if (key !== 'classes') { 
