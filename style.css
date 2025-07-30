@@ -479,6 +479,13 @@ th.sortable:hover .sort-icon {
     border-radius: 1rem;
     overflow: hidden;
     border: 4px solid white;
+    aspect-ratio: 1 / 1;
+}
+
+#qrScannerContainer video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .check-in-result-banner {
