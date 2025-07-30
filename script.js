@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let navEmblaApi = null;
     let onConfirmCallback = null;
     let dataListeners = {}; // To hold references to our listeners
+    let memberCheckInListeners = {};
     let activeClassesRef = null;
 
     // --- DOM Element Cache ---
@@ -2616,22 +2617,52 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // --- START OF FIX: Multi-level Sorting Logic ---
+        // --- START OF FIX: Set up real-time listeners for check-in feedback ---
+
+        // 1. Clean up any old listeners from previous page views
+        Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
+        memberCheckInListeners = {};
+
+        // 2. Find today's classes that the member is booked for but has not yet attended
+        const today = getIsoDate(new Date());
+        const todaysUnattendedBookings = appState.classes.filter(cls => 
+            cls.date === today && 
+            cls.bookedBy && cls.bookedBy[member.id] &&
+            !(cls.attendedBy && cls.attendedBy[member.id])
+        );
+
+        // 3. For each of those classes, create a specific listener
+        todaysUnattendedBookings.forEach(cls => {
+            const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
+            
+            const listener = checkInRef.on('value', (snapshot) => {
+                // 4. When the value becomes 'true', play feedback and clean up this specific listener
+                if (snapshot.val() === true) {
+                    playSuccessSound();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+                    // The page will automatically re-render via other listeners,
+                    // showing the "COMPLETED" status.
+                    checkInRef.off('value', listener); // Stop listening to this class
+                    delete memberCheckInListeners[cls.id];
+                }
+            });
+
+            // 5. Store the listener so we can clean it up if the user navigates away
+            memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
+        });
+        // --- END OF FIX ---
+        
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
             .sort((a, b) => {
-                // Primary Sort: Compare dates in descending order
                 const dateComparison = b.date.localeCompare(a.date);
-                
-                // If the dates are different, sort by date
                 if (dateComparison !== 0) {
                     return dateComparison;
                 }
-                
-                // Secondary Sort: If dates are the same, compare times in ascending order
                 return a.time.localeCompare(b.time);
             });
-        // --- END OF FIX ---
 
         const purchaseHistory = firebaseObjectToArray(member.purchaseHistory);
         const paymentHistory = firebaseObjectToArray(member.paymentHistory);
@@ -4035,15 +4066,15 @@ ${_('whatsapp_closing')}
 
         const today = getIsoDate(new Date());
         
-        // --- START OF FIX #1: Logic to separate total bookings from unattended bookings ---
         const allBookingsToday = appState.classes.filter(cls => 
             cls.date === today && cls.bookedBy && cls.bookedBy[memberId]
         );
         
-        const unattendedBookingsToday = allBookingsToday.filter(cls => 
-            !(cls.attendedBy && cls.attendedBy[memberId])
-        );
-        // --- END OF FIX #1 ---
+        // --- START OF FIX: Added the .sort() method here ---
+        const unattendedBookingsToday = allBookingsToday
+            .filter(cls => !(cls.attendedBy && cls.attendedBy[memberId]))
+            .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time, e.g., "09:00" before "18:00"
+        // --- END OF FIX ---
 
         if (allBookingsToday.length === 0) {
             resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_not_booked').replace('{name}', member.name)}</div>`;
@@ -4061,7 +4092,6 @@ ${_('whatsapp_closing')}
             const cls = appState.classes.find(c => c.id === clsId);
             const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
             
-            // This check is now redundant because of the new filter above, but we keep it as a safeguard.
             if (cls.attendedBy && cls.attendedBy[memberId]) {
                  resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
                  setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
@@ -4070,12 +4100,10 @@ ${_('whatsapp_closing')}
 
             database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
                 .then(() => {
-                    // --- START OF FIX #2: Add sound and vibration on success ---
                     playSuccessSound();
                     if (navigator.vibrate) {
-                        navigator.vibrate(200); // Vibrate for 200ms on success
+                        navigator.vibrate(200);
                     }
-                    // --- END OF FIX #2 ---
 
                     resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
                     setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
@@ -4085,7 +4113,6 @@ ${_('whatsapp_closing')}
         if (unattendedBookingsToday.length === 1) {
             checkInMember(unattendedBookingsToday[0].id);
         } else {
-            // Handle multiple bookings, but now only show the unattended ones
             const classOptions = unattendedBookingsToday.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                 return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
@@ -5886,10 +5913,20 @@ ${_('whatsapp_closing')}
                 const clsPromises = bookedClsIds.map(clsId => database.ref(`/classes/${clsId}`).once('value'));
                 const clsSnapshots = await Promise.all(clsPromises);
 
+                // --- START OF FIX: Applying multi-level sorting logic ---
                 memberBookings = clsSnapshots
                     .map(snap => ({ id: snap.key, ...snap.val() }))
                     .filter(cls => cls.date)
-                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+                    .sort((a, b) => {
+                        // Primary Sort: By date in descending order (newest day first)
+                        const dateComparison = b.date.localeCompare(a.date);
+                        if (dateComparison !== 0) {
+                            return dateComparison;
+                        }
+                        // Secondary Sort: If dates are the same, sort by time in ascending order (earliest class first)
+                        return a.time.localeCompare(b.time);
+                    });
+                // --- END OF FIX ---
             }
             
             const historyListHTML = memberBookings.length === 0 ? `<p class="text-slate-500 text-center p-8">${_('no_booking_history')}</p>` :
@@ -6200,17 +6237,19 @@ ${_('whatsapp_closing')}
         initialFetchAndRender();
     };
     // --- END: NEW MEMBER-SPECIFIC LISTENER FUNCTION ---
-    
+
     const detachDataListeners = () => {
-        // --- START: MODIFIED DETACH LOGIC ---
         if (activeClassesRef) {
             activeClassesRef.off();
         }
         activeClassesRef = null;
-        // --- END: MODIFIED DETACH LOGIC ---
+
+        // --- START OF FIX: Clean up member-specific check-in listeners ---
+        Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
+        memberCheckInListeners = {};
+        // --- END OF FIX ---
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
-            // The check for `classes` is now sufficient. The legacy `cls_` check is gone.
             if (key !== 'classes') { 
                 let path = `/${key}`;
                 if (key === 'currentUser' && appState.currentUser) {
