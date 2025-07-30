@@ -473,7 +473,7 @@ th.sortable:hover .sort-icon {
     align-items: center;
 }
 
-#qrScannerContainer {
+#qr-reader {
     width: 100%;
     max-width: 500px;
     border-radius: 1rem;
@@ -482,7 +482,7 @@ th.sortable:hover .sort-icon {
     aspect-ratio: 1 / 1;
 }
 
-#qrScannerContainer video {
+#qr-reader video {
     width: 100%;
     height: 100%;
     object-fit: cover;
