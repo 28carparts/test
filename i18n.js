@@ -232,6 +232,10 @@ const LANG_PACK = {
         'placeholder_salary_per_class': '$ per class',
         'placeholder_salary_percentage': '% of revenue',
         'placeholder_salary_per_head': '$ per head',
+        'success_item_added_generic': 'New "{type}" added successfully!',
+        'success_item_updated_generic': '"{type}" updated successfully!',
+        'label_sport_type_item': 'Sport Type',
+        'label_tutor_item': 'Tutor',
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -703,6 +707,10 @@ const LANG_PACK = {
         'placeholder_salary_per_class': '每堂課 ($)',
         'placeholder_salary_percentage': '收入百分比 (%)',
         'placeholder_salary_per_head': '每位學員 ($)',
+        'success_item_added_generic': '新的 "{type}" 新增成功！',
+        'success_item_updated_generic': '"{type}" 更新成功！',
+        'label_sport_type_item': '運動類型',
+        'label_tutor_item': '導師',
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
@@ -939,6 +947,5 @@ const LANG_PACK = {
         'export_cat_tutor_by_revenue': '導師收入排行',
         'export_cat_peak_times': '高峰時段',
         'export_cat_low_times': '低峰時段',
-        'salary_calculation_percentage': '{revenue} x {percentage}%',
     }
 };
