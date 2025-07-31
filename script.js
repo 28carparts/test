@@ -2747,10 +2747,56 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // Clean up any old listeners from previous page views
+        // Clean up any old listeners from previous page views to prevent memory leaks
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
+
+        // --- START: NEW REAL-TIME UPDATE LOGIC ---
+        // Find today's classes that this member has booked but not yet attended.
+        const today = getIsoDate(new Date());
+        const todaysUnattendedBookings = appState.classes.filter(cls => 
+            cls.date === today && 
+            cls.bookedBy && cls.bookedBy[member.id] &&
+            !(cls.attendedBy && cls.attendedBy[member.id])
+        );
+
+        // For each of those classes, listen for a check-in event.
+        todaysUnattendedBookings.forEach(cls => {
+            const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
+            
+            const listener = checkInRef.on('value', (snapshot) => {
+                // When a check-in is detected (value becomes true)...
+                if (snapshot.val() === true) {
+                    playSuccessSound();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+
+                    // Find the corresponding entry in the booking history list on this page.
+                    const bookingHistoryEntry = document.querySelector(`.card [data-cls-id="${cls.id}"]`);
+                    if (bookingHistoryEntry) {
+                        const cancelButton = bookingHistoryEntry.querySelector('.cancel-booking-btn-dash');
+                        // Replace the "Cancel" button with a "Completed" status.
+                        if (cancelButton) {
+                            const completedSpan = document.createElement('span');
+                            completedSpan.className = 'text-sm font-semibold text-green-600';
+                            completedSpan.textContent = _('status_completed');
+                            cancelButton.replaceWith(completedSpan);
+                        }
+                    }
+                    
+                    // Clean up this specific listener as it's no longer needed.
+                    checkInRef.off('value', listener);
+                    delete memberCheckInListeners[cls.id];
+                }
+            });
+
+            // Store the listener so it can be cleaned up later.
+            memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
+        });
+        // --- END: NEW REAL-TIME UPDATE LOGIC ---
         
+        // The rest of the function proceeds as before, building the page content.
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
             .sort((a, b) => {
