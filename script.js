@@ -2754,7 +2754,7 @@ ${_('whatsapp_closing')}
                         <div id="upcomingCheckInSection" class="mt-4 space-y-2">
                             ${
                                 todaysUnattendedBookings.length > 0
-                                ? `<h5 class="text-center font-semibold text-slate-600">Upcoming Check-ins</h5>` +
+                                ? `<h5 class="text-center font-semibold text-slate-600">${_('header_upcoming_checkins')}</h5>` +
                                   todaysUnattendedBookings
                                     .sort((a,b) => a.time.localeCompare(b.time))
                                     .map(cls => {
