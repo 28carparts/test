@@ -706,11 +706,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const isStaff = appState.currentUser?.role === 'staff';
         const isAdmin = isOwner || isStaff;
 
+        // 1. Destroy old carousel instance if it exists
         if (navEmblaApi) {
             navEmblaApi.destroy();
             navEmblaApi = null;
         }
 
+        // 2. Set the standard HTML structure for both admins and members
         DOMElements.mainNav.innerHTML = `
             <div id="nav-carousel-mobile" class="lg:hidden">
                 <div class="embla-nav">
@@ -719,18 +721,18 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div id="nav-static-desktop" class="hidden lg:flex items-center gap-2 sm:gap-6 px-4 py-2"></div>
         `;
-
-        if (isAdmin) {
-            DOMElements.mainNav.classList.add('flex-grow', 'lg:flex-grow-0', 'min-w-0');
-        } else {
-            DOMElements.mainNav.classList.remove('flex-grow', 'lg:flex-grow-0', 'min-w-0');
-        }
-
+        
+        // 3. Ensure the main nav container can shrink to fit the carousel, for all roles
+        DOMElements.mainNav.classList.add('flex-grow', 'lg:flex-grow-0', 'min-w-0');
+        
+        // 4. Get containers and define the button array
         const mobileNavContainer = DOMElements.mainNav.querySelector('#nav-carousel-mobile .embla-nav__container');
         const desktopNavContainer = DOMElements.mainNav.querySelector('#nav-static-desktop');
+        let navButtonsHTML = [];
 
+        // 5. Determine which buttons to show based on role
         if (isAdmin) {
-            let navButtonsHTML = [
+            navButtonsHTML = [
                 `<button data-page="schedule" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_schedule')}</button>`,
                 `<button data-page="classes" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_classes')}</button>`,
                 `<button data-page="members" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_members')}</button>`,
@@ -738,7 +740,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 `<button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>`
             ];
             
-            // --- START: MODIFIED SECTION ---
             navButtonsHTML.splice(1, 0, `<button id="navCheckInBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>`);
             navButtonsHTML.splice(2, 0, `<button id="navGoToBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_goto')}</button>`);
 
@@ -746,46 +747,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 navButtonsHTML.splice(4, 0, `<button data-page="salary" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_salary')}</button>`);
                 navButtonsHTML.splice(5, 0, `<button data-page="statistics" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_statistics')}</button>`);
             }
-            // --- END: MODIFIED SECTION ---
-
-            mobileNavContainer.innerHTML = navButtonsHTML.map(btn => `<div class="embla-nav__slide">${btn}</div>`).join('');
-            desktopNavContainer.innerHTML = navButtonsHTML.join('');
-
-            const initNavCarousel = () => {
-                if (window.innerWidth < 1024 && !navEmblaApi) {
-                    const navCarouselNode = DOMElements.mainNav.querySelector('#nav-carousel-mobile .embla-nav');
-                    if (navCarouselNode) {
-                        navEmblaApi = EmblaCarousel(navCarouselNode, {
-                            align: 'start',
-                            dragFree: true
-                        });
-                    }
-                } else if (window.innerWidth >= 1024 && navEmblaApi) {
-                    navEmblaApi.destroy();
-                    navEmblaApi = null;
-                }
-            };
-            initNavCarousel();
-            window.addEventListener('resize', initNavCarousel);
-
-        } else {
+        } else { // Member view
             const { memberSportType, memberTutor } = appState.selectedFilters;
             const activeFilterCount = (memberSportType !== 'all' ? 1 : 0) + (memberTutor !== 'all' ? 1 : 0);
             
-            DOMElements.mainNav.innerHTML = `
-                <div class="flex items-center gap-2 sm:gap-6 px-4 py-2">
-                    <button data-page="schedule" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_schedule')}</button>
-                    <button id="navFilterBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base flex items-center gap-2 relative">
-                        ${_('nav_filter')}
-                        ${activeFilterCount > 0 ? `<span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500"></span>` : ''}
-                    </button>
-                    <button data-page="account" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_account')}</button>
-                    <button data-page="check-in" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>
-                    <button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>
-                </div>
-            `;
+            navButtonsHTML = [
+                `<button data-page="schedule" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_schedule')}</button>`,
+                `<button id="navFilterBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base flex items-center gap-2 relative">
+                    ${_('nav_filter')}
+                    ${activeFilterCount > 0 ? `<span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500"></span>` : ''}
+                </button>`,
+                `<button data-page="account" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_account')}</button>`,
+                `<button data-page="check-in" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>`,
+                `<button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>`
+            ];
         }
 
+        // 6. Populate both mobile (carousel) and desktop (static) containers
+        mobileNavContainer.innerHTML = navButtonsHTML.map(btn => `<div class="embla-nav__slide">${btn}</div>`).join('');
+        desktopNavContainer.innerHTML = navButtonsHTML.join('');
+
+        // 7. Define and call the carousel initializer function
+        const initNavCarousel = () => {
+            if (window.innerWidth < 1024 && !navEmblaApi) {
+                const navCarouselNode = DOMElements.mainNav.querySelector('#nav-carousel-mobile .embla-nav');
+                if (navCarouselNode) {
+                    navEmblaApi = EmblaCarousel(navCarouselNode, {
+                        align: 'start',
+                        dragFree: true
+                    });
+                }
+            } else if (window.innerWidth >= 1024 && navEmblaApi) {
+                navEmblaApi.destroy();
+                navEmblaApi = null;
+            }
+        };
+        initNavCarousel();
+        window.addEventListener('resize', initNavCarousel);
+
+        // 8. Attach all button event listeners
         DOMElements.mainNav.querySelectorAll('button').forEach(btn => {
             if (btn.id === 'logoutBtn') {
                 btn.onclick = handleLogout;
@@ -796,10 +796,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     openFilterModal();
                 };
-            // --- START: ADDED SECTION ---
             } else if (btn.id === 'navCheckInBtn') {
                 btn.onclick = openCheckInModal;
-            // --- END: ADDED SECTION ---
             } else if (btn.id === 'navGoToBtn') {
                 btn.onclick = openGoToDateModal;
             } else if (btn.dataset.page) {
