@@ -308,9 +308,14 @@ th.sortable:hover .sort-icon {
 }
 
 .checkin-selected {
-    background-color: #e0e7ff !important; /* indigo-100 */
-    border: 2px solid #6366f1; /* indigo-500 */
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    background-color: #4f46e5 !important; /* indigo-600 */
+    color: white !important;
+    border-color: transparent; /* Remove the old border */
+    box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39); /* A nice indigo glow */
+}
+
+.checkin-selected strong {
+    color: white;
 }
 
 /* --- Navigation Carousel Styles --- */
