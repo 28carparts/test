@@ -780,6 +780,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${activeFilterCount > 0 ? `<span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500"></span>` : ''}
                     </button>
                     <button data-page="account" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_account')}</button>
+                    <button data-page="check-in" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>
                     <button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>
                 </div>
             `;
@@ -839,7 +840,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const ownerOnlyPages = ['statistics', 'salary']; // Pages only for Owner
         const adminPages = ['members', 'admin', 'classes']; // Pages for Owner and Staff
-        const memberOnlyPages = ['account'];
+        const memberOnlyPages = ['account', 'check-in'];
 
         // If a Staff member tries to access an owner-only page
         if (isStaff && ownerOnlyPages.includes(pageIdToRender)) {
@@ -876,6 +877,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 renderMemberSchedulePage(pageElement);
             }
+        } else if (pageIdToRender === 'check-in') {
+            renderCheckInPage(pageElement);
         } else if (pageIdToRender === 'account') {
             renderAccountPage(pageElement);
         } else if (pageIdToRender === 'admin') {
@@ -2610,6 +2613,133 @@ ${_('whatsapp_closing')}
         }
     }
 
+    function renderCheckInPage(container) {
+        const member = appState.currentUser;
+        if (!member) {
+            container.innerHTML = '<p>Loading details...</p>';
+            return;
+        }
+
+        // Clean up any old listeners from previous page views
+        Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
+        memberCheckInListeners = {};
+
+        const today = getIsoDate(new Date());
+        const todaysUnattendedBookings = appState.classes.filter(cls =>
+            cls.date === today &&
+            cls.bookedBy && cls.bookedBy[member.id] &&
+            !(cls.attendedBy && cls.attendedBy[member.id])
+        );
+
+        // This listener provides real-time feedback when checked in by staff
+        todaysUnattendedBookings.forEach(cls => {
+            const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
+
+            const listener = checkInRef.on('value', (snapshot) => {
+                if (snapshot.val() === true) {
+                    playSuccessSound();
+                    if (navigator.vibrate) navigator.vibrate(200);
+
+                    const resultContainer = document.getElementById('qrCodeResultContainer');
+                    if (resultContainer) {
+                        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                        const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
+                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                        setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
+                    }
+
+                    const upcomingClassEntry = document.querySelector(`[data-checkin-cls-id="${cls.id}"]`);
+                    if (upcomingClassEntry) upcomingClassEntry.remove();
+
+                    const upcomingContainer = document.getElementById('upcomingCheckInSection');
+                    if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
+                        const title = upcomingContainer.querySelector('h5');
+                        if (title) title.remove();
+                    }
+
+                    checkInRef.off('value', listener);
+                    delete memberCheckInListeners[cls.id];
+                }
+            });
+
+            memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
+        });
+
+        // This is the HTML for the QR Code card, now living on its own page
+        container.innerHTML = `
+            <div class="w-full max-w-sm mx-auto">
+                <div class="card p-6 text-center">
+                    <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
+                    <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
+                    <div id="qrCodeResultContainer" class="mt-4"></div>
+
+                    <div id="upcomingCheckInSection" class="mt-4 space-y-2">
+                        ${todaysUnattendedBookings.length > 0
+                            ? `<h5 class="text-center font-semibold text-slate-600">${_('header_upcoming_checkins')}</h5>` +
+                              todaysUnattendedBookings
+                                .sort((a,b) => a.time.localeCompare(b.time))
+                                .map(cls => {
+                                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                                    const isSelected = member.selectedCheckInClassId === cls.id;
+                                    return `
+                                    <button class="w-full text-left p-3 bg-slate-100 rounded-lg text-slate-700 hover:bg-indigo-100 cursor-pointer transition-colors ${isSelected ? 'checkin-selected' : ''}" data-checkin-cls-id="${cls.id}">
+                                        <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
+                                    </button>`;
+                                }).join('')
+                            : ''
+                        }
+                    </div>
+                </div>
+            </div>`;
+
+        // This is the logic that powers the QR Code card
+        const qrCodeContainer = container.querySelector('#qrCodeContainer');
+        if (qrCodeContainer) {
+            qrCodeContainer.innerHTML = '';
+            new QRCode(qrCodeContainer, {
+                text: member.id,
+                width: 192,
+                height: 192,
+                colorDark: "#1e293b",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        const upcomingSection = container.querySelector('#upcomingCheckInSection');
+        if (upcomingSection) {
+            // --- START: Replace this entire click listener block ---
+            upcomingSection.addEventListener('click', (e) => {
+                const clickedButton = e.target.closest('button[data-checkin-cls-id]');
+                if (!clickedButton) return;
+
+                const memberId = appState.currentUser.id;
+                const clsId = clickedButton.dataset.checkinClsId;
+                
+                // Determine the new state before any updates
+                const isAlreadySelected = appState.currentUser.selectedCheckInClassId === clsId;
+                const newSelectionId = isAlreadySelected ? null : clsId;
+
+                // 1. OPTIMISTIC: Update local state immediately
+                appState.currentUser.selectedCheckInClassId = newSelectionId;
+
+                // 2. OPTIMISTIC: Update UI immediately
+                upcomingSection.querySelectorAll('button[data-checkin-cls-id]').forEach(btn => {
+                    btn.classList.remove('checkin-selected');
+                });
+                if (newSelectionId) {
+                    clickedButton.classList.add('checkin-selected');
+                }
+                
+                // 3. Update Firebase in the background
+                database.ref(`/users/${memberId}/selectedCheckInClassId`).set(newSelectionId);
+            });
+            // --- END: Replace this entire click listener block ---
+        }
+        
+        updateUIText();
+    }
+
     function renderAccountPage(container) {
         const member = appState.currentUser;
         if (!member) {
@@ -2620,73 +2750,6 @@ ${_('whatsapp_closing')}
         // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
-
-        const today = getIsoDate(new Date());
-        const todaysUnattendedBookings = appState.classes.filter(cls => 
-            cls.date === today && 
-            cls.bookedBy && cls.bookedBy[member.id] &&
-            !(cls.attendedBy && cls.attendedBy[member.id])
-        );
-
-        todaysUnattendedBookings.forEach(cls => {
-            const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
-            
-            const listener = checkInRef.on('value', (snapshot) => {
-                if (snapshot.val() === true) {
-                    playSuccessSound();
-                    if (navigator.vibrate) {
-                        navigator.vibrate(200);
-                    }
-
-                    const resultContainer = document.getElementById('qrCodeResultContainer');
-                    if (resultContainer) {
-                        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                        const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
-                        
-                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
-                        
-                        setTimeout(() => {
-                            if (resultContainer) {
-                               resultContainer.innerHTML = '';
-                            }
-                        }, 3000);
-                    }
-
-                    // Find and remove the upcoming class entry from the UI
-                    const upcomingClassEntry = document.querySelector(`[data-checkin-cls-id="${cls.id}"]`);
-                    if (upcomingClassEntry) {
-                        upcomingClassEntry.remove();
-                    }
-
-                    // If the container is now empty, remove the title as well
-                    const upcomingContainer = document.getElementById('upcomingCheckInSection');
-                    if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
-                        const title = upcomingContainer.querySelector('h5');
-                        if (title) title.remove();
-                    }
-                    
-                    // --- START: FIX for Booking History Refresh ---
-                    // After check-in, find the corresponding entry in the main booking history and update it.
-                    const bookingHistoryEntry = document.querySelector(`.card [data-cls-id="${cls.id}"]`);
-                    if (bookingHistoryEntry) {
-                        const cancelButton = bookingHistoryEntry.querySelector('.cancel-booking-btn-dash');
-                        if (cancelButton) {
-                            const completedSpan = document.createElement('span');
-                            completedSpan.className = 'text-sm font-semibold text-green-600';
-                            completedSpan.textContent = _('status_completed');
-                            cancelButton.replaceWith(completedSpan);
-                        }
-                    }
-                    // --- END: FIX for Booking History Refresh ---
-
-
-                    checkInRef.off('value', listener);
-                    delete memberCheckInListeners[cls.id];
-                }
-            });
-
-            memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
-        });
         
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
@@ -2744,31 +2807,6 @@ ${_('whatsapp_closing')}
                                 <a href="#" class="lang-selector font-semibold" data-lang="en" data-lang-key="lang_selector_en"></a>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="card p-6 text-center">
-                        <h4 data-lang-key="title_qr_code" class="text-xl font-bold text-slate-800 mb-4"></h4>
-                        <div id="qrCodeContainer" class="w-48 h-48 mx-auto"></div>
-                        <div id="qrCodeResultContainer" class="mt-4"></div>
-
-                        <div id="upcomingCheckInSection" class="mt-4 space-y-2">
-                            ${
-                                todaysUnattendedBookings.length > 0
-                                ? `<h5 class="text-center font-semibold text-slate-600">${_('header_upcoming_checkins')}</h5>` +
-                                  todaysUnattendedBookings
-                                    .sort((a,b) => a.time.localeCompare(b.time))
-                                    .map(cls => {
-                                        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                                        const isSelected = member.selectedCheckInClassId === cls.id;
-                                        return `
-                                        <button class="w-full text-left p-3 bg-slate-100 rounded-lg text-slate-700 hover:bg-indigo-100 cursor-pointer transition-colors ${isSelected ? 'checkin-selected' : ''}" data-checkin-cls-id="${cls.id}">
-                                            <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
-                                        </button>`;
-                                    }).join('')
-                                : ''
-                            }
-                        </div>
-
                     </div>
 
                     ${member.monthlyPlan ? `
@@ -2859,37 +2897,6 @@ ${_('whatsapp_closing')}
                     </div>
                 </div>
             </div>`;
-
-        const qrCodeContainer = container.querySelector('#qrCodeContainer');
-        if (qrCodeContainer) {
-            qrCodeContainer.innerHTML = '';
-            new QRCode(qrCodeContainer, {
-                text: member.id,
-                width: 192,
-                height: 192,
-                colorDark: "#1e293b",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        }
-
-        // Handle the class selection logic
-        const upcomingSection = container.querySelector('#upcomingCheckInSection');
-        if (upcomingSection) {
-            upcomingSection.addEventListener('click', (e) => {
-                const button = e.target.closest('button[data-checkin-cls-id]');
-                if (!button) return;
-
-                const memberId = appState.currentUser.id;
-                const clsId = button.dataset.checkinClsId;
-                const isAlreadySelected = button.classList.contains('checkin-selected');
-                
-                const newSelectionId = isAlreadySelected ? null : clsId;
-                
-                // Update the database with the member's choice
-                database.ref(`/users/${memberId}/selectedCheckInClassId`).set(newSelectionId);
-            });
-        }
 
         setupLanguageToggles();
         updateUIText();
@@ -6236,30 +6243,17 @@ ${_('whatsapp_closing')}
             const newUserData = snapshot.val();
             if (!newUserData) return;
 
-            const oldSelection = appState.currentUser.selectedCheckInClassId;
-            const newSelection = newUserData.selectedCheckInClassId;
+            // Preserve the user's ID, which is not in the database snapshot
+            const userId = appState.currentUser.id;
             
-            // Always update the central state
-            const oldCurrentUser = appState.currentUser;
-            appState.currentUser = { ...appState.currentUser, ...newUserData };
-
-            // Check if ONLY the selection has changed while on the account page
-            if (
-                appState.activePage === 'account' &&
-                oldSelection !== newSelection &&
-                JSON.stringify({ ...oldCurrentUser, selectedCheckInClassId: null }) === JSON.stringify({ ...appState.currentUser, selectedCheckInClassId: null })
-            ) {
-                // This is just a selection change, update UI without full re-render
-                const upcomingSection = document.getElementById('upcomingCheckInSection');
-                if (upcomingSection) {
-                    upcomingSection.querySelectorAll('button[data-checkin-cls-id]').forEach(btn => {
-                        btn.classList.toggle('checkin-selected', btn.dataset.checkinClsId === newSelection);
-                    });
-                }
-            } else {
-                // For any other change (credits, name, etc.), do a full re-render
-                renderCurrentPage();
-            }
+            // Reconstruct the user object to ensure deleted keys are always removed from local state.
+            // This is the complete and correct way to sync state.
+            appState.currentUser = { id: userId, ...newUserData };
+            
+            // Re-render the current page to reflect any changes that came from the server.
+            // Since our click handler is now optimistic, this will primarily handle external
+            // changes or data refreshes on page navigation.
+            renderCurrentPage();
         };
         currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
         // --- END: FIX for QR Code Flicker ---
