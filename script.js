@@ -2640,6 +2640,8 @@ ${_('whatsapp_closing')}
                     playSuccessSound();
                     if (navigator.vibrate) navigator.vibrate(200);
 
+                    database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
+
                     const resultContainer = document.getElementById('qrCodeResultContainer');
                     if (resultContainer) {
                         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
@@ -2747,56 +2749,10 @@ ${_('whatsapp_closing')}
             return;
         };
         
-        // Clean up any old listeners from previous page views to prevent memory leaks
+        // Clean up any old listeners from previous page views
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
-
-        // --- START: NEW REAL-TIME UPDATE LOGIC ---
-        // Find today's classes that this member has booked but not yet attended.
-        const today = getIsoDate(new Date());
-        const todaysUnattendedBookings = appState.classes.filter(cls => 
-            cls.date === today && 
-            cls.bookedBy && cls.bookedBy[member.id] &&
-            !(cls.attendedBy && cls.attendedBy[member.id])
-        );
-
-        // For each of those classes, listen for a check-in event.
-        todaysUnattendedBookings.forEach(cls => {
-            const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
-            
-            const listener = checkInRef.on('value', (snapshot) => {
-                // When a check-in is detected (value becomes true)...
-                if (snapshot.val() === true) {
-                    playSuccessSound();
-                    if (navigator.vibrate) {
-                        navigator.vibrate(200);
-                    }
-
-                    // Find the corresponding entry in the booking history list on this page.
-                    const bookingHistoryEntry = document.querySelector(`.card [data-cls-id="${cls.id}"]`);
-                    if (bookingHistoryEntry) {
-                        const cancelButton = bookingHistoryEntry.querySelector('.cancel-booking-btn-dash');
-                        // Replace the "Cancel" button with a "Completed" status.
-                        if (cancelButton) {
-                            const completedSpan = document.createElement('span');
-                            completedSpan.className = 'text-sm font-semibold text-green-600';
-                            completedSpan.textContent = _('status_completed');
-                            cancelButton.replaceWith(completedSpan);
-                        }
-                    }
-                    
-                    // Clean up this specific listener as it's no longer needed.
-                    checkInRef.off('value', listener);
-                    delete memberCheckInListeners[cls.id];
-                }
-            });
-
-            // Store the listener so it can be cleaned up later.
-            memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
-        });
-        // --- END: NEW REAL-TIME UPDATE LOGIC ---
         
-        // The rest of the function proceeds as before, building the page content.
         const memberBookings = appState.classes
             .filter(c => c.bookedBy && c.bookedBy[member.id])
             .sort((a, b) => {
@@ -4153,6 +4109,44 @@ ${_('whatsapp_closing')}
         });
     }
 
+    function checkInMember(clsId, memberId) {
+        const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
+        const member = appState.users.find(u => u.id === memberId);
+        if (!member || !resultEl) return;
+
+        const cls = appState.classes.find(c => c.id === clsId);
+        if (!cls) {
+            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">Class not found.</div>`;
+            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+            return;
+        }
+
+        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+        
+        if (cls.attendedBy && cls.attendedBy[memberId]) {
+             resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+             setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+             return;
+        }
+
+        // --- The Fix, Part 1 ---
+        // The staff's device is now only responsible for marking attendance.
+        // It no longer clears the member's pre-selection. The member's device will do that.
+        database.ref(`/classes/${clsId}/attendedBy/${memberId}`).set(true)
+            .then(() => {
+                playSuccessSound();
+                if (navigator.vibrate) {
+                    navigator.vibrate(200);
+                }
+
+                resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
+                setTimeout(() => { 
+                    if (html5QrCode) html5QrCode.resume(); 
+                    resultEl.innerHTML = '';
+                }, 2500);
+            });
+    };
+
     function playSuccessSound() {
         // Use the modern Web Audio API for a clean, file-free sound
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -4178,45 +4172,6 @@ ${_('whatsapp_closing')}
         oscillator.stop(audioCtx.currentTime + 0.15);
     }
 
-    function checkInMember(clsId, memberId) {
-        const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
-        const member = appState.users.find(u => u.id === memberId);
-        if (!member || !resultEl) return;
-
-        const cls = appState.classes.find(c => c.id === clsId);
-        if (!cls) {
-            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">Class not found.</div>`;
-            setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
-            return;
-        }
-
-        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-        
-        if (cls.attendedBy && cls.attendedBy[memberId]) {
-             resultEl.innerHTML = `<div class="check-in-result-banner check-in-notice">${_('check_in_error_already_checked_in').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
-             setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
-             return;
-        }
-
-        // --- START: NEW ---
-        // Create an atomic update to mark as attended AND clear the pre-selection.
-        const updates = {};
-        updates[`/classes/${clsId}/attendedBy/${memberId}`] = true;
-        updates[`/users/${memberId}/selectedCheckInClassId`] = null; // Clear the selection
-
-        database.ref().update(updates)
-            .then(() => {
-                playSuccessSound();
-                if (navigator.vibrate) {
-                    navigator.vibrate(200);
-                }
-
-                resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${_('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType))}</div>`;
-                setTimeout(() => { if (html5QrCode) html5QrCode.resume(); resultEl.innerHTML = '';}, 2500);
-            });
-        // --- END: NEW ---
-    };
-
     async function handleCheckIn(memberId) {
         const resultEl = DOMElements.checkInModal.querySelector("#checkInResult");
         resultEl.innerHTML = `<p class="text-center font-semibold text-slate-500 p-4">${_('check_in_scanning')}</p>`;
@@ -4228,17 +4183,17 @@ ${_('whatsapp_closing')}
             return;
         }
 
-        // --- START: NEW ---
-        // Priority 1: Check if the member has pre-selected a class.
+        // --- The Fix, Part 2 ---
+        // This logic checks for the pre-selected class first, which was missing.
         const memberSnapshot = await database.ref(`/users/${memberId}`).once('value');
         const memberData = memberSnapshot.val();
         const preSelectedClassId = memberData?.selectedCheckInClassId;
 
         if (preSelectedClassId) {
-            checkInMember(preSelectedClassId, memberId); // Pass memberId
+            checkInMember(preSelectedClassId, memberId); // Use our new helper function
             return; // Stop further execution
         }
-        // --- END: NEW ---
+        // --- End Fix, Part 2 ---
 
         const today = getIsoDate(new Date());
         
@@ -4262,14 +4217,8 @@ ${_('whatsapp_closing')}
             return;
         }
 
-        // --- START: MODIFIED (function signature changed) ---
-        const checkInAndResume = (clsId) => {
-            checkInMember(clsId, memberId); // Pass memberId
-        };
-        // --- END: MODIFIED ---
-
         if (unattendedBookingsToday.length === 1) {
-            checkInAndResume(unattendedBookingsToday[0].id);
+            checkInMember(unattendedBookingsToday[0].id, memberId); // Use our new helper function
         } else {
             const classOptions = unattendedBookingsToday.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
@@ -4288,7 +4237,7 @@ ${_('whatsapp_closing')}
             
             resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
                 btn.onclick = () => {
-                    checkInAndResume(btn.dataset.clsId);
+                    checkInMember(btn.dataset.clsId, memberId); // Use our new helper function
                 };
             });
         }
@@ -4709,46 +4658,52 @@ ${_('whatsapp_closing')}
         }
     }
 
+    function handleAdminItemDelete(type, id, name) {
+        // 1. Data Integrity Check
+        let isInUse = false;
+        if (type === 'sportType') {
+            isInUse = appState.classes.some(c => c.sportTypeId === id);
+        } else if (type === 'tutor') {
+            isInUse = appState.classes.some(c => c.tutorId === id);
+        }
+
+        if (isInUse) {
+            showMessageBox(_('error_cannot_delete_item_in_use').replace('{name}', name), 'error');
+            return; // Stop the deletion process
+        }
+
+        // 2. Confirmation Dialog
+        const title = _('confirm_delete_generic_title').replace('{type}', type === 'sportType' ? 'Sport Type' : 'Tutor');
+        const message = _('confirm_delete_generic_desc').replace('{name}', name);
+        
+        showConfirmation(title, message, () => {
+            // 3. Deletion from Firebase
+            const path = type === 'sportType' ? '/sportTypes/' : '/tutors/';
+            database.ref(path + id).remove()
+                .then(() => {
+                    showMessageBox(_('info_item_deleted').replace('{type}', type === 'sportType' ? 'Sport Type' : 'Tutor'), 'info');
+                })
+                .catch(error => {
+                    showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error');
+                });
+        });
+    }
+
     function handleAdminListClick(e) {
         const target = e.target.closest('.edit-btn, .delete-btn');
         if (!target) return;
+
         const { type, id, name } = target.dataset;
 
         if (target.classList.contains('edit-btn')) {
-            if (type === 'sportType') openSportTypeModal(appState.sportTypes.find(st => st.id === id));
-            if (type === 'tutor') openTutorModal(appState.tutors.find(t => t.id === id));
-        } else if (target.classList.contains('delete-btn')) {
-            // --- START: REFINED LOGIC WITH DATA INTEGRITY CHECK ---
-            // First, check if the item is in use.
             if (type === 'sportType') {
-                const isInUse = appState.classes.some(c => c.sportTypeId === id);
-                if (isInUse) {
-                    showMessageBox(_('error_cannot_delete_item_in_use').replace('{name}', name), 'error');
-                    return; // Prevent deletion
-                }
+                openSportTypeModal(appState.sportTypes.find(st => st.id === id));
+            } else if (type === 'tutor') {
+                openTutorModal(appState.tutors.find(t => t.id === id));
             }
-            if (type === 'tutor') {
-                const isInUse = appState.classes.some(c => c.tutorId === id);
-                if (isInUse) {
-                    showMessageBox(_('error_cannot_delete_item_in_use').replace('{name}', name), 'error');
-                    return; // Prevent deletion
-                }
-            }
-
-            // If not in use, proceed with the original confirmation and deletion logic.
-            showConfirmation(
-                _('confirm_delete_generic_title').replace('{type}', type), 
-                _('confirm_delete_generic_desc').replace('{name}', name), 
-                () => {
-                if (type === 'sportType') {
-                    database.ref('/sportTypes/' + id).remove();
-                }
-                if (type === 'tutor') {
-                    database.ref('/tutors/' + id).remove();
-                }
-                showMessageBox(_('info_item_deleted').replace('{type}', type), 'info');
-            });
-            // --- END: REFINED LOGIC ---
+        } else if (target.classList.contains('delete-btn')) {
+            // All the complex logic is now handled by our new helper function
+            handleAdminItemDelete(type, id, name);
         }
     }
     
@@ -4834,7 +4789,15 @@ ${_('whatsapp_closing')}
 
             promise = database.ref('/sportTypes').push(sportTypeData);
         }
-        promise.then(() => closeModal(DOMElements.sportTypeModal));
+        promise.then(() => {
+            const itemType = _('label_sport_type_item');
+            const message = id
+                ? _('success_item_updated_generic').replace('{type}', itemType)
+                : _('success_item_added_generic').replace('{type}', itemType);
+            
+            showMessageBox(message, 'success');
+            closeModal(DOMElements.sportTypeModal);
+        });
     }
 
     function openTutorModal(tutorToEdit = null) {
@@ -5038,7 +5001,15 @@ ${_('whatsapp_closing')}
 
             promise = database.ref('/tutors').push(tutorData);
         }
-        promise.then(() => closeModal(DOMElements.tutorModal));
+        promise.then(() => {
+            const itemType = _('label_tutor_item');
+            const message = id
+                ? _('success_item_updated_generic').replace('{type}', itemType)
+                : _('success_item_added_generic').replace('{type}', itemType);
+
+            showMessageBox(message, 'success');
+            closeModal(DOMElements.tutorModal);
+        });
     }
 
     async function renderSalaryPage(container) {
@@ -6171,12 +6142,21 @@ ${_('whatsapp_closing')}
                 const val = snapshot.val();
                 if (key === 'currentUser') {
                     appState.currentUser = { ...appState.currentUser, ...val };
+                    // If the account page is active, re-render it for profile changes
+                    if (appState.activePage === 'account') renderCurrentPage();
+
                 } else if (key === 'studioSettings') {
                     if (val) appState.studioSettings = { ...appState.studioSettings, ...val, clsDefaults: { ...appState.studioSettings.clsDefaults, ...(val.clsDefaults || {}) } };
-                } else {
+                    // If on the admin page, re-render to show new defaults
+                    if (appState.activePage === 'admin') renderAdminPage(document.getElementById('page-admin'));
+                
+                } else { // This handles tutors and sportTypes
                     appState[key] = firebaseObjectToArray(val);
+                    // Only update the lists if we are on the Admin page
+                    if (appState.activePage === 'admin') {
+                        renderAdminLists();
+                    }
                 }
-                renderCurrentPage();
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
