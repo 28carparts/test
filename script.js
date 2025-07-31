@@ -6322,28 +6322,34 @@ ${_('whatsapp_closing')}
             // currentUser: database.ref('/users/' + appState.currentUser.id), // We will handle this one specially
         };
 
-        // --- START: Replace this block within initMemberListeners ---
-        // Handle the currentUser listener separately to be more surgical
+        // --- START: Safari-Specific Flicker Fix ---
+        // Handle the currentUser listener separately to be more surgical.
         const currentUserRef = database.ref('/users/' + appState.currentUser.id);
         dataListeners['currentUser'] = (snapshot) => {
             const newUserData = snapshot.val();
             if (!newUserData) return;
 
-            // Preserve the user's ID, which is not in the database snapshot
             const userId = appState.currentUser.id;
-            
-            // Reconstruct the user object to ensure deleted keys are always removed from local state.
-            // This is the complete and correct way to sync state.
+            // Update the global state with the latest user data.
             appState.currentUser = { id: userId, ...newUserData };
             
-            // Re-render the current page to reflect any changes that came from the server.
-            // Since our click handler is now optimistic, this will primarily handle external
-            // changes or data refreshes on page navigation.
-            renderCurrentPage();
+            // THE FIX:
+            // If the user is on the 'check-in' page, we must avoid a full re-render
+            // to prevent the camera stream from flickering in Safari. Instead, we
+            // call `renderCheckInPage` directly, which contains non-destructive
+            // logic to only update the button list.
+            if (appState.activePage === 'check-in') {
+                const checkInPageContainer = document.getElementById('page-check-in');
+                if (checkInPageContainer) {
+                    renderCheckInPage(checkInPageContainer);
+                }
+            } else {
+                // For any other page, a full re-render is safe and correct.
+                renderCurrentPage();
+            }
         };
         currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
-        // --- END: Replace this block within initMemberListeners ---
-
+        // --- END: Safari-Specific Flicker Fix ---
 
         Object.entries(refs).forEach(([key, ref]) => {
             dataListeners[key] = (snapshot) => {
