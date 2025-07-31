@@ -2629,43 +2629,81 @@ ${_('whatsapp_closing')}
             !(cls.attendedBy && cls.attendedBy[member.id])
         );
 
-        // This listener provides real-time feedback when checked in by staff
+        // --- START OF FIX: The core logic change is here ---
+        // Get a list of all unattended class IDs for today to check against later.
+        const unattendedClsIds = todaysUnattendedBookings.map(cls => cls.id);
+
         todaysUnattendedBookings.forEach(cls => {
             const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
 
-            const listener = checkInRef.on('value', (snapshot) => {
-                if (snapshot.val() === true) {
-                    playSuccessSound();
-                    if (navigator.vibrate) navigator.vibrate(200);
+            // This single listener definition will be used for all classes today.
+            const listener = (snapshot) => {
+                // Only act when a class is marked as true (checked in)
+                if (snapshot.val() !== true) return;
 
-                    database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
+                const resultContainer = document.getElementById('qrCodeResultContainer');
+                if (!resultContainer) return;
 
-                    const resultContainer = document.getElementById('qrCodeResultContainer');
-                    if (resultContainer) {
-                        const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                        const message = _('check_in_success').replace('{name}', member.name).replace('{class}', getSportTypeName(sportType));
-                        resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
-                        setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
-                    }
+                // Check how many of the day's originally unattended classes are now attended.
+                // It checks the main `appState.classes` which is updated by other listeners.
+                const newlyAttendedCount = unattendedClsIds.reduce((count, id) => {
+                    const c = appState.classes.find(cls => cls.id === id);
+                    return (c && c.attendedBy && c.attendedBy[member.id]) ? count + 1 : count;
+                }, 0);
 
-                    const upcomingClassEntry = document.querySelector(`[data-checkin-cls-id="${cls.id}"]`);
-                    if (upcomingClassEntry) upcomingClassEntry.remove();
+                let message = '';
+                // If all of the day's classes are now attended, we infer it was a "Check-In All" action.
+                if (newlyAttendedCount === unattendedClsIds.length && unattendedClsIds.length > 1) {
+                    message = _('check_in_success_all')
+                        .replace('{name}', member.name)
+                        .replace('{count}', unattendedClsIds.length);
+                    
+                    // Remove all of the day's class entries from the UI.
+                    unattendedClsIds.forEach(id => {
+                        document.querySelector(`[data-checkin-cls-id="${id}"]`)?.remove();
+                    });
 
-                    const upcomingContainer = document.getElementById('upcomingCheckInSection');
-                    if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
-                        const title = upcomingContainer.querySelector('h5');
-                        if (title) title.remove();
-                    }
-
-                    checkInRef.off('value', listener);
-                    delete memberCheckInListeners[cls.id];
+                } else { // Otherwise, it was a single check-in.
+                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                    message = _('check_in_success')
+                        .replace('{name}', member.name)
+                        .replace('{class}', getSportTypeName(sportType));
+                    
+                    // Remove just the one class that triggered this specific listener.
+                    document.querySelector(`[data-checkin-cls-id="${cls.id}"]`)?.remove();
                 }
-            });
+
+                // --- This logic is now common for both single and bulk check-ins ---
+                playSuccessSound();
+                if (navigator.vibrate) navigator.vibrate(200);
+
+                // The member no longer needs a class pre-selected.
+                database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
+
+                // Display the appropriate success message.
+                resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
+
+                // If no more classes are listed, remove the "Upcoming Check-ins" header.
+                const upcomingContainer = document.getElementById('upcomingCheckInSection');
+                if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
+                    upcomingContainer.querySelector('h5')?.remove();
+                }
+
+                // IMPORTANT: Clean up all of today's listeners to prevent this logic from running again.
+                unattendedClsIds.forEach(id => {
+                    if (memberCheckInListeners[id]) {
+                        memberCheckInListeners[id].ref.off('value', memberCheckInListeners[id].listener);
+                        delete memberCheckInListeners[id];
+                    }
+                });
+            };
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
+            checkInRef.on('value', listener);
         });
+        // --- END OF FIX ---
 
-        // This is the HTML for the QR Code card, now living on its own page
         container.innerHTML = `
             <div class="w-full max-w-sm mx-auto">
                 <div class="card p-6 text-center">
@@ -2692,7 +2730,6 @@ ${_('whatsapp_closing')}
                 </div>
             </div>`;
 
-        // This is the logic that powers the QR Code card
         const qrCodeContainer = container.querySelector('#qrCodeContainer');
         if (qrCodeContainer) {
             qrCodeContainer.innerHTML = '';
@@ -2715,14 +2752,11 @@ ${_('whatsapp_closing')}
                 const memberId = appState.currentUser.id;
                 const clsId = clickedButton.dataset.checkinClsId;
                 
-                // Determine the new state before any updates
                 const isAlreadySelected = appState.currentUser.selectedCheckInClassId === clsId;
                 const newSelectionId = isAlreadySelected ? null : clsId;
 
-                // 1. OPTIMISTIC: Update local state immediately
                 appState.currentUser.selectedCheckInClassId = newSelectionId;
 
-                // 2. OPTIMISTIC: Update UI immediately
                 upcomingSection.querySelectorAll('button[data-checkin-cls-id]').forEach(btn => {
                     btn.classList.remove('checkin-selected');
                 });
@@ -2730,7 +2764,6 @@ ${_('whatsapp_closing')}
                     clickedButton.classList.add('checkin-selected');
                 }
                 
-                // 3. Update Firebase in the background
                 database.ref(`/users/${memberId}/selectedCheckInClassId`).set(newSelectionId);
             });
         }
@@ -4179,17 +4212,14 @@ ${_('whatsapp_closing')}
             return;
         }
 
-        // --- The Fix, Part 2 ---
-        // This logic checks for the pre-selected class first, which was missing.
         const memberSnapshot = await database.ref(`/users/${memberId}`).once('value');
         const memberData = memberSnapshot.val();
         const preSelectedClassId = memberData?.selectedCheckInClassId;
 
         if (preSelectedClassId) {
-            checkInMember(preSelectedClassId, memberId); // Use our new helper function
-            return; // Stop further execution
+            checkInMember(preSelectedClassId, memberId);
+            return;
         }
-        // --- End Fix, Part 2 ---
 
         const today = getIsoDate(new Date());
         
@@ -4214,28 +4244,62 @@ ${_('whatsapp_closing')}
         }
 
         if (unattendedBookingsToday.length === 1) {
-            checkInMember(unattendedBookingsToday[0].id, memberId); // Use our new helper function
+            checkInMember(unattendedBookingsToday[0].id, memberId);
         } else {
+            // This is the multi-booking case
             const classOptions = unattendedBookingsToday.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg" data-cls-id="${cls.id}">
+                return `<button class="w-full text-left p-3 bg-slate-100 hover:bg-indigo-100 rounded-lg transition" data-cls-id="${cls.id}">
                     <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
                 </button>`;
             }).join('');
             
+            // Build the HTML for the selection dialog, including the new button
             resultEl.innerHTML = `
                 <div class="p-4 bg-slate-50 rounded-lg">
                     <h4 class="font-bold text-center mb-2">${_('check_in_select_class_title')}</h4>
                     <p class="text-sm text-center text-slate-600 mb-4">${_('check_in_select_class_prompt').replace('{name}', member.name)}</p>
                     <div class="space-y-2">${classOptions}</div>
+                    <button id="checkInAllBtn" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition">${_('btn_check_in_all')}</button>
                 </div>
             `;
             
+            // Listener for individual class check-in buttons
             resultEl.querySelectorAll('button[data-cls-id]').forEach(btn => {
                 btn.onclick = () => {
-                    checkInMember(btn.dataset.clsId, memberId); // Use our new helper function
+                    checkInMember(btn.dataset.clsId, memberId);
                 };
             });
+
+            // Listener for the new "Check-In All" button
+            const checkInAllBtn = resultEl.querySelector('#checkInAllBtn');
+            if (checkInAllBtn) {
+                checkInAllBtn.onclick = () => {
+                    const updates = {};
+                    unattendedBookingsToday.forEach(cls => {
+                        updates[`/classes/${cls.id}/attendedBy/${memberId}`] = true;
+                    });
+
+                    database.ref().update(updates).then(() => {
+                        playSuccessSound();
+                        if (navigator.vibrate) navigator.vibrate(200);
+
+                        const successMessage = _('check_in_success_all')
+                                .replace('{name}', member.name)
+                                .replace('{count}', unattendedBookingsToday.length);
+
+                        resultEl.innerHTML = `<div class="check-in-result-banner check-in-success">${successMessage}</div>`;
+                        setTimeout(() => { 
+                            if (html5QrCode) html5QrCode.resume(); 
+                            resultEl.innerHTML = '';
+                        }, 2500);
+                    }).catch(error => {
+                        console.error('Failed to check in all classes', error);
+                        resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('error_generic')}</div>`;
+                        setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
+                    });
+                };
+            }
         }
     }
 
