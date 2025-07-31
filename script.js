@@ -2629,74 +2629,85 @@ ${_('whatsapp_closing')}
             !(cls.attendedBy && cls.attendedBy[member.id])
         );
 
-        // --- START OF FIX: The core logic change is here ---
-        // Get a list of all unattended class IDs for today to check against later.
-        const unattendedClsIds = todaysUnattendedBookings.map(cls => cls.id);
+        // --- START OF FIX: This logic now uses a debouncer to correctly handle bulk updates ---
+
+        // These variables will be shared by all listeners created in this render cycle.
+        let checkInDebounceTimer = null;
+        const newlyCheckedInIds = new Set();
+        const totalUnattendedCountAtRender = todaysUnattendedBookings.length;
+
+        // This is the handler that will run after the debounce period.
+        const processCheckIns = () => {
+            const resultContainer = document.getElementById('qrCodeResultContainer');
+            if (!resultContainer) return;
+            
+            const processedCount = newlyCheckedInIds.size;
+            if (processedCount === 0) return;
+
+            // If multiple classes were checked in and it matches the total number
+            // of unattended classes for the day, we treat it as a "Check-In All" event.
+            if (processedCount > 1 && processedCount === totalUnattendedCountAtRender) {
+                const message = _('check_in_success_all')
+                    .replace('{name}', member.name)
+                    .replace('{count}', processedCount);
+                
+                resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                
+                // Remove all the corresponding UI elements at once.
+                newlyCheckedInIds.forEach(id => {
+                    document.querySelector(`[data-checkin-cls-id="${id}"]`)?.remove();
+                });
+
+            } else {
+                // Otherwise, process them as individual check-ins.
+                // This loop handles the case of a single check-in.
+                newlyCheckedInIds.forEach(id => {
+                    const cls = appState.classes.find(c => c.id === id);
+                    if (!cls) return;
+
+                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
+                    const message = _('check_in_success')
+                        .replace('{name}', member.name)
+                        .replace('{class}', getSportTypeName(sportType));
+
+                    resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
+                    document.querySelector(`[data-checkin-cls-id="${id}"]`)?.remove();
+                });
+            }
+            
+            // These actions are common to both scenarios.
+            playSuccessSound();
+            if (navigator.vibrate) navigator.vibrate(200);
+            
+            database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
+            setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
+
+            // Clean up UI and reset the collector for the next action.
+            const upcomingContainer = document.getElementById('upcomingCheckInSection');
+            if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
+                upcomingContainer.querySelector('h5')?.remove();
+            }
+            newlyCheckedInIds.clear();
+        };
 
         todaysUnattendedBookings.forEach(cls => {
             const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
 
-            // This single listener definition will be used for all classes today.
             const listener = (snapshot) => {
-                // Only act when a class is marked as true (checked in)
+                // Only act when a class is marked as true.
                 if (snapshot.val() !== true) return;
 
-                const resultContainer = document.getElementById('qrCodeResultContainer');
-                if (!resultContainer) return;
-
-                // Check how many of the day's originally unattended classes are now attended.
-                // It checks the main `appState.classes` which is updated by other listeners.
-                const newlyAttendedCount = unattendedClsIds.reduce((count, id) => {
-                    const c = appState.classes.find(cls => cls.id === id);
-                    return (c && c.attendedBy && c.attendedBy[member.id]) ? count + 1 : count;
-                }, 0);
-
-                let message = '';
-                // If all of the day's classes are now attended, we infer it was a "Check-In All" action.
-                if (newlyAttendedCount === unattendedClsIds.length && unattendedClsIds.length > 1) {
-                    message = _('check_in_success_all')
-                        .replace('{name}', member.name)
-                        .replace('{count}', unattendedClsIds.length);
-                    
-                    // Remove all of the day's class entries from the UI.
-                    unattendedClsIds.forEach(id => {
-                        document.querySelector(`[data-checkin-cls-id="${id}"]`)?.remove();
-                    });
-
-                } else { // Otherwise, it was a single check-in.
-                    const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
-                    message = _('check_in_success')
-                        .replace('{name}', member.name)
-                        .replace('{class}', getSportTypeName(sportType));
-                    
-                    // Remove just the one class that triggered this specific listener.
-                    document.querySelector(`[data-checkin-cls-id="${cls.id}"]`)?.remove();
-                }
-
-                // --- This logic is now common for both single and bulk check-ins ---
-                playSuccessSound();
-                if (navigator.vibrate) navigator.vibrate(200);
-
-                // The member no longer needs a class pre-selected.
-                database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
-
-                // Display the appropriate success message.
-                resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
-                setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
-
-                // If no more classes are listed, remove the "Upcoming Check-ins" header.
-                const upcomingContainer = document.getElementById('upcomingCheckInSection');
-                if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
-                    upcomingContainer.querySelector('h5')?.remove();
-                }
-
-                // IMPORTANT: Clean up all of today's listeners to prevent this logic from running again.
-                unattendedClsIds.forEach(id => {
-                    if (memberCheckInListeners[id]) {
-                        memberCheckInListeners[id].ref.off('value', memberCheckInListeners[id].listener);
-                        delete memberCheckInListeners[id];
-                    }
-                });
+                // Immediately detach this specific listener.
+                checkInRef.off('value', listener);
+                delete memberCheckInListeners[cls.id];
+                
+                // Add the ID to our set of recently checked-in classes.
+                newlyCheckedInIds.add(cls.id);
+                
+                // Reset the timer. This ensures that if multiple events arrive in quick
+                // succession, the handler only runs once after the last event.
+                clearTimeout(checkInDebounceTimer);
+                checkInDebounceTimer = setTimeout(processCheckIns, 150); // 150ms is enough to catch a bulk update.
             };
 
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
@@ -6319,30 +6330,30 @@ ${_('whatsapp_closing')}
         const refs = {
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
-            // currentUser: database.ref('/users/' + appState.currentUser.id), // We will handle this one specially
         };
 
-        // --- START: Replace this block within initMemberListeners ---
-        // Handle the currentUser listener separately to be more surgical
+        // --- START OF FIX: The logic inside the currentUser listener is now more intelligent ---
+        // Handle the currentUser listener separately to be more surgical.
         const currentUserRef = database.ref('/users/' + appState.currentUser.id);
         dataListeners['currentUser'] = (snapshot) => {
             const newUserData = snapshot.val();
             if (!newUserData) return;
 
-            // Preserve the user's ID, which is not in the database snapshot
+            // Preserve the user's ID, which is not in the database snapshot.
             const userId = appState.currentUser.id;
             
-            // Reconstruct the user object to ensure deleted keys are always removed from local state.
-            // This is the complete and correct way to sync state.
+            // Always keep the central app state in sync.
             appState.currentUser = { id: userId, ...newUserData };
             
-            // Re-render the current page to reflect any changes that came from the server.
-            // Since our click handler is now optimistic, this will primarily handle external
-            // changes or data refreshes on page navigation.
-            renderCurrentPage();
+            // THE FIX: Only trigger a full, expensive re-render if the user is on the Account page.
+            // The Check-in page manages its own state for class selection and check-in success,
+            // so a full re-render is unnecessary and causes the flicker. This guard prevents it.
+            if (appState.activePage === 'account') {
+                renderCurrentPage();
+            }
         };
         currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
-        // --- END: Replace this block within initMemberListeners ---
+        // --- END OF FIX ---
 
 
         Object.entries(refs).forEach(([key, ref]) => {
