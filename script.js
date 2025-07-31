@@ -2664,6 +2664,21 @@ ${_('whatsapp_closing')}
                         const title = upcomingContainer.querySelector('h5');
                         if (title) title.remove();
                     }
+                    
+                    // --- START: FIX for Booking History Refresh ---
+                    // After check-in, find the corresponding entry in the main booking history and update it.
+                    const bookingHistoryEntry = document.querySelector(`.card [data-cls-id="${cls.id}"]`);
+                    if (bookingHistoryEntry) {
+                        const cancelButton = bookingHistoryEntry.querySelector('.cancel-booking-btn-dash');
+                        if (cancelButton) {
+                            const completedSpan = document.createElement('span');
+                            completedSpan.className = 'text-sm font-semibold text-green-600';
+                            completedSpan.textContent = _('status_completed');
+                            cancelButton.replaceWith(completedSpan);
+                        }
+                    }
+                    // --- END: FIX for Booking History Refresh ---
+
 
                     checkInRef.off('value', listener);
                     delete memberCheckInListeners[cls.id];
@@ -2858,7 +2873,6 @@ ${_('whatsapp_closing')}
             });
         }
 
-        // --- START: NEW ---
         // Handle the class selection logic
         const upcomingSection = container.querySelector('#upcomingCheckInSection');
         if (upcomingSection) {
@@ -2870,23 +2884,12 @@ ${_('whatsapp_closing')}
                 const clsId = button.dataset.checkinClsId;
                 const isAlreadySelected = button.classList.contains('checkin-selected');
                 
-                // Remove the highlight from all buttons first
-                upcomingSection.querySelectorAll('button').forEach(btn => btn.classList.remove('checkin-selected'));
-                
-                // If it was already selected, we are deselecting it.
-                // Otherwise, we are selecting a new one.
                 const newSelectionId = isAlreadySelected ? null : clsId;
-
-                // If a new class is being selected, add the highlight back
-                if (newSelectionId) {
-                    button.classList.add('checkin-selected');
-                }
                 
                 // Update the database with the member's choice
                 database.ref(`/users/${memberId}/selectedCheckInClassId`).set(newSelectionId);
             });
         }
-        // --- END: NEW ---
 
         setupLanguageToggles();
         updateUIText();
@@ -6218,25 +6221,54 @@ ${_('whatsapp_closing')}
     };
     // --- END: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
 
-    // --- START: NEW MEMBER-SPECIFIC LISTENER FUNCTION ---
     const initMemberListeners = () => {
         // --- Listeners for static-like data (tutors, sports, user profile) ---
         const refs = {
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
-            currentUser: database.ref('/users/' + appState.currentUser.id),
+            // currentUser: database.ref('/users/' + appState.currentUser.id), // We will handle this one specially
         };
+
+        // --- START: FIX for QR Code Flicker ---
+        // Handle the currentUser listener separately to be more surgical
+        const currentUserRef = database.ref('/users/' + appState.currentUser.id);
+        dataListeners['currentUser'] = (snapshot) => {
+            const newUserData = snapshot.val();
+            if (!newUserData) return;
+
+            const oldSelection = appState.currentUser.selectedCheckInClassId;
+            const newSelection = newUserData.selectedCheckInClassId;
+            
+            // Always update the central state
+            const oldCurrentUser = appState.currentUser;
+            appState.currentUser = { ...appState.currentUser, ...newUserData };
+
+            // Check if ONLY the selection has changed while on the account page
+            if (
+                appState.activePage === 'account' &&
+                oldSelection !== newSelection &&
+                JSON.stringify({ ...oldCurrentUser, selectedCheckInClassId: null }) === JSON.stringify({ ...appState.currentUser, selectedCheckInClassId: null })
+            ) {
+                // This is just a selection change, update UI without full re-render
+                const upcomingSection = document.getElementById('upcomingCheckInSection');
+                if (upcomingSection) {
+                    upcomingSection.querySelectorAll('button[data-checkin-cls-id]').forEach(btn => {
+                        btn.classList.toggle('checkin-selected', btn.dataset.checkinClsId === newSelection);
+                    });
+                }
+            } else {
+                // For any other change (credits, name, etc.), do a full re-render
+                renderCurrentPage();
+            }
+        };
+        currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
+        // --- END: FIX for QR Code Flicker ---
+
 
         Object.entries(refs).forEach(([key, ref]) => {
             dataListeners[key] = (snapshot) => {
                 const val = snapshot.val();
-                if (key === 'currentUser') {
-                    appState.currentUser = { ...appState.currentUser, ...val };
-                    // A full re-render is okay here as it's less frequent (e.g., credit change)
-                    renderCurrentPage();
-                } else {
-                    appState[key] = firebaseObjectToArray(val);
-                }
+                appState[key] = firebaseObjectToArray(val);
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
@@ -6281,7 +6313,6 @@ ${_('whatsapp_closing')}
 
         // PHASE 2: Attach live listeners for surgical updates AFTER the initial render.
         
-        // --- START: MODIFIED LISTENER LOGIC ---
         // This listener is now smarter, just like the owner's version.
         activeClassesRef.on('child_changed', (snapshot) => {
             if (!initialLoadComplete) return;
@@ -6321,7 +6352,6 @@ ${_('whatsapp_closing')}
                 _reSortDayColumn(newCls.date);
             }
         });
-        // --- END: MODIFIED LISTENER LOGIC ---
 
         activeClassesRef.on('child_removed', (snapshot) => {
             if (!initialLoadComplete) return;
@@ -6338,7 +6368,6 @@ ${_('whatsapp_closing')}
         // Kick off the whole process.
         initialFetchAndRender();
     };
-    // --- END: NEW MEMBER-SPECIFIC LISTENER FUNCTION ---
 
     const detachDataListeners = () => {
         if (activeClassesRef) {
