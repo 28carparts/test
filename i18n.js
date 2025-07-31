@@ -191,6 +191,7 @@ const LANG_PACK = {
 
         // --- Account Page ---
         'header_my_bookings': 'My Bookings',
+        'header_upcoming_checkins': 'Upcoming Check-ins',
         'header_purchase_history': 'Purchase History',
         'header_payment_history': 'Payment History',
         'label_join_date': 'Join Date',
@@ -661,6 +662,7 @@ const LANG_PACK = {
 
         // --- Account Page ---
         'header_my_bookings': '我的預約',
+        'header_upcoming_checkins': '待簽到課程',
         'header_purchase_history': '購買記錄',
         'header_payment_history': '付款記錄',
         'label_join_date': '加入日期',
