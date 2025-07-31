@@ -2708,7 +2708,6 @@ ${_('whatsapp_closing')}
 
         const upcomingSection = container.querySelector('#upcomingCheckInSection');
         if (upcomingSection) {
-            // --- START: Replace this entire click listener block ---
             upcomingSection.addEventListener('click', (e) => {
                 const clickedButton = e.target.closest('button[data-checkin-cls-id]');
                 if (!clickedButton) return;
@@ -2734,7 +2733,6 @@ ${_('whatsapp_closing')}
                 // 3. Update Firebase in the background
                 database.ref(`/users/${memberId}/selectedCheckInClassId`).set(newSelectionId);
             });
-            // --- END: Replace this entire click listener block ---
         }
         
         updateUIText();
@@ -6260,7 +6258,7 @@ ${_('whatsapp_closing')}
             // currentUser: database.ref('/users/' + appState.currentUser.id), // We will handle this one specially
         };
 
-        // --- START: FIX for QR Code Flicker ---
+        // --- START: Replace this block within initMemberListeners ---
         // Handle the currentUser listener separately to be more surgical
         const currentUserRef = database.ref('/users/' + appState.currentUser.id);
         dataListeners['currentUser'] = (snapshot) => {
@@ -6280,7 +6278,7 @@ ${_('whatsapp_closing')}
             renderCurrentPage();
         };
         currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
-        // --- END: FIX for QR Code Flicker ---
+        // --- END: Replace this block within initMemberListeners ---
 
 
         Object.entries(refs).forEach(([key, ref]) => {
