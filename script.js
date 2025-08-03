@@ -5443,21 +5443,65 @@ ${_('whatsapp_closing')}
         const statsContainer = container.querySelector('#statisticsContainer');
         const exportBtn = container.querySelector('#exportStatsBtn');
         const exportBtnDefaultHTML = exportBtn.innerHTML;
-        const periods = { [_('filter_last_7_days')]: 7, [_('filter_last_30_days')]: 30, [_('filter_last_90_days')]: 90, [_('filter_all_time')]: Infinity };
+
+        // --- START OF FIX: Added future-looking filters with negative values ---
+        // Note: You will need to add the new `filter_upcoming_...` keys to your i18n.js file.
+        const periods = {
+            // Future-looking filters use negative numbers
+            [_('filter_upcoming_90_days')]: -90,
+            [_('filter_upcoming_30_days')]: -30,
+            [_('filter_upcoming_7_days')]: -7,
+            // Past-looking filters use positive numbers
+            [_('filter_last_7_days')]: 7,
+            [_('filter_last_30_days')]: 30,
+            [_('filter_last_90_days')]: 90,
+            [_('filter_all_time')]: Infinity 
+        };
+        // --- END OF FIX ---
+
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
+        // Default selection to "Last 30 Days"
+        periodSelect.value = -7;
         
         let currentStatsForExport = {};
 
         const renderFilteredStats = async () => {
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('status_loading')}...</p>`;
-            const days = parseInt(periodSelect.value);
-            const now = new Date();
-            const startDate = days === Infinity ? new Date(0) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
-            const startDateIso = getIsoDate(startDate);
+            const days = parseFloat(periodSelect.value);
             
-            const nowIso = getIsoDate(now); // Get today's date in YYYY-MM-DD format
-            const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).endAt(nowIso).once('value');
-            const filteredClasses = firebaseObjectToArray(classesSnapshot.val());
+            // --- START OF FIX: Updated data fetching logic for past and future ranges ---
+            let filteredClasses;
+
+            if (days === Infinity) {
+                // For "All Time", fetch all classes directly.
+                const allClassesSnapshot = await database.ref('/classes').once('value');
+                filteredClasses = firebaseObjectToArray(allClassesSnapshot.val()).filter(c => c && c.date);
+            } else {
+                // This block now handles both past (positive days) and future (negative days) ranges.
+                const now = new Date();
+                now.setUTCHours(0, 0, 0, 0); // Normalize 'now' to the start of the UTC day for consistency.
+
+                let startDate, endDate;
+
+                if (days > 0) { // Past-looking (e.g., Last 7 Days)
+                    startDate = new Date(now.getTime()); // Create a copy of 'now'
+                    startDate.setUTCDate(now.getUTCDate() - (days - 1));
+                    endDate = now;
+                } else { // Future-looking (e.g., Upcoming 7 Days, where days = -7)
+                    startDate = now;
+                    endDate = new Date(now.getTime()); // Create a copy of 'now'
+                    // Add days to the future. Math.abs(days) makes -7 become 7.
+                    endDate.setUTCDate(now.getUTCDate() + (Math.abs(days) - 1));
+                }
+                
+                const startDateIso = getIsoDate(startDate);
+                const endDateIso = getIsoDate(endDate);
+                
+                // This single query works for both past and future ranges.
+                const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).endAt(endDateIso).once('value');
+                filteredClasses = firebaseObjectToArray(classesSnapshot.val());
+            }
+            // --- END OF FIX ---
 
             if (filteredClasses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('info_no_data_for_period')}</p>`;
@@ -5471,16 +5515,14 @@ ${_('whatsapp_closing')}
                 totalAttendees += cls.attendedBy ? Object.keys(cls.attendedBy).length : 0;
             });
 
-            const totalCapacity = filteredClasses.reduce((sum, c) => sum + c.maxParticipants, 0);
+            const totalCapacity = filteredClasses.reduce((sum, c) => sum + (c.maxParticipants || 0), 0);
             const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
             const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
             
-            // --- START OF CHANGE: Popularity is now based on attendance ('attendedBy') ---
             const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', 'attendedBy', appState.sportTypes);
             const tutorPopularity = rankByStat(filteredClasses, 'tutorId', 'attendedBy', appState.tutors);
             const peakTimes = rankTimeSlots(filteredClasses, 'desc');
             const lowTimes = rankTimeSlots(filteredClasses, 'asc');
-            // --- END OF CHANGE ---
 
             statsContainer.innerHTML = `
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
