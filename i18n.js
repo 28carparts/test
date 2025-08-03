@@ -305,6 +305,9 @@ const LANG_PACK = {
         'filter_last_30_days': 'Last 30 Days',
         'filter_last_90_days': 'Last 90 Days',
         'filter_all_time': 'All Time',
+        'filter_upcoming_7_days': 'Upcoming 7 Days',
+        'filter_upcoming_30_days': 'Upcoming 30 Days',
+        'filter_upcoming_90_days': 'Upcoming 90 Days',
         'info_no_data_for_period': 'No data available for the selected period.',
         'info_no_data_to_display': 'No data to display for this period.',
 
@@ -768,8 +771,6 @@ const LANG_PACK = {
         'salary_unit_attendee': '位出席者',
         'salary_unit_attendees': '位出席者',
         'info_no_classes_in_period': '此期間沒有授課記錄。',
-        'info_no_data_for_period': '所選期間無可用數據。',
-        'info_no_data_to_display': '此期間無數據可顯示。',
         'template_salary_percentage': '{revenue} x {percentage}%',
         
         // --- Statistics Page ---
@@ -791,6 +792,11 @@ const LANG_PACK = {
         'filter_last_30_days': '最近 30 天',
         'filter_last_90_days': '最近 90 天',
         'filter_all_time': '所有時間',
+        'filter_upcoming_7_days': '未來 7 天',
+        'filter_upcoming_30_days': '未來 30 天',
+        'filter_upcoming_90_days': '未來 90 天',
+        'info_no_data_for_period': '所選期間無可用數據。',
+        'info_no_data_to_display': '此期間無數據可顯示。',
 
         // --- Modals ---
         'title_delete_class': '刪除課程',
