@@ -5452,10 +5452,11 @@ ${_('whatsapp_closing')}
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('status_loading')}...</p>`;
             const days = parseInt(periodSelect.value);
             const now = new Date();
-            const startDate = days === Infinity ? new Date(0) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+            const startDate = days === Infinity ? new Date(0) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
             const startDateIso = getIsoDate(startDate);
             
-            const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).once('value');
+            const nowIso = getIsoDate(now); // Get today's date in YYYY-MM-DD format
+            const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).endAt(nowIso).once('value');
             const filteredClasses = firebaseObjectToArray(classesSnapshot.val());
 
             if (filteredClasses.length === 0) {
