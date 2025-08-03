@@ -394,14 +394,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- END: Add this new function here ---
 
     function calculateClsRevenueAndPayout(cls, allUsers, allTutors, allClasses) {
-        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
+        // --- START OF CHANGE: Logic is now based on ATTENDED members ---
+        const attendedMemberIds = cls.attendedBy ? Object.keys(cls.attendedBy) : [];
         let tutorPayout = 0;
-        
-        // This part requires a full set of classes to trace member purchase history
-        const membersOnThisCls = bookedMemberIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+
+        const attendedMembersOnThisCls = attendedMemberIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
         const allBookingsByTheseMembers = [];
-        if (membersOnThisCls.length > 0) {
-            const memberIdSet = new Set(membersOnThisCls.map(m => m.id));
+        if (attendedMembersOnThisCls.length > 0) {
+            const memberIdSet = new Set(attendedMembersOnThisCls.map(m => m.id));
             allClasses.forEach(c => {
                 if (c.bookedBy) {
                     for (const memberId of Object.keys(c.bookedBy)) {
@@ -414,11 +414,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
+        // The revenue calculation now correctly filters by attendance inside the function.
         const { revenueByClsId } = calculateRevenueForBookings(allBookingsByTheseMembers);
         const grossRevenue = revenueByClsId.get(cls.id) || 0;
 
-        // --- START: SIMPLIFIED PAYOUT CALCULATION ---
-        // We now assume `payoutDetails` always exists and remove the legacy fallback.
+        // Payout calculation is also updated.
         if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
             const { salaryType, salaryValue } = cls.payoutDetails;
             if (salaryType === 'perCls') {
@@ -426,10 +426,11 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (salaryType === 'percentage') {
                 tutorPayout = grossRevenue * (salaryValue / 100);
             } else if (salaryType === 'perHeadcount') {
-                tutorPayout = bookedMemberIds.length * salaryValue;
+                // This now correctly uses the count of *attended* members.
+                tutorPayout = attendedMemberIds.length * salaryValue;
             }
         }
-        // --- END: SIMPLIFIED PAYOUT CALCULATION ---
+        // --- END OF CHANGE ---
         
         const netRevenue = grossRevenue - tutorPayout;
         return { grossRevenue, tutorPayout, netRevenue };
@@ -1034,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const member = appState.users.find(u => u.id === memberId);
                 
                 const message = createWhatsAppMessage(member, cls);
-                copyTextToClipboard(message, _('success_text_copied').replace('{text}', 'WhatsApp message'));
+                copyTextToClipboard(message, _('success_text_copied').replace('{text}', _('label_whatsapp_message')));
 
                 memberItem.querySelector('.member-name').classList.add('notified-member');
                 btn.textContent = _('btn_copied');
@@ -1304,18 +1305,26 @@ ${_('whatsapp_closing')}
         }
     }
 
-    // --- Class, Booking, and Member List Modals (Refactored) ---
     async function openJoinedMembersModal(cls) {
         if (appState.copyMode.active) return;
 
-        const bookedMemberIds = cls.bookedBy ? Object.keys(cls.bookedBy) : [];
+        // Fetch the absolute latest class data to ensure we start with a clean state.
+        const freshClsSnapshot = await database.ref('/classes/' + cls.id).once('value');
+        let currentCls = { id: freshClsSnapshot.key, ...freshClsSnapshot.val() };
+
+        const bookedMemberIds = currentCls.bookedBy ? Object.keys(currentCls.bookedBy) : [];
         const isOwner = appState.currentUser?.role === 'owner';
+
+        const sportType = appState.sportTypes.find(st => st.id === currentCls.sportTypeId);
+        const translatedSubtitle = _('template_class_on_date')
+            .replace('{class}', getSportTypeName(sportType))
+            .replace('{date}', formatShortDateWithYear(currentCls.date));
 
         DOMElements.joinedMembersModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-3xl font-bold text-slate-800 mb-2 text-center">${_('title_class_details')}</h2>
-                <p class="text-center text-slate-500 mb-6">${appState.sportTypes.find(st => st.id === cls.sportTypeId).name} on ${formatShortDateWithYear(cls.date)}</p>
+                <p class="text-center text-slate-500 mb-6">${translatedSubtitle}</p>
                 ${isOwner ? `
                 <div id="clsRevenueDetails" class="mb-6 p-4 bg-slate-50 rounded-lg text-center"><p class="text-slate-500">${_('status_calculating_revenue')}</p></div>
                 ` : ''}
@@ -1352,18 +1361,13 @@ ${_('whatsapp_closing')}
         bookedMembers.forEach(member => usersCache.set(member.id, member));
         appState.users = Array.from(usersCache.values());
 
-        if (isOwner) {
-            const revenueEl = DOMElements.joinedMembersModal.querySelector('#clsRevenueDetails');
-            let grossRevenue = 0, tutorPayout = 0, netRevenue = 0;
-            if (bookedMemberIds.length > 0) {
-                const allClassesSnapshot = await database.ref('/classes').once('value');
-                const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
+        const renderRevenueDetails = (clsForRevenue, allClassesForCalc) => {
+            if (!isOwner) return;
 
-                const revenueData = calculateClsRevenueAndPayout(cls, appState.users, appState.tutors, allClassesForCalc);
-                grossRevenue = revenueData.grossRevenue;
-                tutorPayout = revenueData.tutorPayout;
-                netRevenue = revenueData.netRevenue;
-            }
+            const revenueEl = DOMElements.joinedMembersModal.querySelector('#clsRevenueDetails');
+            if (!revenueEl) return;
+            
+            const { grossRevenue, tutorPayout, netRevenue } = calculateClsRevenueAndPayout(clsForRevenue, appState.users, appState.tutors, allClassesForCalc);
             
             const netRevenueColor = netRevenue >= 0 ? 'text-green-600' : 'text-red-600';
             revenueEl.innerHTML = `
@@ -1372,13 +1376,18 @@ ${_('whatsapp_closing')}
                     <div><p class="text-sm text-slate-500">${_('label_tutor_payout')}</p><p class="text-2xl font-bold text-red-600">(${formatCurrency(tutorPayout)})</p></div>
                     <div><p class="text-sm text-slate-500">${_('label_net_revenue')}</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(netRevenue)}</p></div>
                 </div>`;
-        }
+        };
+
+        const allClassesSnapshot = await database.ref('/classes').once('value');
+        const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
+
+        renderRevenueDetails(currentCls, allClassesForCalc);
         
         if (bookedMembers.length === 0) {
             listEl.innerHTML = `<p class="text-slate-500 text-center">${_('status_no_bookings_yet')}</p>`;
         } else {
             listEl.innerHTML = bookedMembers.map(member => {
-                const isAttended = cls.attendedBy && cls.attendedBy[member.id];
+                const isAttended = currentCls.attendedBy && currentCls.attendedBy[member.id];
                 return `<div class="bg-slate-100 p-3 rounded-lg flex justify-between items-center">
                     <div class="flex items-center">
                        <input type="checkbox" data-member-id="${member.id}" class="h-5 w-5 rounded text-indigo-600 mr-4 attendance-checkbox" ${isAttended ? 'checked' : ''}>
@@ -1394,12 +1403,38 @@ ${_('whatsapp_closing')}
             listEl.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                 checkbox.onchange = (e) => {
                     const memberId = e.target.dataset.memberId;
-                    const attendedRef = database.ref(`/classes/${cls.id}/attendedBy/${memberId}`);
-                    if (e.target.checked) {
+                    const isChecked = e.target.checked;
+                    const attendedRef = database.ref(`/classes/${currentCls.id}/attendedBy/${memberId}`);
+                    
+                    // --- START OF DEFINITIVE FIX ---
+                    // 1. Mutate the local `currentCls` object. This ensures subsequent toggles in the
+                    // same modal session work correctly.
+                    if (isChecked) {
+                        if (!currentCls.attendedBy) currentCls.attendedBy = {};
+                        currentCls.attendedBy[memberId] = true;
+                    } else {
+                        if (currentCls.attendedBy) {
+                            delete currentCls.attendedBy[memberId];
+                        }
+                    }
+                    
+                    // 2. Find and update the corresponding class in the main `allClassesForCalc` array.
+                    // This is the crucial step that fixes the bug.
+                    const indexInAllClasses = allClassesForCalc.findIndex(c => c.id === currentCls.id);
+                    if (indexInAllClasses > -1) {
+                        allClassesForCalc[indexInAllClasses] = currentCls;
+                    }
+                    
+                    // 3. Re-render the revenue display. It now receives the fully updated data.
+                    renderRevenueDetails(currentCls, allClassesForCalc);
+                    
+                    // 4. Update the database in the background.
+                    if (isChecked) {
                         attendedRef.set(true);
                     } else {
                         attendedRef.remove();
                     }
+                    // --- END OF DEFINITIVE FIX ---
                 };
             });
         }
@@ -1424,7 +1459,7 @@ ${_('whatsapp_closing')}
 
             const unbookedMembers = appState.users.filter(u => 
                 u.role !== 'owner' && u.role !== 'staff' && !u.isDeleted &&
-                (!cls.bookedBy || !cls.bookedBy[u.id]) && (
+                (!currentCls.bookedBy || !currentCls.bookedBy[u.id]) && (
                     u.name.toLowerCase().includes(searchTerm) ||
                     u.email.toLowerCase().includes(searchTerm) ||
                     (u.phone && u.phone.includes(searchTerm)))
@@ -1452,29 +1487,29 @@ ${_('whatsapp_closing')}
             if (target) {
                 const memberId = target.dataset.memberId;
                 const memberToAdd = appState.users.find(u => u.id === memberId);
-                const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                const currentBookings = currentCls.bookedBy ? Object.keys(currentCls.bookedBy).length : 0;
 
-                if (currentBookings >= cls.maxParticipants) {
+                if (currentBookings >= currentCls.maxParticipants) {
                     showMessageBox(_('error_class_is_full'), 'error');
                     return;
                 }
                 
                 if (memberToAdd && !memberToAdd.monthlyPlan) {
-                    if (parseFloat(memberToAdd.credits) < parseFloat(cls.credits)) {
+                    if (parseFloat(memberToAdd.credits) < parseFloat(currentCls.credits)) {
                         showMessageBox(_('error_member_insufficient_credits'), 'error');
                         return;
                     }
-                    database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(cls.credits));
+                    database.ref(`/users/${memberId}/credits`).transaction(credits => (credits || 0) - parseFloat(currentCls.credits));
                 }
 
                 const updates = {};
-                updates[`/classes/${cls.id}/bookedBy/${memberId}`] = {
+                updates[`/classes/${currentCls.id}/bookedBy/${memberId}`] = {
                     bookedAt: new Date().toISOString(),
                     bookedBy: appState.currentUser.name,
                     monthlyCreditValue: memberToAdd.monthlyCreditValue || 0,
-                    creditsPaid: cls.credits
+                    creditsPaid: currentCls.credits
                 };
-                updates[`/memberBookings/${memberId}/${cls.id}`] = true;
+                updates[`/memberBookings/${memberId}/${currentCls.id}`] = true;
                 database.ref().update(updates).then(() => {
                     showMessageBox(_('success_walk_in_added'), 'success');
                     closeModal(DOMElements.joinedMembersModal);
@@ -4450,48 +4485,50 @@ ${_('whatsapp_closing')}
 
             if (member.monthlyPlan) {
                 for (const cls of memberClasses) {
-                    const bookingInfo = cls.bookedBy[member.id];
-                    
-                    // --- MODIFIED: Use the frozen value from the booking object ---
-                    // It checks for the new object format first, with a fallback for any old data.
-                    const creditValueForThisBooking = (typeof bookingInfo === 'object' && bookingInfo.monthlyCreditValue)
-                        ? bookingInfo.monthlyCreditValue
-                        : (member.monthlyCreditValue || 0); // Fallback for legacy bookings
-                    
-                    const revenue = (cls.credits || 0) * creditValueForThisBooking;
-                    totalGrossRevenue += revenue;
-                    revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + revenue);
+                    // --- START OF CHANGE: Only calculate revenue if the member attended ---
+                    if (cls.attendedBy && cls.attendedBy[member.id]) {
+                        const bookingInfo = cls.bookedBy[member.id];
+                        const creditValueForThisBooking = (typeof bookingInfo === 'object' && bookingInfo.monthlyCreditValue)
+                            ? bookingInfo.monthlyCreditValue
+                            : (member.monthlyCreditValue || 0);
+                        
+                        const revenue = (cls.credits || 0) * creditValueForThisBooking;
+                        totalGrossRevenue += revenue;
+                        revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + revenue);
+                    }
+                    // --- END OF CHANGE ---
                 }
                 continue;
             }
 
-            // --- START: THE FIX IS HERE ---
-            // We must filter out 'deleted' purchase entries before sorting for FIFO.
             const purchasePool = firebaseObjectToArray(member.purchaseHistory)
-                .filter(p => p.status !== 'deleted') // <-- ADD THIS LINE
+                .filter(p => p.status !== 'deleted')
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(p => ({
                     ...p,
                     costPerCredit: p.costPerCredit !== undefined ? p.costPerCredit : 0,
                     remainingCredits: p.credits,
                 }));
-            // --- END: THE FIX IS HERE ---
             
             for (const cls of memberClasses) {
-                let creditsToDeduct = cls.credits;
-                let clsRevenue = 0;
+                // --- START OF CHANGE: Only calculate revenue if the member attended ---
+                if (cls.attendedBy && cls.attendedBy[member.id]) {
+                    let creditsToDeduct = cls.credits;
+                    let clsRevenue = 0;
 
-                for (const purchase of purchasePool) {
-                    if (creditsToDeduct <= 0) break;
-                    if (purchase.remainingCredits <= 0) continue;
+                    for (const purchase of purchasePool) {
+                        if (creditsToDeduct <= 0) break;
+                        if (purchase.remainingCredits <= 0) continue;
 
-                    const deductFromThisPool = Math.min(creditsToDeduct, purchase.remainingCredits);
-                    clsRevenue += deductFromThisPool * purchase.costPerCredit;
-                    purchase.remainingCredits -= deductFromThisPool;
-                    creditsToDeduct -= deductFromThisPool;
+                        const deductFromThisPool = Math.min(creditsToDeduct, purchase.remainingCredits);
+                        clsRevenue += deductFromThisPool * purchase.costPerCredit;
+                        purchase.remainingCredits -= deductFromThisPool;
+                        creditsToDeduct -= deductFromThisPool;
+                    }
+                    totalGrossRevenue += clsRevenue;
+                    revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + clsRevenue);
                 }
-                totalGrossRevenue += clsRevenue;
-                revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + clsRevenue);
+                // --- END OF CHANGE ---
             }
         }
         return { grossRevenue: totalGrossRevenue, revenueByClsId };
@@ -4792,7 +4829,7 @@ ${_('whatsapp_closing')}
                         </div>
                         <div>
                             <label for="sportTypeNameZh" data-lang-key="admin_sport_type_name_zh" class="block text-slate-600 text-sm font-semibold mb-2"></label>
-                            <input type="text" id="sportTypeNameZh" class="form-input" placeholder="e.g., 瑜伽">
+                            <input type="text" id="sportTypeNameZh" class="form-input" data-lang-key="placeholder_yoga_example">
                         </div>
                         <div>
                             <label data-lang-key="admin_sport_type_color" class="block text-slate-600 text-sm font-semibold mb-2"></label>
@@ -4884,7 +4921,7 @@ ${_('whatsapp_closing')}
                     <div>
                         <label for="tutorPhone" data-lang-key="label_mobile_number" class="block text-slate-600 text-sm font-semibold mb-2"></label>
                         <div class="flex gap-2">
-                            <input type="text" id="tutorCountryCode" class="form-input w-24" data-lang-key="placeholder_country_code" placeholder="852">
+                            <input type="text" id="tutorCountryCode" class="form-input w-24" data-lang-key="placeholder_country_code_example">
                             <input type="tel" id="tutorPhone" class="form-input flex-grow">
                         </div>
                     </div>
@@ -5117,20 +5154,15 @@ ${_('whatsapp_closing')}
         if (periods.length > 0) {
             periodSelect.innerHTML = periods.map(p => `<option value="${p}">${new Date(p + '-01T12:00:00Z').toLocaleString(getLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`).join('');
             
-            // --- START: NEW LOGIC BLOCK ---
-            const currentMonthPeriod = getIsoDate(new Date()).substring(0, 7); // e.g., "2024-07"
+            const currentMonthPeriod = getIsoDate(new Date()).substring(0, 7);
 
             if (appState.selectedFilters.salaryPeriod && periods.includes(appState.selectedFilters.salaryPeriod)) {
-                // Priority 1: Use the last selected filter if it's still valid
                 periodSelect.value = appState.selectedFilters.salaryPeriod;
             } else if (periods.includes(currentMonthPeriod)) {
-                // Priority 2: Default to the CURRENT month if it exists in the list
                 periodSelect.value = currentMonthPeriod;
             } else {
-                // Priority 3: Fallback to the newest available month
                 periodSelect.value = periods[0];
             }
-            // --- END: NEW LOGIC BLOCK ---
 
         } else {
             periodSelect.innerHTML = '<option value="">No Data</option>';
@@ -5205,7 +5237,9 @@ ${_('whatsapp_closing')}
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                 let earnings = 0;
                 let calculation = _('label_na');
-                const attendeesCount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                // --- START OF FIX: Use ATTENDEE count for export calculation ---
+                const attendeesCount = cls.attendedBy ? Object.keys(cls.attendedBy).length : 0;
+                // --- END OF FIX ---
                 const clsGrossRevenue = revenueByClsId.get(cls.id) || 0;
                 
                 if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
@@ -5241,7 +5275,7 @@ ${_('whatsapp_closing')}
             exportToCsv(fileName, exportData);
 
             exportBtn.disabled = false;
-            exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg> Export`;
+            exportBtn.innerHTML = exportBtnDefaultHTML;
         };
         
         onFilterChange();
@@ -5283,14 +5317,15 @@ ${_('whatsapp_closing')}
             });
         }
         
+        // This call now uses the corrected, attendance-based logic
         const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings);
         
         let totalEarnings = 0;
         const clsDetails = classesInPeriod.map(cls => {
             const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
             let earnings = 0;
-            let calculation = "N/A";
-            const attendeesCount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+            let calculation = _('label_na');
+            const attendeesCount = cls.attendedBy ? Object.keys(cls.attendedBy).length : 0;
             const clsGrossRevenue = revenueByClsId.get(cls.id) || 0;
             
             if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
@@ -5300,7 +5335,8 @@ ${_('whatsapp_closing')}
                     calculation = _('salary_calculation_fixed').replace('{amount}', formatCurrency(salaryValue));
                 } else if (salaryType === 'percentage') {
                     earnings = clsGrossRevenue * (salaryValue / 100);
-                    calculation = `${formatCurrency(clsGrossRevenue)} x ${salaryValue}%`;
+                    // Use the new template key for the percentage calculation string
+                    calculation = _('template_salary_percentage').replace('{revenue}', formatCurrency(clsGrossRevenue)).replace('{percentage}', salaryValue);
                 } else if (salaryType === 'perHeadcount') {
                     earnings = attendeesCount * salaryValue;
                     const attendeesUnit = _(attendeesCount === 1 ? 'salary_unit_attendee' : 'salary_unit_attendees');
@@ -5423,7 +5459,7 @@ ${_('whatsapp_closing')}
             const filteredClasses = firebaseObjectToArray(classesSnapshot.val());
 
             if (filteredClasses.length === 0) {
-                 statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">No data available for the selected period.</p>`;
+                 statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('info_no_data_for_period')}</p>`;
                  currentStatsForExport = {}; 
                  return;
             }
@@ -5438,42 +5474,44 @@ ${_('whatsapp_closing')}
             const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
             const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
             
-            const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', 'bookedBy', appState.sportTypes);
-            const tutorPopularity = rankByStat(filteredClasses, 'tutorId', 'bookedBy', appState.tutors);
+            // --- START OF CHANGE: Popularity is now based on attendance ('attendedBy') ---
+            const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', 'attendedBy', appState.sportTypes);
+            const tutorPopularity = rankByStat(filteredClasses, 'tutorId', 'attendedBy', appState.tutors);
             const peakTimes = rankTimeSlots(filteredClasses, 'desc');
             const lowTimes = rankTimeSlots(filteredClasses, 'asc');
+            // --- END OF CHANGE ---
 
             statsContainer.innerHTML = `
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div id="grossRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_gross_revenue')}</p><p class="text-2xl font-bold text-slate-800">${_('status_loading')}...</p></div>
                     <div id="netRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_net_revenue')}</p><p class="text-2xl font-bold text-slate-800">${_('status_loading')}...</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_total_enrollments')}</p><p class="text-2xl font-bold text-slate-800">${totalBookings}</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_total_attendees')}</p><p class="text-2xl font-bold text-slate-800">${totalAttendees}</p></div>
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_attendance_rate')}</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_avg_fill_rate')}</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${createRankingCard(_('header_popular_classes'), clsPopularity, _('label_enrollments'), '#6366f1', true)}
+                    ${createRankingCard(_('header_popular_classes'), clsPopularity, _('label_attendees'), '#6366f1', true)}
                     <div id="topEarningClassesCard">${createRankingCard(_('header_top_earning_classes'), [], _('label_revenue'), '#22c55e', true)}</div>
-                    ${createRankingCard(_('header_top_tutors_enrollment'), tutorPopularity, _('label_enrollments'), '#6366f1')}
+                    ${createRankingCard(_('header_top_tutors_attendance'), tutorPopularity, _('label_attendees'), '#6366f1')}
                     <div id="topTutorsByRevenueCard">${createRankingCard(_('header_top_tutors_revenue'), [], _('label_revenue'), '#22c55e')}</div>
-                    ${createRankingCard(_('header_peak_times'), peakTimes, _('label_enrollments'), '#f97316')}
-                    ${createRankingCard(_('header_low_times'), lowTimes, _('label_enrollments'), '#f97316')}
+                    ${createRankingCard(_('header_peak_times'), peakTimes, _('label_attendees'), '#f97316')}
+                    ${createRankingCard(_('header_low_times'), lowTimes, _('label_attendees'), '#f97316')}
                 </div>`;
             
             currentStatsForExport = {
                 summary: [
                     { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
-                    { Metric: 'Total Enrollments', Value: totalBookings },
+                    { Metric: 'Total Attendees', Value: totalAttendees },
                     { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
                     { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
                 ],
-                clsPopularity: clsPopularity.map(item => ({ Ranking: 'Class by Enrollment', name: item.name, value: item.value })),
-                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Enrollment', name: item.name, value: item.value })),
+                clsPopularity: clsPopularity.map(item => ({ Ranking: 'Class by Attendance', name: item.name, value: item.value })),
+                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Attendance', name: item.name, value: item.value })),
                 peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', name: item.name, value: item.value })),
                 lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', name: item.name, value: item.value }))
             };
             
-            await calculateAndRenderRevenueStats(filteredClasses); // <<< FIX #1: Added await
+            await calculateAndRenderRevenueStats(filteredClasses);
         };
 
         const calculateAndRenderRevenueStats = async (filteredClasses) => {
@@ -5511,7 +5549,7 @@ ${_('whatsapp_closing')}
                 if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
                     const { salaryType, salaryValue } = cls.payoutDetails;
                     if (salaryType === 'perCls') totalTutorPayout += salaryValue;
-                    else if (salaryType === 'perHeadcount') totalTutorPayout += (cls.bookedBy ? Object.keys(cls.bookedBy).length : 0) * salaryValue;
+                    else if (salaryType === 'perHeadcount') totalTutorPayout += (cls.attendedBy ? Object.keys(cls.attendedBy).length : 0) * salaryValue;
                     else if (salaryType === 'percentage') totalTutorPayout += clsRevenue * (salaryValue / 100);
                 }
             });
@@ -5556,7 +5594,6 @@ ${_('whatsapp_closing')}
                 return;
             }
 
-            // This is the main fix: Standardize ALL rows to a 3-column format.
             const translatedSummary = [
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
@@ -5575,8 +5612,8 @@ ${_('whatsapp_closing')}
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
-                    [_('export_header_name')]: _('export_cat_total_enrollments'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Enrollments'))?.Value || 'N/A'
+                    [_('export_header_name')]: _('export_cat_total_attendees'),
+                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Attendees'))?.Value || 'N/A'
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
@@ -5593,7 +5630,6 @@ ${_('whatsapp_closing')}
             const createTranslatedSection = (title, data) => {
                 if (!data || data.length === 0) return [];
                 return [
-                    // Spacer row with the same 3 keys
                     { [_('export_header_category')]: '', [_('export_header_name')]: '', [_('export_header_value')]: '' },
                     ...data.map(item => ({
                         [_('export_header_category')]: title,
@@ -5607,9 +5643,9 @@ ${_('whatsapp_closing')}
 
             const formattedExportData = [
                 ...translatedSummary,
-                ...createTranslatedSection(_('export_cat_class_by_enrollment'), clsPopularity),
+                ...createTranslatedSection(_('export_cat_class_by_attendance'), clsPopularity),
                 ...createTranslatedSection(_('export_cat_class_by_revenue'), topClassesByRevenue),
-                ...createTranslatedSection(_('export_cat_tutor_by_enrollment'), tutorPopularity),
+                ...createTranslatedSection(_('export_cat_tutor_by_attendance'), tutorPopularity),
                 ...createTranslatedSection(_('export_cat_tutor_by_revenue'), topTutorsByRevenue),
                 ...createTranslatedSection(_('export_cat_peak_times'), peakTimes),
                 ...createTranslatedSection(_('export_cat_low_times'), lowTimes),
@@ -5715,7 +5751,7 @@ ${_('whatsapp_closing')}
                             <div class="bar-chart-bar h-2.5 rounded-full" style="width: ${max > 0 ? (item.value / max) * 100 : 0}%; background-color: ${color};"></div>
                         </div>
                     </div>
-                `).join('') : '<p class="text-slate-500 text-sm">No data to display for this period.</p>'}
+                `).join('') : `<p class="text-slate-500 text-sm">${_('info_no_data_to_display')}</p>`}
                 </div>
             </div>`;
     }
