@@ -4464,7 +4464,7 @@ ${_('whatsapp_closing')}
         }
     }
 
-    function calculateRevenueForBookings(bookings) {
+    function calculateRevenueForBookings(bookings, revenueMode = 'actual') {
         const bookingsByMember = bookings.reduce((acc, booking) => {
             const memberId = booking.member.id;
             if (!acc[memberId]) {
@@ -4483,50 +4483,49 @@ ${_('whatsapp_closing')}
 
             const memberClasses = bookingsByMember[memberId].sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`));
 
-            if (member.monthlyPlan) {
-                for (const cls of memberClasses) {
-                    // --- START OF CHANGE: Only calculate revenue if the member attended ---
-                    if (cls.attendedBy && cls.attendedBy[member.id]) {
+            for (const cls of memberClasses) {
+                // --- START OF CHANGE: This is the core logic update ---
+                const isAttended = cls.attendedBy && cls.attendedBy[memberId];
+                // Calculate revenue if we are in 'projected' mode OR if we are in 'actual' mode and the member attended.
+                const shouldCalculate = (revenueMode === 'projected') || (revenueMode === 'actual' && isAttended);
+
+                if (shouldCalculate) {
+                    let revenue = 0;
+                    if (member.monthlyPlan) {
                         const bookingInfo = cls.bookedBy[member.id];
                         const creditValueForThisBooking = (typeof bookingInfo === 'object' && bookingInfo.monthlyCreditValue)
                             ? bookingInfo.monthlyCreditValue
                             : (member.monthlyCreditValue || 0);
+                        revenue = (cls.credits || 0) * creditValueForThisBooking;
+                    } else {
+                        // For credit-based members, we calculate the revenue based on their purchase history.
+                        // This logic is complex and remains encapsulated. We assume for both actual and projected
+                        // that the credit cost is the same.
+                        const purchasePool = firebaseObjectToArray(member.purchaseHistory)
+                            .filter(p => p.status !== 'deleted')
+                            .sort((a, b) => new Date(a.date) - new Date(b.date))
+                            .map(p => ({
+                                ...p,
+                                costPerCredit: p.costPerCredit !== undefined ? p.costPerCredit : 0,
+                                remainingCredits: p.credits,
+                            }));
                         
-                        const revenue = (cls.credits || 0) * creditValueForThisBooking;
-                        totalGrossRevenue += revenue;
-                        revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + revenue);
+                        let creditsToDeduct = cls.credits;
+                        let clsRevenueForCreditMember = 0;
+
+                        for (const purchase of purchasePool) {
+                            if (creditsToDeduct <= 0) break;
+                            if (purchase.remainingCredits <= 0) continue;
+
+                            const deductFromThisPool = Math.min(creditsToDeduct, purchase.remainingCredits);
+                            clsRevenueForCreditMember += deductFromThisPool * purchase.costPerCredit;
+                            purchase.remainingCredits -= deductFromThisPool;
+                            creditsToDeduct -= deductFromThisPool;
+                        }
+                        revenue = clsRevenueForCreditMember;
                     }
-                    // --- END OF CHANGE ---
-                }
-                continue;
-            }
-
-            const purchasePool = firebaseObjectToArray(member.purchaseHistory)
-                .filter(p => p.status !== 'deleted')
-                .sort((a, b) => new Date(a.date) - new Date(b.date))
-                .map(p => ({
-                    ...p,
-                    costPerCredit: p.costPerCredit !== undefined ? p.costPerCredit : 0,
-                    remainingCredits: p.credits,
-                }));
-            
-            for (const cls of memberClasses) {
-                // --- START OF CHANGE: Only calculate revenue if the member attended ---
-                if (cls.attendedBy && cls.attendedBy[member.id]) {
-                    let creditsToDeduct = cls.credits;
-                    let clsRevenue = 0;
-
-                    for (const purchase of purchasePool) {
-                        if (creditsToDeduct <= 0) break;
-                        if (purchase.remainingCredits <= 0) continue;
-
-                        const deductFromThisPool = Math.min(creditsToDeduct, purchase.remainingCredits);
-                        clsRevenue += deductFromThisPool * purchase.costPerCredit;
-                        purchase.remainingCredits -= deductFromThisPool;
-                        creditsToDeduct -= deductFromThisPool;
-                    }
-                    totalGrossRevenue += clsRevenue;
-                    revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + clsRevenue);
+                    totalGrossRevenue += revenue;
+                    revenueByClsId.set(cls.id, (revenueByClsId.get(cls.id) || 0) + revenue);
                 }
                 // --- END OF CHANGE ---
             }
@@ -5231,7 +5230,7 @@ ${_('whatsapp_closing')}
                 });
             }
             
-            const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings);
+            const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings, 'actual');
             
             const clsDetails = sortedClassesInPeriod.map(cls => {
                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
@@ -5318,7 +5317,7 @@ ${_('whatsapp_closing')}
         }
         
         // This call now uses the corrected, attendance-based logic
-        const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings);
+        const { revenueByClsId } = calculateRevenueForBookings(allMemberBookings, 'actual');
         
         let totalEarnings = 0;
         const clsDetails = classesInPeriod.map(cls => {
@@ -5443,25 +5442,17 @@ ${_('whatsapp_closing')}
         const statsContainer = container.querySelector('#statisticsContainer');
         const exportBtn = container.querySelector('#exportStatsBtn');
         const exportBtnDefaultHTML = exportBtn.innerHTML;
-
-        // --- START OF FIX: Added future-looking filters with negative values ---
-        // Note: You will need to add the new `filter_upcoming_...` keys to your i18n.js file.
         const periods = {
-            // Future-looking filters use negative numbers
             [_('filter_upcoming_90_days')]: -90,
             [_('filter_upcoming_30_days')]: -30,
             [_('filter_upcoming_7_days')]: -7,
-            // Past-looking filters use positive numbers
             [_('filter_last_7_days')]: 7,
             [_('filter_last_30_days')]: 30,
             [_('filter_last_90_days')]: 90,
             [_('filter_all_time')]: Infinity 
         };
-        // --- END OF FIX ---
-
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
-        // Default selection to "Last 30 Days"
-        periodSelect.value = -7;
+        periodSelect.value = 30;
         
         let currentStatsForExport = {};
 
@@ -5469,39 +5460,39 @@ ${_('whatsapp_closing')}
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('status_loading')}...</p>`;
             const days = parseFloat(periodSelect.value);
             
-            // --- START OF FIX: Updated data fetching logic for past and future ranges ---
+            const isFutureView = days < 0;
+            const primaryStatKey = isFutureView ? 'bookedBy' : 'attendedBy';
+            const participantLabel = isFutureView ? _('label_total_enrollments') : _('label_total_attendees');
+            const rankingValueLabel = isFutureView ? _('label_enrollments') : _('label_attendees');
+            const tutorPopularityTitle = isFutureView ? _('header_top_tutors_enrollment') : _('header_top_tutors_attendance');
+
             let filteredClasses;
 
             if (days === Infinity) {
-                // For "All Time", fetch all classes directly.
                 const allClassesSnapshot = await database.ref('/classes').once('value');
                 filteredClasses = firebaseObjectToArray(allClassesSnapshot.val()).filter(c => c && c.date);
             } else {
-                // This block now handles both past (positive days) and future (negative days) ranges.
                 const now = new Date();
-                now.setUTCHours(0, 0, 0, 0); // Normalize 'now' to the start of the UTC day for consistency.
+                now.setUTCHours(0, 0, 0, 0);
 
                 let startDate, endDate;
-
-                if (days > 0) { // Past-looking (e.g., Last 7 Days)
-                    startDate = new Date(now.getTime()); // Create a copy of 'now'
+                if (isFutureView) {
+                    startDate = new Date(now.getTime());
+                    startDate.setUTCDate(now.getUTCDate() + 1);
+                    endDate = new Date(now.getTime());
+                    endDate.setUTCDate(now.getUTCDate() + Math.abs(days));
+                } else {
+                    startDate = new Date(now.getTime());
                     startDate.setUTCDate(now.getUTCDate() - (days - 1));
                     endDate = now;
-                } else { // Future-looking (e.g., Upcoming 7 Days, where days = -7)
-                    startDate = now;
-                    endDate = new Date(now.getTime()); // Create a copy of 'now'
-                    // Add days to the future. Math.abs(days) makes -7 become 7.
-                    endDate.setUTCDate(now.getUTCDate() + (Math.abs(days) - 1));
                 }
                 
                 const startDateIso = getIsoDate(startDate);
                 const endDateIso = getIsoDate(endDate);
                 
-                // This single query works for both past and future ranges.
                 const classesSnapshot = await database.ref('/classes').orderByChild('date').startAt(startDateIso).endAt(endDateIso).once('value');
                 filteredClasses = firebaseObjectToArray(classesSnapshot.val());
             }
-            // --- END OF FIX ---
 
             if (filteredClasses.length === 0) {
                  statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('info_no_data_for_period')}</p>`;
@@ -5509,55 +5500,59 @@ ${_('whatsapp_closing')}
                  return;
             }
 
-            let totalBookings = 0, totalAttendees = 0;
+            let totalParticipants = 0, totalBookings = 0;
             filteredClasses.forEach(cls => {
+                totalParticipants += cls[primaryStatKey] ? Object.keys(cls[primaryStatKey]).length : 0;
                 totalBookings += cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
-                totalAttendees += cls.attendedBy ? Object.keys(cls.attendedBy).length : 0;
             });
 
             const totalCapacity = filteredClasses.reduce((sum, c) => sum + (c.maxParticipants || 0), 0);
             const avgFillRate = totalCapacity > 0 ? (totalBookings / totalCapacity) * 100 : 0;
-            const attendanceRate = totalBookings > 0 ? (totalAttendees / totalBookings) * 100 : 0;
+            const attendanceRate = totalBookings > 0 ? (totalParticipants / totalBookings) * 100 : 0;
             
-            const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', 'attendedBy', appState.sportTypes);
-            const tutorPopularity = rankByStat(filteredClasses, 'tutorId', 'attendedBy', appState.tutors);
-            const peakTimes = rankTimeSlots(filteredClasses, 'desc');
-            const lowTimes = rankTimeSlots(filteredClasses, 'asc');
+            const clsPopularity = rankByStat(filteredClasses, 'sportTypeId', primaryStatKey, appState.sportTypes);
+            const tutorPopularity = rankByStat(filteredClasses, 'tutorId', primaryStatKey, appState.tutors);
+            const peakTimes = rankTimeSlots(filteredClasses, 'desc', primaryStatKey);
+            const lowTimes = rankTimeSlots(filteredClasses, 'asc', primaryStatKey);
 
             statsContainer.innerHTML = `
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div id="grossRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_gross_revenue')}</p><p class="text-2xl font-bold text-slate-800">${_('status_loading')}...</p></div>
                     <div id="netRevenueCard" class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_net_revenue')}</p><p class="text-2xl font-bold text-slate-800">${_('status_loading')}...</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_total_attendees')}</p><p class="text-2xl font-bold text-slate-800">${totalAttendees}</p></div>
-                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_attendance_rate')}</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>
+                    <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${participantLabel}</p><p class="text-2xl font-bold text-slate-800">${totalParticipants}</p></div>
+                    ${!isFutureView ? `<div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_attendance_rate')}</p><p class="text-2xl font-bold text-slate-800">${attendanceRate.toFixed(1)}%</p></div>` : ''}
                     <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_avg_fill_rate')}</p><p class="text-2xl font-bold text-slate-800">${avgFillRate.toFixed(1)}%</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${createRankingCard(_('header_popular_classes'), clsPopularity, _('label_attendees'), '#6366f1', true)}
+                    ${createRankingCard(_('header_popular_classes'), clsPopularity, rankingValueLabel, '#6366f1', true)}
                     <div id="topEarningClassesCard">${createRankingCard(_('header_top_earning_classes'), [], _('label_revenue'), '#22c55e', true)}</div>
-                    ${createRankingCard(_('header_top_tutors_attendance'), tutorPopularity, _('label_attendees'), '#6366f1')}
+                    ${createRankingCard(tutorPopularityTitle, tutorPopularity, rankingValueLabel, '#6366f1')}
                     <div id="topTutorsByRevenueCard">${createRankingCard(_('header_top_tutors_revenue'), [], _('label_revenue'), '#22c55e')}</div>
-                    ${createRankingCard(_('header_peak_times'), peakTimes, _('label_attendees'), '#f97316')}
-                    ${createRankingCard(_('header_low_times'), lowTimes, _('label_attendees'), '#f97316')}
+                    ${createRankingCard(_('header_peak_times'), peakTimes, rankingValueLabel, '#f97316')}
+                    ${createRankingCard(_('header_low_times'), lowTimes, rankingValueLabel, '#f97316')}
                 </div>`;
             
+            // --- START OF CHANGE 1: Store summary data with stable, non-translated keys ---
             currentStatsForExport = {
                 summary: [
-                    { Metric: 'Time Period', Value: periodSelect.options[periodSelect.selectedIndex].text },
-                    { Metric: 'Total Attendees', Value: totalAttendees },
-                    { Metric: 'Attendance Rate (%)', Value: attendanceRate.toFixed(1) },
-                    { Metric: 'Average Fill Rate (%)', Value: avgFillRate.toFixed(1) }
+                    { key: 'timePeriod', value: periodSelect.options[periodSelect.selectedIndex].text },
+                    { key: 'totalParticipants', value: totalParticipants },
+                    { key: 'avgFillRate', value: avgFillRate.toFixed(1) }
                 ],
-                clsPopularity: clsPopularity.map(item => ({ Ranking: 'Class by Attendance', name: item.name, value: item.value })),
-                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by Attendance', name: item.name, value: item.value })),
+                clsPopularity: clsPopularity.map(item => ({ Ranking: 'Class by ' + rankingValueLabel, name: item.name, value: item.value })),
+                tutorPopularity: tutorPopularity.map(item => ({ Ranking: 'Tutor by ' + rankingValueLabel, name: item.name, value: item.value })),
                 peakTimes: peakTimes.map(item => ({ Ranking: 'Peak Time Slots', name: item.name, value: item.value })),
                 lowTimes: lowTimes.map(item => ({ Ranking: 'Low Time Slots', name: item.name, value: item.value }))
             };
+             if (!isFutureView) {
+                currentStatsForExport.summary.push({ key: 'attendanceRate', value: attendanceRate.toFixed(1) });
+            }
+            // --- END OF CHANGE 1 ---
             
-            await calculateAndRenderRevenueStats(filteredClasses);
+            await calculateAndRenderRevenueStats(filteredClasses, isFutureView);
         };
 
-        const calculateAndRenderRevenueStats = async (filteredClasses) => {
+        const calculateAndRenderRevenueStats = async (filteredClasses, isFutureView) => {
             const memberIdsInPeriod = new Set();
             filteredClasses.forEach(cls => {
                 if (cls.bookedBy) {
@@ -5582,17 +5577,22 @@ ${_('whatsapp_closing')}
                 });
             }
             
-            const { revenueByClsId } = calculateRevenueForBookings(allRelevantBookings);
+            const revenueMode = isFutureView ? 'projected' : 'actual';
+            const { revenueByClsId } = calculateRevenueForBookings(allRelevantBookings, revenueMode);
             
             let grossRevenue = 0, totalTutorPayout = 0;
+            const participantCountKey = isFutureView ? 'bookedBy' : 'attendedBy';
+
             filteredClasses.forEach(cls => {
                 const clsRevenue = revenueByClsId.get(cls.id) || 0;
                 grossRevenue += clsRevenue;
                 
                 if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
                     const { salaryType, salaryValue } = cls.payoutDetails;
+                    const participantCount = cls[participantCountKey] ? Object.keys(cls[participantCountKey]).length : 0;
+
                     if (salaryType === 'perCls') totalTutorPayout += salaryValue;
-                    else if (salaryType === 'perHeadcount') totalTutorPayout += (cls.attendedBy ? Object.keys(cls.attendedBy).length : 0) * salaryValue;
+                    else if (salaryType === 'perHeadcount') totalTutorPayout += participantCount * salaryValue;
                     else if (salaryType === 'percentage') totalTutorPayout += clsRevenue * (salaryValue / 100);
                 }
             });
@@ -5616,10 +5616,12 @@ ${_('whatsapp_closing')}
             const topTutorsByRevenueCard = document.getElementById('topTutorsByRevenueCard');
             if(topTutorsByRevenueCard) topTutorsByRevenueCard.innerHTML = createRankingCard(_('header_top_tutors_revenue'), topTutorsByRevenue, _('label_revenue'), '#22c55e');
 
+            // --- START OF CHANGE 2: Push to summary with stable keys ---
             currentStatsForExport.summary.push(
-                { Metric: 'Gross Revenue', Value: formatCurrency(grossRevenue) },
-                { Metric: 'Net Revenue', Value: formatCurrency(totalNetRevenue) }
+                { key: 'grossRevenue', value: formatCurrency(grossRevenue) },
+                { key: 'netRevenue', value: formatCurrency(totalNetRevenue) }
             );
+            // --- END OF CHANGE 2 ---
             currentStatsForExport.topClassesByRevenue = topClassesByRevenue.map(item => ({ Ranking: 'Class by Revenue', name: item.name, value: item.value }));
             currentStatsForExport.topTutorsByRevenue = topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', name: item.name, value: item.value }));
         };
@@ -5637,39 +5639,44 @@ ${_('whatsapp_closing')}
                 return;
             }
 
+            // --- START OF CHANGE 3: Read from summary using stable keys ---
+            const isFutureView = parseFloat(periodSelect.value) < 0;
+            const classPopularityTitle = isFutureView ? _('export_cat_class_by_enrollment') : _('export_cat_class_by_attendance');
+            const tutorPopularityTitle = isFutureView ? _('export_cat_tutor_by_enrollment') : _('export_cat_tutor_by_attendance');
+            
             const translatedSummary = [
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
                     [_('export_header_name')]: _('export_cat_time_period'),
-                    [_('export_header_value')]: periodSelect.options[periodSelect.selectedIndex].text
+                    [_('export_header_value')]: summary.find(s => s.key === 'timePeriod')?.value || _('label_na')
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
                     [_('export_header_name')]: _('export_cat_gross_revenue'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Gross'))?.Value || 'N/A'
+                    [_('export_header_value')]: summary.find(s => s.key === 'grossRevenue')?.value || _('label_na')
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
                     [_('export_header_name')]: _('export_cat_net_revenue'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Net'))?.Value || 'N/A'
+                    [_('export_header_value')]: summary.find(s => s.key === 'netRevenue')?.value || _('label_na')
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
-                    [_('export_header_name')]: _('export_cat_total_attendees'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Attendees'))?.Value || 'N/A'
+                    [_('export_header_name')]: isFutureView ? _('label_total_enrollments') : _('label_total_attendees'),
+                    [_('export_header_value')]: summary.find(s => s.key === 'totalParticipants')?.value || _('label_na')
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
                     [_('export_header_name')]: _('export_cat_attendance_rate'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Attendance'))?.Value || 'N/A'
+                    [_('export_header_value')]: summary.find(s => s.key === 'attendanceRate')?.value || _('label_na')
                 },
                 {
                     [_('export_header_category')]: _('title_studio_stats'),
                     [_('export_header_name')]: _('export_cat_avg_fill_rate'),
-                    [_('export_header_value')]: summary.find(s => s.Metric.includes('Fill Rate'))?.Value || 'N/A'
+                    [_('export_header_value')]: summary.find(s => s.key === 'avgFillRate')?.value || _('label_na')
                 },
             ];
-
+            
             const createTranslatedSection = (title, data) => {
                 if (!data || data.length === 0) return [];
                 return [
@@ -5686,13 +5693,14 @@ ${_('whatsapp_closing')}
 
             const formattedExportData = [
                 ...translatedSummary,
-                ...createTranslatedSection(_('export_cat_class_by_attendance'), clsPopularity),
+                ...createTranslatedSection(classPopularityTitle, clsPopularity),
                 ...createTranslatedSection(_('export_cat_class_by_revenue'), topClassesByRevenue),
-                ...createTranslatedSection(_('export_cat_tutor_by_attendance'), tutorPopularity),
+                ...createTranslatedSection(tutorPopularityTitle, tutorPopularity),
                 ...createTranslatedSection(_('export_cat_tutor_by_revenue'), topTutorsByRevenue),
                 ...createTranslatedSection(_('export_cat_peak_times'), peakTimes),
                 ...createTranslatedSection(_('export_cat_low_times'), lowTimes),
             ];
+            // --- END OF CHANGE 3 ---
 
             const periodText = periodSelect.options[periodSelect.selectedIndex].text.replace(/ /g, '-');
             const fileName = `statistics-report_${periodText}`;
@@ -5751,14 +5759,16 @@ ${_('whatsapp_closing')}
             .slice(0, 5);
     }
 
-    function rankTimeSlots(classes, sortDirection = 'desc') {
+    function rankTimeSlots(classes, sortDirection = 'desc', valueKey = 'bookedBy') {
         const timeSlots = {};
         classes.forEach(c => {
             const hour = c.time.split(':')[0];
             // Using a simple 1-hour slot for clarity
             const slot = `${String(hour).padStart(2, '0')}:00 - ${String(parseInt(hour) + 1).padStart(2, '0')}:00`;
-            const bookings = c.bookedBy ? Object.keys(c.bookedBy).length : 0;
-            timeSlots[slot] = (timeSlots[slot] || 0) + bookings;
+            // --- START OF CHANGE: Use the dynamic valueKey ---
+            const participants = c[valueKey] ? Object.keys(c[valueKey]).length : 0;
+            timeSlots[slot] = (timeSlots[slot] || 0) + participants;
+            // --- END OF CHANGE ---
         });
 
         const sortedSlots = Object.entries(timeSlots).sort(([, aValue], [, bValue]) => {
