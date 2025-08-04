@@ -4720,7 +4720,7 @@ ${_('whatsapp_closing')}
                     <div class="flex items-center gap-3"><span class="h-5 w-5 rounded-full" style="background-color: ${st.color}"></span><span class="text-slate-700 font-semibold">${sportName}</span></div>
                     <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="sportType" data-id="${st.id}">${_('btn_edit')}</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="sportType" data-id="${st.id}" data-name="${sportName}">${_('btn_delete')}</button></div>
                 </li>`
-            }).join('') || `<li class="text-center text-slate-500 p-4">No sport types found.</li>`;
+            }).join('') || `<li class="text-center text-slate-500 p-4">${_('info_no_sport_types_found')}</li>`;
             
             renderPaginationControls(sportsPaginationContainer, sportPage, sportsTotalPages, filteredSports.length, itemsPerPage.sports, (newPage) => {
                 appState.pagination.sports.page = newPage;
@@ -4756,7 +4756,7 @@ ${_('whatsapp_closing')}
                     </div>
                     <div class="flex gap-2"><button class="edit-btn font-semibold text-indigo-600" data-type="tutor" data-id="${t.id}">${_('btn_edit')}</button><button type="button" class="delete-btn font-semibold text-red-600" data-type="tutor" data-id="${t.id}" data-name="${t.name}">${_('btn_delete')}</button></div>
                 </li>`
-            }).join('') || `<li class="text-center text-slate-500 p-4">No tutors found.</li>`;
+            }).join('') || `<li class="text-center text-slate-500 p-4">${_('info_no_tutors_found')}</li>`;
             
             renderPaginationControls(tutorsPaginationContainer, tutorPage, tutorsTotalPages, filteredTutors.length, itemsPerPage.tutors, (newPage) => {
                 appState.pagination.tutors.page = newPage;
@@ -4779,8 +4779,11 @@ ${_('whatsapp_closing')}
             return; // Stop the deletion process
         }
 
+        // --- START OF FIX ---
+        const itemTypeText = type === 'sportType' ? _('label_sport_type_item') : _('label_tutor_item');
+        
         // 2. Confirmation Dialog
-        const title = _('confirm_delete_generic_title').replace('{type}', type === 'sportType' ? 'Sport Type' : 'Tutor');
+        const title = _('confirm_delete_generic_title').replace('{type}', itemTypeText);
         const message = _('confirm_delete_generic_desc').replace('{name}', name);
         
         showConfirmation(title, message, () => {
@@ -4788,12 +4791,13 @@ ${_('whatsapp_closing')}
             const path = type === 'sportType' ? '/sportTypes/' : '/tutors/';
             database.ref(path + id).remove()
                 .then(() => {
-                    showMessageBox(_('info_item_deleted').replace('{type}', type === 'sportType' ? 'Sport Type' : 'Tutor'), 'info');
+                    showMessageBox(_('info_item_deleted').replace('{type}', itemTypeText), 'info');
                 })
                 .catch(error => {
                     showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error');
                 });
         });
+        // --- END OF FIX ---
     }
 
     function handleAdminListClick(e) {
@@ -5452,7 +5456,7 @@ ${_('whatsapp_closing')}
             [_('filter_all_time')]: Infinity 
         };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
-        periodSelect.value = 30;
+        periodSelect.value = -7;
         
         let currentStatsForExport = {};
 
@@ -5948,7 +5952,7 @@ ${_('whatsapp_closing')}
                 monthFilter.value = periods[0];
             }
         } else {
-            monthFilter.innerHTML = '<option value="">No Months Available</option>';
+            monthFilter.innerHTML = `<option value="">${_('label_no_months_available')}</option>`;
         }
 
         populateSportTypeFilter(sportTypeFilter);
@@ -6038,7 +6042,7 @@ ${_('whatsapp_closing')}
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
                         <td class="p-2">${formatShortDateWithYear(cls.date)}<br><span class="text-sm text-slate-500">${getTimeRange(cls.time, cls.duration)}</span></td>
                         <td class="p-2 font-semibold">${getSportTypeName(sportType)}</td>
-                        <td class="p-2">${tutor?.name || 'Unknown'}</td>
+                        <td class="p-2">${tutor?.name || _('label_unknown')}</td>
                         <td class="p-2">${cls.credits}</td>
                         <td class="p-2">${bookingsCount}/${cls.maxParticipants}</td>
                         <td class="p-2 text-right space-x-2">
@@ -6046,7 +6050,7 @@ ${_('whatsapp_closing')}
                             <button class="delete-cls-btn font-semibold text-red-600" data-id="${cls.id}">${_('btn_delete')}</button>
                         </td>
                     </tr>`;
-            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">No classes match the selected filters for this month.</td></tr>`;
+            }).join('') || `<tr><td colspan="7" class="text-center p-4 text-slate-500">${_('info_no_classes_match_filters')}</td></tr>`;
 
             renderPaginationControls(paginationContainer, page, totalPages, filteredClasses.length, itemsPerPage.classes, (newPage) => {
                 appState.pagination.classes.page = newPage;
