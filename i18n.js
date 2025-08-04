@@ -240,6 +240,8 @@ const LANG_PACK = {
         'success_item_updated_generic': '"{type}" updated successfully!',
         'label_sport_type_item': 'Sport Type',
         'label_tutor_item': 'Tutor',
+        'info_no_sport_types_found': 'No sport types found.',
+        'info_no_tutors_found': 'No tutors found.',
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -270,6 +272,8 @@ const LANG_PACK = {
         'label_in_month': 'in month',
         'table_header_datetime': 'Date/Time',
         'table_header_attendees': 'Attendees',
+        'label_no_months_available': 'No Months Available',
+        'label_unknown': 'Unknown',
 
         // --- Salary Page ---
         'title_salary_overview': 'Tutor Salary Overview',
@@ -731,6 +735,8 @@ const LANG_PACK = {
         'success_item_updated_generic': '"{type}" 更新成功！',
         'label_sport_type_item': '運動類型',
         'label_tutor_item': '導師',
+        'info_no_sport_types_found': '找不到任何運動類型。',
+        'info_no_tutors_found': '找不到任何導師。',
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
@@ -761,6 +767,8 @@ const LANG_PACK = {
         'label_in_month': '於本月',
         'table_header_datetime': '日期/時間',
         'table_header_attendees': '出席人數',
+        'label_no_months_available': '沒有可用的月份',
+        'label_unknown': '未知',
 
         // --- Salary Page ---
         'title_salary_overview': '導師薪資總覽',
