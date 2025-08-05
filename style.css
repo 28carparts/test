@@ -60,7 +60,14 @@ body {
     filter: blur(1px);
     pointer-events: none;
 }
-
+.cls-block-ended {
+    filter: blur(2px);
+    opacity: 0.75;
+}
+.cls-block-ended:hover {
+    filter: none;
+    opacity: 1;
+}
 /* --- START: New Participant Counter Styles --- */
 .participant-counter {
     display: inline-flex;
@@ -518,3 +525,65 @@ th.sortable:hover .sort-icon {
     background-color: #ffedd5; /* orange-100 */
     color: #9a3412; /* orange-800 */
 }
+/* --- START: Schedule Publishing Styles (Revised) --- */
+.publish-toggle-container {
+    position: absolute;
+    top: 0.5rem; /* 8px */
+    right: 0.5rem; /* 8px */
+    z-index: 5; /* Ensure it's above the day header content */
+}
+
+.publish-toggle {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    width: 36px; /* Fixed width for the toggle */
+    height: 20px; /* Fixed height for the toggle */
+    padding: 2px; /* Small padding inside the toggle */
+    border-radius: 9999px;
+    transition: background-color 0.2s ease-in-out;
+    border: 1px solid transparent;
+}
+
+.publish-toggle-handle {
+    width: 1rem; /* 16px */
+    height: 1rem; /* 16px */
+    border-radius: 50%;
+    background-color: white;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    transition: transform 0.2s ease-in-out;
+}
+
+/* This class exists but is now hidden, as requested */
+.publish-toggle-text {
+    display: none;
+}
+
+/* Unpublished (Draft) State */
+.publish-toggle.status-draft {
+    background-color: #e2e8f0; /* slate-200 */
+    border-color: #cbd5e1; /* slate-300 */
+}
+.publish-toggle.status-draft .publish-toggle-handle {
+    transform: translateX(0);
+}
+
+/* Published State */
+.publish-toggle.status-published {
+    background-color: #22c55e; /* green-500 */
+}
+.publish-toggle.status-published .publish-toggle-handle {
+    transform: translateX(1rem); /* 16px */
+}
+
+/* Opacity effect now ONLY targets the day-header */
+.day-column.is-draft .day-header {
+    opacity: 0.65;
+    transition: opacity 0.3s ease;
+}
+
+/* This rule remains the same: only members are blocked from interacting with draft classes */
+.member-view .day-column.is-draft .cls-block {
+    pointer-events: none;
+}
+/* --- END: Schedule Publishing Styles (Revised) --- */
