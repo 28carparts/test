@@ -2839,7 +2839,7 @@ ${_('whatsapp_closing')}
                         }
 
                         ${todaysUnattendedBookings.length > 1
-                            ? `<p class="text-center text-xs text-slate-500 mt-2" data-lang-key="check_in_preselect_prompt"></p>`
+                            ? `<p class="text-center text-sm text-slate-500 mt-2" data-lang-key="check_in_preselect_prompt"></p>`
                             : ''
                         }
 
@@ -4227,11 +4227,7 @@ ${_('whatsapp_closing')}
                     <h2 class="text-2xl font-bold text-slate-800 mb-2">${_('check_in_title')}</h2>
                     <p class="text-slate-500 mb-4">${_('check_in_prompt')}</p>
                 </div>
-                
-                <!-- START OF FIX: Simplified the nested divs into a single one -->
                 <div id="qr-reader" class="bg-slate-900"></div>
-                <!-- END OF FIX -->
-                
                 <div id="checkInResult" class="min-h-[4rem]"></div>
             </div>
         `;
