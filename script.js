@@ -82,7 +82,8 @@ document.addEventListener('DOMContentLoaded', function() {
         classesSort: {
             key: 'date',
             direction: 'asc'
-        }
+        },
+        scheduleStatus: {} 
     };
     let emblaApi = null;
     let navEmblaApi = null;
@@ -811,6 +812,19 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const updateUIVisibility = () => {
+        const body = document.body;
+        const isAdmin = appState.currentUser?.role === 'owner' || appState.currentUser?.role === 'staff';
+
+        if (appState.currentUser) {
+            if (isAdmin) {
+                body.classList.add('admin-view');
+                body.classList.remove('member-view');
+            } else {
+                body.classList.add('member-view');
+                body.classList.remove('admin-view');
+            }
+        }
+
         // Render the navigation bar
         renderNav();
 
@@ -1973,7 +1987,19 @@ ${_('whatsapp_closing')}
         const isAdmin = isOwner || isStaff;
         const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
         
-        el.className = `cls-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between`;
+        const isEndedToday = !isAdmin && cls.date === getIsoDate(new Date()) && (() => {
+            const now = new Date();
+            const [hours, minutes] = cls.time.split(':').map(Number);
+            
+            // Create a date object for the class's end time *today*
+            const classEndTime = new Date(); 
+            classEndTime.setHours(hours, minutes, 0, 0); // Set start time
+            classEndTime.setMinutes(classEndTime.getMinutes() + (cls.duration || 0)); // Add duration
+
+            return now > classEndTime;
+        })();
+
+        el.className = `cls-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between ${isEndedToday ? 'cls-block-ended' : ''}`;
         el.style.backgroundColor = sportType?.color || '#64748b';
 
         if (!isAdmin) {
@@ -2198,6 +2224,27 @@ ${_('whatsapp_closing')}
         return el;
     }
 
+    function handlePublishToggle(date, isCurrentlyPublished) {
+        const newStatus = !isCurrentlyPublished;
+
+        const performUpdate = () => {
+            database.ref(`/scheduleStatus/${date}`).set(newStatus)
+                .catch(error => console.error("Failed to update schedule status:", error));
+        };
+
+        // If we are un-publishing, show a confirmation dialog first
+        if (isCurrentlyPublished) {
+            showConfirmation(
+                _('confirm_unpublish_day_title'),
+                _('confirm_unpublish_day_desc'),
+                performUpdate // Only update if confirmed
+            );
+        } else {
+            // If publishing, no confirmation is needed
+            performUpdate();
+        }
+    }
+
     function _reSortDayColumn(dateIso) {
         const dayContainer = document.querySelector(`.classes-container[data-date="${dateIso}"]`);
         if (!dayContainer) return; // Do nothing if the day is not visible
@@ -2231,18 +2278,35 @@ ${_('whatsapp_closing')}
         emblaContainer.innerHTML = '';
         let content = '';
 
+        const scheduleStatus = appState.scheduleStatus || {};
+
         const todayIso = getIsoDate(new Date());
-        // Use the new language-aware formatter
         const headerDateFormatter = new Intl.DateTimeFormat(getLocale(), { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
         datesArray.forEach(dateIso => {
             const date = new Date(dateIso + 'T12:00:00Z');
             const isToday = (dateIso === todayIso);
-            // Translate the "Today" badge
             const todayBadge = isToday ? `<span class="ml-2 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">${_('label_today')}</span>` : '';
             const headerClasses = `day-header p-2 rounded-t-xl ${isToday ? 'bg-indigo-50' : 'hover:bg-slate-100'}`;
 
-            // Translate the copy buttons
+            const isPublished = scheduleStatus[dateIso] === true;
+            const statusClass = isPublished ? 'status-published' : 'status-draft';
+            // --- START OF MODIFICATION ---
+            // We get the status text for the tooltip, but not for display.
+            const statusTooltip = isPublished ? _('status_published') : _('status_draft');
+            const draftClass = isPublished ? '' : 'is-draft';
+
+            // The text inside the toggle's span is now removed. A title attribute is added for hover info.
+            const publishToggleHTML = showAddButton ? `
+                <div class="publish-toggle-container">
+                    <div class="publish-toggle ${statusClass}" data-date="${dateIso}" title="${statusTooltip}">
+                        <span class="publish-toggle-handle"></span>
+                        <span class="publish-toggle-text"></span>
+                    </div>
+                </div>
+            ` : '';
+            // --- END OF MODIFICATION ---
+
             const copyButtonsHTML = showAddButton ? `
                 <div class="mt-2 grid grid-cols-2 gap-2">
                     <button data-date="${dateIso}" class="copy-class-btn w-full flex items-center justify-center py-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 text-xs transition-all">${_('btn_copy_class')}</button>
@@ -2252,8 +2316,9 @@ ${_('whatsapp_closing')}
 
             content += `
                 <div class="embla__slide px-2">
-                    <div class="day-column bg-slate-50/50 rounded-xl flex flex-col">
-                        <div class="${headerClasses}" data-date="${dateIso}">
+                    <div class="day-column bg-slate-50/50 rounded-xl flex flex-col ${draftClass}">
+                        <div class="${headerClasses} relative" data-date="${dateIso}">
+                            ${publishToggleHTML}
                             <div class="flex items-center justify-center font-semibold text-slate-700">
                                 <span>${headerDateFormatter.format(date)}</span>
                                 ${todayBadge}
@@ -2772,6 +2837,12 @@ ${_('whatsapp_closing')}
                                 }).join('')
                             : ''
                         }
+
+                        ${todaysUnattendedBookings.length > 1
+                            ? `<p class="text-center text-xs text-slate-500 mt-2" data-lang-key="check_in_preselect_prompt"></p>`
+                            : ''
+                        }
+
                     </div>
                 </div>
             </div>`;
@@ -4180,7 +4251,7 @@ ${_('whatsapp_closing')}
         }).catch(err => {
             console.error("Unable to start QR scanner", err);
             const resultEl = document.getElementById("checkInResult");
-            if(resultEl) resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">Could not start camera. Please check permissions.</div>`;
+            if(resultEl) resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('check_in_error_camera_start_failed')}</div>`;
         });
     }
 
@@ -6291,7 +6362,6 @@ ${_('whatsapp_closing')}
         // --- END: MODIFIED LOGIC ---
     };
 
-    // --- START: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
     const initOwnerListeners = () => {
         // --- Listeners for foundational data (settings, current user profile, etc.) ---
         const nonUserRefs = {
@@ -6299,6 +6369,8 @@ ${_('whatsapp_closing')}
             sportTypes: database.ref('/sportTypes'),
             studioSettings: database.ref('/studioSettings'),
             currentUser: database.ref('/users/' + appState.currentUser.id),
+            // --- ADD THIS NEW LISTENER ---
+            scheduleStatus: database.ref('/scheduleStatus'),
         };
 
         Object.entries(nonUserRefs).forEach(([key, ref]) => {
@@ -6306,21 +6378,24 @@ ${_('whatsapp_closing')}
                 const val = snapshot.val();
                 if (key === 'currentUser') {
                     appState.currentUser = { ...appState.currentUser, ...val };
-                    // If the account page is active, re-render it for profile changes
                     if (appState.activePage === 'account') renderCurrentPage();
-
                 } else if (key === 'studioSettings') {
                     if (val) appState.studioSettings = { ...appState.studioSettings, ...val, clsDefaults: { ...appState.studioSettings.clsDefaults, ...(val.clsDefaults || {}) } };
-                    // If on the admin page, re-render to show new defaults
                     if (appState.activePage === 'admin') renderAdminPage(document.getElementById('page-admin'));
-                
+                // --- START: MODIFIED LOGIC ---
+                } else if (key === 'scheduleStatus') {
+                    appState.scheduleStatus = val || {};
+                    // Re-render the schedule page to reflect any status changes (e.g., from another admin)
+                    if (appState.activePage === 'schedule') {
+                        renderCurrentPage();
+                    }
                 } else { // This handles tutors and sportTypes
                     appState[key] = firebaseObjectToArray(val);
-                    // Only update the lists if we are on the Admin page
                     if (appState.activePage === 'admin') {
                         renderAdminLists();
                     }
                 }
+                // --- END: MODIFIED LOGIC ---
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
@@ -6353,32 +6428,25 @@ ${_('whatsapp_closing')}
         }).catch(error => console.error("Initial class fetch failed for owner:", error));
 
 
-        // --- START: MODIFIED LISTENER LOGIC ---
         activeClassesRef.on('child_changed', (snapshot) => {
             if (!initialLoadComplete) return;
 
             const updatedCls = { id: snapshot.key, ...snapshot.val() };
             const oldCls = appState.classes.find(c => c.id === updatedCls.id);
             
-            // This is the intelligent check
             const timeHasChanged = oldCls && updatedCls.time !== oldCls.time;
             
-            // First, update the global state regardless of what changed
             const index = appState.classes.findIndex(c => c.id === updatedCls.id);
             if (index > -1) appState.classes[index] = updatedCls; else appState.classes.push(updatedCls);
 
-            // Now, decide how to update the UI
             if (timeHasChanged) {
-                // If time changed, re-sort the entire day column
                 _reSortDayColumn(updatedCls.date);
             } else {
-                // Otherwise, perform the simple, surgical replacement (no flicker)
                 const clsElement = document.getElementById(updatedCls.id);
                 if (clsElement) {
                     clsElement.replaceWith(createClsElement(updatedCls));
                 }
                 
-                // Show booking notification if it's a new booking
                 if (oldCls) {
                     const oldBookedIds = Object.keys(oldCls.bookedBy || {});
                     const newBookedIds = Object.keys(updatedCls.bookedBy || {});
@@ -6395,7 +6463,6 @@ ${_('whatsapp_closing')}
                 }
             }
         });
-        // --- END: MODIFIED LISTENER LOGIC ---
 
         activeClassesRef.on('child_added', (snapshot) => {
             if (!initialLoadComplete) return;
@@ -6403,7 +6470,6 @@ ${_('whatsapp_closing')}
             const newCls = { id: snapshot.key, ...snapshot.val() };
             if (!appState.classes.some(c => c.id === newCls.id)) {
                 appState.classes.push(newCls);
-                // A full re-sort of the day is best here to place the new class correctly
                 _reSortDayColumn(newCls.date);
             }
         });
@@ -6416,77 +6482,89 @@ ${_('whatsapp_closing')}
             if (clsElement) clsElement.remove();
         });
     };
-    // --- END: NEW OWNER-SPECIFIC LISTENER FUNCTION ---
 
     const initMemberListeners = () => {
-        // --- Listeners for static-like data (tutors, sports, user profile) ---
+        // Detach any existing listeners from this section to be safe
+        if (dataListeners.tutors) database.ref('/tutors').off('value', dataListeners.tutors);
+        if (dataListeners.sportTypes) database.ref('/sportTypes').off('value', dataListeners.sportTypes);
+        if (dataListeners.currentUser) database.ref('/users/' + appState.currentUser.id).off('value', dataListeners.currentUser);
+        if (dataListeners.scheduleStatus) database.ref('/scheduleStatus').off('value', dataListeners.scheduleStatus);
+        if (activeClassesRef) activeClassesRef.off();
+
         const refs = {
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
         };
-
-        // --- START OF FIX: The logic inside the currentUser listener is now more intelligent ---
-        // Handle the currentUser listener separately to be more surgical.
+        
         const currentUserRef = database.ref('/users/' + appState.currentUser.id);
         dataListeners['currentUser'] = (snapshot) => {
             const newUserData = snapshot.val();
             if (!newUserData) return;
-
-            // Preserve the user's ID, which is not in the database snapshot.
             const userId = appState.currentUser.id;
-            
-            // Always keep the central app state in sync.
             appState.currentUser = { id: userId, ...newUserData };
-            
-            // THE FIX: Only trigger a full, expensive re-render if the user is on the Account page.
-            // The Check-in page manages its own state for class selection and check-in success,
-            // so a full re-render is unnecessary and causes the flicker. This guard prevents it.
             if (appState.activePage === 'account') {
                 renderCurrentPage();
             }
         };
         currentUserRef.on('value', dataListeners['currentUser'], (error) => console.error(`Listener error on /users/${appState.currentUser.id}`, error));
-        // --- END OF FIX ---
-
 
         Object.entries(refs).forEach(([key, ref]) => {
             dataListeners[key] = (snapshot) => {
-                const val = snapshot.val();
-                appState[key] = firebaseObjectToArray(val);
+                appState[key] = firebaseObjectToArray(snapshot.val());
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
 
-        // --- NEW, SURGICAL Class Listening Strategy for Members ---
+        // --- START OF NEW LOGIC FOR MEMBERS ---
         let initialLoadComplete = false;
-        const memberId = appState.currentUser.id;
-        const todayIso = getIsoDate(new Date());
-        activeClassesRef = database.ref('/classes').orderByChild('date').startAt(todayIso);
+        let scheduleStatus = {};
 
-        // PHASE 1: Perform a single, initial fetch to render the page quickly.
+        const statusRef = database.ref('/scheduleStatus');
+        dataListeners.scheduleStatus = (snapshot) => {
+            scheduleStatus = snapshot.val() || {};
+            appState.scheduleStatus = scheduleStatus;
+
+            if (initialLoadComplete) {
+                // A status change means an admin published/unpublished a day.
+                // We need to re-fetch and re-render the entire page for the member.
+                initMemberListeners();
+            }
+        };
+        statusRef.on('value', dataListeners.scheduleStatus);
+
         const initialFetchAndRender = async () => {
             try {
-                // Fetch past and future classes in parallel for speed.
+                // We already have the status from the listener, but we fetch it again
+                // on first load to ensure we don't have a race condition.
+                const statusSnapshot = await statusRef.once('value');
+                scheduleStatus = statusSnapshot.val() || {};
+                appState.scheduleStatus = scheduleStatus;
+
+                const memberId = appState.currentUser.id;
                 const pastBookingsPromise = database.ref(`/memberBookings/${memberId}`).once('value').then(snap => {
                     if (!snap.exists()) return [];
                     const clsIds = Object.keys(snap.val());
-                    const pastClsPromises = clsIds.map(id => database.ref(`/classes/${id}`).once('value'));
-                    return Promise.all(pastClsPromises);
+                    return Promise.all(clsIds.map(id => database.ref(`/classes/${id}`).once('value')));
                 });
 
-                const futureClassesPromise = activeClassesRef.once('value');
+                const todayIso = getIsoDate(new Date());
+                const futureClassesPromise = database.ref('/classes').orderByChild('date').startAt(todayIso).once('value');
+                
                 const [pastClsSnapshots, futureClassesSnapshot] = await Promise.all([pastBookingsPromise, futureClassesPromise]);
 
                 const pastClasses = pastClsSnapshots.map(snap => ({ id: snap.key, ...snap.val() })).filter(c => c.date && c.date < todayIso);
                 const futureClasses = firebaseObjectToArray(futureClassesSnapshot.val());
 
-                // Combine and de-duplicate using a Map.
+                const allClasses = [...pastClasses, ...futureClasses];
+                // CRITICAL: Filter classes to only show published ones
+                const publishedClasses = allClasses.filter(cls => {
+                    return cls.date < todayIso || scheduleStatus[cls.date] === true;
+                });
+                
                 const allClassesMap = new Map();
-                futureClasses.forEach(cls => allClassesMap.set(cls.id, cls));
-                pastClasses.forEach(cls => allClassesMap.set(cls.id, cls));
+                publishedClasses.forEach(cls => allClassesMap.set(cls.id, cls));
                 appState.classes = Array.from(allClassesMap.values());
 
-                // Render the entire page ONCE.
                 renderCurrentPage();
                 initialLoadComplete = true;
 
@@ -6495,62 +6573,54 @@ ${_('whatsapp_closing')}
             }
         };
 
-        // PHASE 2: Attach live listeners for surgical updates AFTER the initial render.
-        
-        // This listener is now smarter, just like the owner's version.
+        activeClassesRef = database.ref('/classes').orderByChild('date').startAt(getIsoDate(new Date()));
+
         activeClassesRef.on('child_changed', (snapshot) => {
             if (!initialLoadComplete) return;
-
             const updatedCls = { id: snapshot.key, ...snapshot.val() };
-            const oldCls = appState.classes.find(c => c.id === updatedCls.id);
+            
+            // ONLY process the update if the day is published
+            if (scheduleStatus[updatedCls.date] !== true) return;
 
-            // Check if the time specifically has changed.
+            const oldCls = appState.classes.find(c => c.id === updatedCls.id);
             const timeHasChanged = oldCls && updatedCls.time !== oldCls.time;
             
-            // First, always update the central app state.
             const index = appState.classes.findIndex(c => c.id === updatedCls.id);
             if (index > -1) appState.classes[index] = updatedCls; else appState.classes.push(updatedCls);
 
-            // Now, decide how to update the UI based on what changed.
             if (timeHasChanged) {
-                // If the time was edited by an admin, re-sort the entire day column.
                 _reSortDayColumn(updatedCls.date);
             } else {
-                // For any other change (like participant count), just replace the single element.
                 const clsElement = document.getElementById(updatedCls.id);
                 if (clsElement) {
-                    const newClsElement = createClsElement(updatedCls);
-                    clsElement.replaceWith(newClsElement);
+                    clsElement.replaceWith(createClsElement(updatedCls));
                 }
             }
         });
 
-        // This listener now correctly re-sorts the day when a new class is added.
         activeClassesRef.on('child_added', (snapshot) => {
             if (!initialLoadComplete) return;
-
             const newCls = { id: snapshot.key, ...snapshot.val() };
+            
+            // ONLY process the addition if the day is published
+            if (scheduleStatus[newCls.date] !== true) return;
+
             if (!appState.classes.some(c => c.id === newCls.id)) {
                 appState.classes.push(newCls);
-                // Re-sort the day column to place the new class in the correct time slot.
                 _reSortDayColumn(newCls.date);
             }
         });
 
         activeClassesRef.on('child_removed', (snapshot) => {
             if (!initialLoadComplete) return;
-
             const removedClsId = snapshot.key;
             appState.classes = appState.classes.filter(c => c.id !== removedClsId);
-            
             const clsElement = document.getElementById(removedClsId);
-            if (clsElement) {
-                clsElement.remove();
-            }
+            if (clsElement) clsElement.remove();
         });
 
-        // Kick off the whole process.
         initialFetchAndRender();
+        // --- END OF NEW LOGIC FOR MEMBERS ---
     };
 
     const detachDataListeners = () => {
@@ -6559,19 +6629,18 @@ ${_('whatsapp_closing')}
         }
         activeClassesRef = null;
 
-        // --- START OF FIX: Clean up member-specific check-in listeners ---
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
-        // --- END OF FIX ---
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
-            if (key !== 'classes') { 
-                let path = `/${key}`;
-                if (key === 'currentUser' && appState.currentUser) {
-                    path = `/users/${appState.currentUser.id}`;
-                }
-                database.ref(path).off('value', listenerInfo);
+            // Detach all listeners regardless of key, as their paths are now more varied.
+            let path;
+            if (key === 'currentUser' && appState.currentUser) {
+                path = `/users/${appState.currentUser.id}`;
+            } else {
+                path = `/${key}`;
             }
+            database.ref(path).off('value', listenerInfo);
         });
         
         dataListeners = {};
@@ -6629,6 +6698,7 @@ ${_('whatsapp_closing')}
             detachDataListeners();
             appState.currentUser = null;
             appState.activePage = 'schedule';
+            document.body.classList.remove('admin-view', 'member-view');
             DOMElements.appWrapper.classList.add('hidden');
             DOMElements.authPage.classList.remove('hidden');
         }
@@ -6741,6 +6811,19 @@ ${_('whatsapp_closing')}
                 }
                 return;
             }
+
+            // --- START: ADD THIS NEW BLOCK ---
+            const publishToggle = e.target.closest('.publish-toggle');
+            if (publishToggle) {
+                // Prevent other click events like opening the copy menu
+                e.stopPropagation();
+                
+                const date = publishToggle.dataset.date;
+                const isPublished = publishToggle.classList.contains('status-published');
+                handlePublishToggle(date, isPublished);
+                return;
+            }
+            // --- END: ADD THIS NEW BLOCK ---
 
             if (appState.copyMode.active) {
                 let copyActionTaken = false;
