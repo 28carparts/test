@@ -2029,7 +2029,10 @@ ${_('whatsapp_closing')}
                 } 
             };
         } else if (isMonthlyMember && isRestrictedForMonthly) {
-            el.classList.add('cls-block-restricted');
+            el.classList.add('cls-block-restricted', 'cursor-pointer');
+            mainAction = () => {
+                showMessageBox(_('error_class_not_for_monthly'), 'info');
+            };
         } else if (isBookedByCurrentUser) {
             el.classList.add('booked-by-member');
         } else if (appState.currentUser && !isFull) {
