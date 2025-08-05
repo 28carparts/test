@@ -419,6 +419,7 @@ const LANG_PACK = {
         'whatsapp_body_update': 'This is a friendly update from StudioPulse regarding your booked class:',
         'whatsapp_changes_header': 'The following details have been changed:',
         'whatsapp_cancellation_option': 'If you can no longer make it, you can cancel your booking via the app.🙏',
+        'error_class_not_for_monthly': 'This class is not available for booking with a monthly plan.',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -920,6 +921,7 @@ const LANG_PACK = {
         'whatsapp_body_update': '這是來自 StudioPulse 關於您已預約課程的更新通知：',
         'whatsapp_changes_header': '以下是課程的變更詳情：',
         'whatsapp_cancellation_option': '如果您無法參加更新後的課程，可以隨時透過App取消預約。🙏',
+        'error_class_not_for_monthly': '此課程不適用於月費方案預約。',
 
         // --- QR Code ---
         'nav_check_in': '簽到',
