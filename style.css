@@ -586,3 +586,50 @@ th.sortable:hover .sort-icon {
     pointer-events: none;
 }
 /* --- END: Schedule Publishing Styles (Revised) --- */
+/* --- Announcement Banner Styles --- */
+.announcement-banner {
+    background-color: #4f46e5; /* indigo-600 */
+    color: white;
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    z-index: 30; /* Below modals, but above page content */
+    transition: all 0.5s ease-in-out;
+    max-height: 200px;
+    opacity: 1;
+}
+
+.announcement-banner.hidden {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.announcement-content {
+    flex-grow: 1;
+    margin-right: 1rem;
+}
+
+.announcement-title {
+    font-weight: 700;
+}
+
+.announcement-dismiss-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+    width: 1.75rem; /* 28px */
+    height: 1.75rem; /* 28px */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.announcement-dismiss-btn:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
