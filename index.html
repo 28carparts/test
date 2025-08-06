@@ -122,6 +122,7 @@
 
     <!-- Main App Wrapper -->
     <div id="appWrapper" class="w-full max-w-screen-2xl mx-auto hidden">
+
         <header class="w-full mb-8">
             <div class="flex flex-wrap justify-between items-center gap-4">
                  <h1 class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter">
@@ -143,6 +144,10 @@
                 </nav>
             </div>
         </header>
+
+        <!-- START: Add this new element -->
+        <div id="announcementBanner" class="announcement-banner hidden shadow-lg mb-4 rounded-lg"></div>
+        <!-- END: Add this new element -->
 
         <!-- Main Content Area -->
         <main class="w-full">
@@ -183,6 +188,7 @@
     <div id="goToDateModal" class="fixed inset-0 flex items-center justify-center z-40 hidden modal-backdrop overflow-y-auto"></div>
     <div id="numericDialModal" class="fixed inset-0 flex items-end justify-center z-40 hidden modal-backdrop overflow-y-auto"></div>
     <div id="checkInModal" class="fixed inset-0 flex items-start justify-center z-50 hidden modal-backdrop overflow-y-auto"></div>
+    <div id="announcementModal" class="fixed inset-0 flex items-center justify-center z-40 hidden modal-backdrop overflow-y-auto"></div>
 
     <!-- Cancel Copy Button -->
     <button type="button" id="cancelCopyBtn" data-lang-key="btn_cancel_copy" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-transform hover:scale-105"aria-label="Cancel Copy Mode">Cancel Copy</button>
