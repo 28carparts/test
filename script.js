@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
             key: 'date',
             direction: 'asc'
         },
+        currentAnnouncement: null,
         scheduleStatus: {} 
     };
     let emblaApi = null;
@@ -116,7 +117,9 @@ document.addEventListener('DOMContentLoaded', function() {
         goToDateModal: document.getElementById('goToDateModal'),
         numericDialModal: document.getElementById('numericDialModal'),
         cancelCopyBtn: document.getElementById('cancelCopyBtn'),
-        checkInModal: document.getElementById('checkInModal')
+        checkInModal: document.getElementById('checkInModal'),
+        announcementBanner: document.getElementById('announcementBanner'), // ADD THIS LINE
+        announcementModal: document.getElementById('announcementModal') // ADD THIS LINE
     };
 
     // --- START: NEW LANGUAGE FUNCTIONS ---
@@ -741,7 +744,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 `<button data-page="admin" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_admin')}</button>`,
                 `<button id="logoutBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base text-red-600 hover:text-red-800">${_('nav_logout')}</button>`
             ];
-            
+
+            navButtonsHTML.splice(4, 0, `<button id="navAnnounceBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_announce')}</button>`);
             navButtonsHTML.splice(1, 0, `<button id="navCheckInBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_check_in')}</button>`);
             navButtonsHTML.splice(2, 0, `<button id="navGoToBtn" class="nav-btn font-semibold px-3 py-1 text-sm sm:text-base">${_('nav_goto')}</button>`);
 
@@ -791,6 +795,8 @@ document.addEventListener('DOMContentLoaded', function() {
         DOMElements.mainNav.querySelectorAll('button').forEach(btn => {
             if (btn.id === 'logoutBtn') {
                 btn.onclick = handleLogout;
+            } else if (btn.id === 'navAnnounceBtn') { // ADD THIS ELSE IF BLOCK
+                btn.onclick = openAnnouncementModal;
             } else if (btn.id === 'navFilterBtn') {
                 btn.onclick = () => {
                     if (appState.activePage !== 'schedule') {
@@ -1977,6 +1983,101 @@ ${_('whatsapp_closing')}
     }
 
     // --- Main Rendering Functions ---
+    function openAnnouncementModal() {
+        const modal = DOMElements.announcementModal;
+        const current = appState.currentAnnouncement;
+
+        modal.innerHTML = `
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
+                <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">${_('announcement_modal_title')}</h2>
+                <form id="announcementForm" class="space-y-4">
+                    <div>
+                        <label for="announcementTitle" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_title_label')}</label>
+                        <input type="text" id="announcementTitle" class="form-input" placeholder="${_('announcement_title_placeholder')}" value="${current?.title || ''}">
+                    </div>
+                    <div>
+                        <label for="announcementMessage" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label')}</label>
+                        <textarea id="announcementMessage" required class="form-input" rows="4" placeholder="${_('announcement_message_placeholder')}">${current?.message || ''}</textarea>
+                    </div>
+                    <div class="flex flex-col sm:flex-row justify-center gap-4 pt-4">
+                        <button type="button" id="clearAnnouncementBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition ${!current ? 'hidden' : ''}">${_('btn_clear_announcement')}</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition">${_('btn_publish_announcement')}</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        const form = modal.querySelector('#announcementForm');
+        form.onsubmit = handleAnnouncementFormSubmit;
+
+        modal.querySelector('#clearAnnouncementBtn').onclick = () => {
+            database.ref('/announcements/current').remove().then(() => {
+                showMessageBox(_('success_announcement_cleared'), 'success');
+                closeModal(modal);
+            });
+        };
+
+        openModal(modal);
+    }
+
+    function handleAnnouncementFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const message = form.querySelector('#announcementMessage').value.trim();
+
+        if (!message) {
+            showMessageBox(_('error_announcement_message_required'), 'error');
+            return;
+        }
+
+        const newAnnouncement = {
+            id: new Date().getTime(), // Unique ID for dismissal tracking
+            title: form.querySelector('#announcementTitle').value.trim(),
+            message: message,
+            postedBy: appState.currentUser.name,
+            postedAt: new Date().toISOString()
+        };
+
+        database.ref('/announcements/current').set(newAnnouncement).then(() => {
+            showMessageBox(_('success_announcement_published'), 'success');
+            closeModal(DOMElements.announcementModal);
+        });
+    }
+
+    function displayAnnouncement() {
+        const banner = DOMElements.announcementBanner;
+        const announcement = appState.currentAnnouncement;
+
+        if (!announcement || !banner) {
+            if (banner) banner.classList.add('hidden');
+            return;
+        }
+
+        const dismissedId = localStorage.getItem('dismissedAnnouncementId');
+        if (String(announcement.id) === dismissedId) {
+            banner.classList.add('hidden');
+            return;
+        }
+
+        banner.innerHTML = `
+            <div class="announcement-content">
+                ${announcement.title ? `<p class="announcement-title">${announcement.title}</p>` : ''}
+                <p>${announcement.message}</p>
+            </div>
+            <button class="announcement-dismiss-btn" aria-label="Dismiss announcement">
+                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        `;
+
+        banner.classList.remove('hidden');
+
+        banner.querySelector('.announcement-dismiss-btn').onclick = () => {
+            banner.classList.add('hidden');
+            localStorage.setItem('dismissedAnnouncementId', announcement.id);
+        };
+    }
+
     function createClsElement(cls) {
         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
         const tutor = appState.tutors.find(t => t.id === cls.tutorId);
@@ -6362,6 +6463,13 @@ ${_('whatsapp_closing')}
     };
 
     const initOwnerListeners = () => {
+        const announcementRef = database.ref('/announcements/current');
+        dataListeners.announcement = (snapshot) => {
+            appState.currentAnnouncement = snapshot.val();
+            displayAnnouncement();
+        };
+        announcementRef.on('value', dataListeners.announcement);
+
         // --- Listeners for foundational data (settings, current user profile, etc.) ---
         const nonUserRefs = {
             tutors: database.ref('/tutors'),
@@ -6483,6 +6591,13 @@ ${_('whatsapp_closing')}
     };
 
     const initMemberListeners = () => {
+        const announcementRef = database.ref('/announcements/current');
+        dataListeners.announcement = (snapshot) => {
+            appState.currentAnnouncement = snapshot.val();
+            displayAnnouncement();
+        };
+        announcementRef.on('value', dataListeners.announcement);
+
         // Detach any existing listeners from this section to be safe
         if (dataListeners.tutors) database.ref('/tutors').off('value', dataListeners.tutors);
         if (dataListeners.sportTypes) database.ref('/sportTypes').off('value', dataListeners.sportTypes);
@@ -6630,6 +6745,10 @@ ${_('whatsapp_closing')}
 
         Object.values(memberCheckInListeners).forEach(({ ref, listener }) => ref.off('value', listener));
         memberCheckInListeners = {};
+
+        if (dataListeners.announcement) {
+            database.ref('/announcements/current').off('value', dataListeners.announcement);
+        }
 
         Object.entries(dataListeners).forEach(([key, listenerInfo]) => {
             // Detach all listeners regardless of key, as their paths are now more varied.
