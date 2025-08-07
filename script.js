@@ -1992,13 +1992,23 @@ ${_('whatsapp_closing')}
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">${_('announcement_modal_title')}</h2>
                 <form id="announcementForm" class="space-y-4">
-                    <div>
-                        <label for="announcementTitle" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_title_label')}</label>
-                        <input type="text" id="announcementTitle" class="form-input" placeholder="${_('announcement_title_placeholder')}" value="${current?.title || ''}">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="announcementTitleEn" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_title_label_en')}</label>
+                            <input type="text" id="announcementTitleEn" class="form-input" placeholder="e.g., Holiday Notice" value="${current?.title?.en || ''}">
+                        </div>
+                        <div>
+                            <label for="announcementTitleZh" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_title_label_zh')}</label>
+                            <input type="text" id="announcementTitleZh" class="form-input" placeholder="例如：假期通知" value="${current?.title?.zh || ''}">
+                        </div>
                     </div>
                     <div>
-                        <label for="announcementMessage" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label')}</label>
-                        <textarea id="announcementMessage" required class="form-input" rows="4" placeholder="${_('announcement_message_placeholder')}">${current?.message || ''}</textarea>
+                        <label for="announcementMessageEn" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label_en')}</label>
+                        <textarea id="announcementMessageEn" required class="form-input" rows="3" placeholder="Enter the English announcement details here...">${current?.message?.en || ''}</textarea>
+                    </div>
+                    <div>
+                        <label for="announcementMessageZh" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label_zh')}</label>
+                        <textarea id="announcementMessageZh" class="form-input" rows="3" placeholder="在此輸入中文公告內容...">${current?.message?.zh || ''}</textarea>
                     </div>
                     <div class="flex flex-col sm:flex-row justify-center gap-4 pt-4">
                         <button type="button" id="clearAnnouncementBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition ${!current ? 'hidden' : ''}">${_('btn_clear_announcement')}</button>
@@ -2024,17 +2034,23 @@ ${_('whatsapp_closing')}
     function handleAnnouncementFormSubmit(e) {
         e.preventDefault();
         const form = e.target;
-        const message = form.querySelector('#announcementMessage').value.trim();
+        const messageEn = form.querySelector('#announcementMessageEn').value.trim();
 
-        if (!message) {
-            showMessageBox(_('error_announcement_message_required'), 'error');
+        if (!messageEn) {
+            showMessageBox(_('error_announcement_message_required_en'), 'error');
             return;
         }
 
         const newAnnouncement = {
-            id: new Date().getTime(), // Unique ID for dismissal tracking
-            title: form.querySelector('#announcementTitle').value.trim(),
-            message: message,
+            id: new Date().getTime(),
+            title: {
+                en: form.querySelector('#announcementTitleEn').value.trim(),
+                zh: form.querySelector('#announcementTitleZh').value.trim()
+            },
+            message: {
+                en: messageEn,
+                zh: form.querySelector('#announcementMessageZh').value.trim()
+            },
             postedBy: appState.currentUser.name,
             postedAt: new Date().toISOString()
         };
@@ -2059,11 +2075,29 @@ ${_('whatsapp_closing')}
             banner.classList.add('hidden');
             return;
         }
+        
+        // Helper to get the correct text with fallback logic
+        const getTranslatedText = (field) => {
+            if (!field) return '';
+            if (appState.currentLanguage === 'zh-TW' && field.zh) {
+                return field.zh;
+            }
+            return field.en || ''; // Fallback to English
+        };
+
+        const title = getTranslatedText(announcement.title);
+        const message = getTranslatedText(announcement.message);
+
+        // If after checking both languages the message is still empty, don't show the banner.
+        if (!message) {
+             banner.classList.add('hidden');
+             return;
+        }
 
         banner.innerHTML = `
             <div class="announcement-content">
-                ${announcement.title ? `<p class="announcement-title">${announcement.title}</p>` : ''}
-                <p>${announcement.message}</p>
+                ${title ? `<p class="announcement-title">${title}</p>` : ''}
+                <p>${message}</p>
             </div>
             <button class="announcement-dismiss-btn" aria-label="Dismiss announcement">
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
