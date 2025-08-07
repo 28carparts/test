@@ -248,15 +248,15 @@ const LANG_PACK = {
         'info_no_tutors_found': 'No tutors found.',
         'nav_announce': 'Announce',
         'announcement_modal_title': 'Post an Announcement',
-        'announcement_title_label': 'Title (Optional)',
-        'announcement_title_placeholder': 'e.g., Holiday Notice',
-        'announcement_message_label': 'Message',
-        'announcement_message_placeholder': 'Enter the announcement details here...',
+        'announcement_title_label_en': 'Title (EN)', // Changed
+        'announcement_title_label_zh': 'Title (繁中)', // New
+        'announcement_message_label_en': 'Message (EN)', // Changed
+        'announcement_message_label_zh': 'Message (繁中)', // New
         'btn_publish_announcement': 'Publish Announcement',
         'btn_clear_announcement': 'Clear Current Announcement',
         'success_announcement_published': 'Announcement published successfully!',
         'success_announcement_cleared': 'Current announcement cleared.',
-        'error_announcement_message_required': 'An announcement message is required.',
+        'error_announcement_message_required_en': 'An English announcement message is required.', // Changed
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -761,15 +761,15 @@ const LANG_PACK = {
         'info_no_tutors_found': '找不到任何導師。',
         'nav_announce': '發布公告',
         'announcement_modal_title': '發布公告',
-        'announcement_title_label': '標題 (選填)',
-        'announcement_title_placeholder': '例如：假期通知',
-        'announcement_message_label': '訊息',
-        'announcement_message_placeholder': '在此輸入公告內容...',
+        'announcement_title_label_en': '標題 (EN)', // Changed
+        'announcement_title_label_zh': '標題 (繁中)', // New
+        'announcement_message_label_en': '訊息 (EN)', // Changed
+        'announcement_message_label_zh': '訊息 (繁中)', // New,
         'btn_publish_announcement': '發布公告',
         'btn_clear_announcement': '清除目前公告',
         'success_announcement_published': '公告發布成功！',
         'success_announcement_cleared': '目前公告已清除。',
-        'error_announcement_message_required': '必須輸入公告訊息。',
+        'error_announcement_message_required_en': '必須輸入英文公告訊息。', // Changed
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
