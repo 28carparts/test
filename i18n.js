@@ -256,7 +256,8 @@ const LANG_PACK = {
         'btn_clear_announcement': 'Clear Current Announcement',
         'success_announcement_published': 'Announcement published successfully!',
         'success_announcement_cleared': 'Current announcement cleared.',
-        'error_announcement_message_required_en': 'An English announcement message is required.', // Changed
+        'error_sport_type_name_required': 'A sport type name is required (in at least one language).',
+        'error_announcement_message_required': 'An announcement message is required (in at least one language).',
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -281,6 +282,13 @@ const LANG_PACK = {
         'confirm_delete_payment_title': 'Delete Payment Entry',
         'confirm_delete_payment_desc': 'Are you sure you want to delete this payment entry? This action is for record-keeping and cannot be undone.',
         'header_member_booking_history': "{name}'s Booking History",
+        'status_overdue': 'Payment is overdue.',
+        'status_no_credits': 'Out of credits.',
+        'status_due_soon': 'Payment due in {days} day(s).',
+        'status_expiring_soon': 'Credits expire in {days} day(s).',
+        'status_low_credits': 'Low on credits ({count} remaining).',
+        'label_admin_notes': 'Admin Notes (Visible to Staff Only)',
+        'placeholder_admin_notes': 'e.g., Prefers morning classes, injury info, etc.',
 
         // --- Classes Page ---
         'title_all_classes': 'All Classes',
@@ -431,6 +439,7 @@ const LANG_PACK = {
         'whatsapp_changes_header': 'The following details have been changed:',
         'whatsapp_cancellation_option': 'If you can no longer make it, you can cancel your booking via the app.🙏',
         'error_class_not_for_monthly': 'This class is not available for booking with a monthly plan.',
+        'btn_jump_to_today': 'Jump to Today',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -769,7 +778,8 @@ const LANG_PACK = {
         'btn_clear_announcement': '清除目前公告',
         'success_announcement_published': '公告發布成功！',
         'success_announcement_cleared': '目前公告已清除。',
-        'error_announcement_message_required_en': '必須輸入英文公告訊息。', // Changed
+        'error_sport_type_name_required': '必須輸入運動類型名稱（至少一種語言）。',
+        'error_announcement_message_required': '必須輸入公告訊息（至少一種語言）。',
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
@@ -794,6 +804,13 @@ const LANG_PACK = {
         'confirm_delete_payment_title': '刪除付款記錄',
         'confirm_delete_payment_desc': '您確定要刪除此付款記錄嗎？此操作僅為記錄目的，無法復原。',
         'header_member_booking_history': "{name} 的預約記錄",
+        'status_overdue': '款項已逾期。',
+        'status_no_credits': '點數已用完。',
+        'status_due_soon': '{days} 天內需要付款。',
+        'status_expiring_soon': '點數將於 {days} 天內到期。',
+        'status_low_credits': '點數不足 (剩餘 {count} 點)。',
+        'label_admin_notes': '管理員備註 (僅供員工查看)',
+        'placeholder_admin_notes': '例如：偏好早上的課程、傷患資訊等...',
         
         // --- Classes Page ---
         'title_all_classes': '所有課程',
@@ -944,6 +961,7 @@ const LANG_PACK = {
         'whatsapp_changes_header': '以下是課程的變更詳情：',
         'whatsapp_cancellation_option': '如果您無法參加更新後的課程，可以隨時透過App取消預約。🙏',
         'error_class_not_for_monthly': '此課程不適用於月費方案預約。',
+        'btn_jump_to_today': '跳至今天',
 
         // --- QR Code ---
         'nav_check_in': '簽到',
