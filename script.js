@@ -2917,14 +2917,11 @@ ${_('whatsapp_closing')}
             !(cls.attendedBy && cls.attendedBy[member.id])
         );
 
-        // --- START OF FIX: This logic now uses a debouncer to correctly handle bulk updates ---
-
-        // These variables will be shared by all listeners created in this render cycle.
+        // --- START OF DEBOUNCER LOGIC (No changes here) ---
         let checkInDebounceTimer = null;
         const newlyCheckedInIds = new Set();
         const totalUnattendedCountAtRender = todaysUnattendedBookings.length;
 
-        // This is the handler that will run after the debounce period.
         const processCheckIns = () => {
             const resultContainer = document.getElementById('qrCodeResultContainer');
             if (!resultContainer) return;
@@ -2932,8 +2929,6 @@ ${_('whatsapp_closing')}
             const processedCount = newlyCheckedInIds.size;
             if (processedCount === 0) return;
 
-            // If multiple classes were checked in and it matches the total number
-            // of unattended classes for the day, we treat it as a "Check-In All" event.
             if (processedCount > 1 && processedCount === totalUnattendedCountAtRender) {
                 const message = _('check_in_success_all')
                     .replace('{name}', member.name)
@@ -2941,14 +2936,11 @@ ${_('whatsapp_closing')}
                 
                 resultContainer.innerHTML = `<div class="check-in-result-banner check-in-success">${message}</div>`;
                 
-                // Remove all the corresponding UI elements at once.
                 newlyCheckedInIds.forEach(id => {
                     document.querySelector(`[data-checkin-cls-id="${id}"]`)?.remove();
                 });
 
             } else {
-                // Otherwise, process them as individual check-ins.
-                // This loop handles the case of a single check-in.
                 newlyCheckedInIds.forEach(id => {
                     const cls = appState.classes.find(c => c.id === id);
                     if (!cls) return;
@@ -2963,45 +2955,33 @@ ${_('whatsapp_closing')}
                 });
             }
             
-            // These actions are common to both scenarios.
             playSuccessSound();
             if (navigator.vibrate) navigator.vibrate(200);
             
             database.ref(`/users/${member.id}/selectedCheckInClassId`).set(null);
             setTimeout(() => { if (resultContainer) resultContainer.innerHTML = ''; }, 3000);
 
-            // Clean up UI and reset the collector for the next action.
             const upcomingContainer = document.getElementById('upcomingCheckInSection');
             if (upcomingContainer && upcomingContainer.querySelectorAll('[data-checkin-cls-id]').length === 0) {
-                upcomingContainer.querySelector('h5')?.remove();
+                upcomingContainer.innerHTML = `<p class="text-center text-slate-500 mt-4">${_('info_no_booked_class_today')}</p>`;
             }
             newlyCheckedInIds.clear();
         };
 
         todaysUnattendedBookings.forEach(cls => {
             const checkInRef = database.ref(`/classes/${cls.id}/attendedBy/${member.id}`);
-
             const listener = (snapshot) => {
-                // Only act when a class is marked as true.
                 if (snapshot.val() !== true) return;
-
-                // Immediately detach this specific listener.
                 checkInRef.off('value', listener);
                 delete memberCheckInListeners[cls.id];
-                
-                // Add the ID to our set of recently checked-in classes.
                 newlyCheckedInIds.add(cls.id);
-                
-                // Reset the timer. This ensures that if multiple events arrive in quick
-                // succession, the handler only runs once after the last event.
                 clearTimeout(checkInDebounceTimer);
-                checkInDebounceTimer = setTimeout(processCheckIns, 150); // 150ms is enough to catch a bulk update.
+                checkInDebounceTimer = setTimeout(processCheckIns, 150);
             };
-
             memberCheckInListeners[cls.id] = { ref: checkInRef, listener: listener };
             checkInRef.on('value', listener);
         });
-        // --- END OF FIX ---
+        // --- END OF DEBOUNCER LOGIC ---
 
         container.innerHTML = `
             <div class="w-full max-w-sm mx-auto">
@@ -3022,15 +3002,14 @@ ${_('whatsapp_closing')}
                                     <button class="w-full text-left p-3 bg-slate-100 rounded-lg text-slate-700 hover:bg-indigo-100 cursor-pointer transition-colors ${isSelected ? 'checkin-selected' : ''}" data-checkin-cls-id="${cls.id}">
                                         <strong>${getSportTypeName(sportType)}</strong> at ${getTimeRange(cls.time, cls.duration)}
                                     </button>`;
-                                }).join('')
-                            : ''
+                                }).join('') +
+                              (todaysUnattendedBookings.length > 1
+                                  ? `<p class="text-center text-sm text-slate-500 mt-2" data-lang-key="check_in_preselect_prompt"></p>`
+                                  : '')
+                            // --- START: THIS IS THE ONLY CHANGE ---
+                            : `<p class="text-center text-slate-500 mt-4">${_('info_no_booked_class_today')}</p>`
+                            // --- END: THIS IS THE ONLY CHANGE ---
                         }
-
-                        ${todaysUnattendedBookings.length > 1
-                            ? `<p class="text-center text-sm text-slate-500 mt-2" data-lang-key="check_in_preselect_prompt"></p>`
-                            : ''
-                        }
-
                     </div>
                 </div>
             </div>`;
