@@ -643,3 +643,52 @@ th.sortable:hover .sort-icon {
     vertical-align: middle;
     box-shadow: 0 0 0 2px white, 0 1px 2px rgba(0,0,0,0.2);
 }
+/* --- Urgency Indicator for Classes (Inside Counter) --- */
+.urgency-indicator-text {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-right: 6px; /* Space between text and numbers */
+    color: white;
+}
+/* --- Custom Member Tooltip --- */
+tr.has-tooltip {
+    position: relative;
+}
+
+td.has-tooltip-content {
+    position: static;
+}
+
+.member-tooltip {
+    position: absolute;
+    top: 100%; /* CHANGED: Position below the row */
+    left: 0;
+    z-index: 30;
+
+    /* Appearance */
+    background-color: rgba(17, 24, 39, 0.9);
+    color: white;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    
+    /* Sizing and Text */
+    min-width: 280px;
+    font-size: 0.875rem;
+    font-weight: normal;
+    text-align: left;
+    white-space: pre-wrap;
+
+    /* Hide by default */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+}
+
+/* Show on hover */
+tr.has-tooltip:hover .member-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
