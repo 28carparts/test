@@ -345,16 +345,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return appState.currentLanguage === 'zh-TW' ? 'zh-TW' : 'en-US';
     };
     const getSportTypeName = (sportType) => {
-        // If the sportType object doesn't exist, return a fallback.
+        // Handle cases where the sportType object is missing.
         if (!sportType) {
             return _('unknown_type');
         }
-        // If the language is Chinese AND a Chinese name exists, use it.
-        if (appState.currentLanguage === 'zh-TW' && sportType.name_zh) {
-            return sportType.name_zh;
-        }
-        // Otherwise, fall back to the default English name.
-        return sportType.name;
+
+        // Determine the preferred and fallback names based on the current language.
+        const preferredName = (appState.currentLanguage === 'zh-TW') ? sportType.name_zh : sportType.name;
+        const fallbackName = (appState.currentLanguage === 'zh-TW') ? sportType.name : sportType.name_zh;
+        
+        // Return the first available name: preferred, then fallback, then the generic error message.
+        // The '||' operator elegantly handles empty or null values.
+        return preferredName || fallbackName || _('unknown_type');
     };
     const formatCurrency = (amount) => {
         // Use the dynamic locale for number/currency formatting
@@ -2004,7 +2006,7 @@ ${_('whatsapp_closing')}
                     </div>
                     <div>
                         <label for="announcementMessageEn" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label_en')}</label>
-                        <textarea id="announcementMessageEn" required class="form-input" rows="3" placeholder="Enter the English announcement details here...">${current?.message?.en || ''}</textarea>
+                        <textarea id="announcementMessageEn" class="form-input" rows="3" placeholder="Enter the English announcement details here...">${current?.message?.en || ''}</textarea>
                     </div>
                     <div>
                         <label for="announcementMessageZh" class="block text-slate-600 text-sm font-semibold mb-2">${_('announcement_message_label_zh')}</label>
@@ -2034,12 +2036,16 @@ ${_('whatsapp_closing')}
     function handleAnnouncementFormSubmit(e) {
         e.preventDefault();
         const form = e.target;
+        
+        // --- START: MODIFIED VALIDATION LOGIC ---
         const messageEn = form.querySelector('#announcementMessageEn').value.trim();
+        const messageZh = form.querySelector('#announcementMessageZh').value.trim();
 
-        if (!messageEn) {
-            showMessageBox(_('error_announcement_message_required_en'), 'error');
+        if (!messageEn && !messageZh) {
+            showMessageBox(_('error_announcement_message_required'), 'error');
             return;
         }
+        // --- END: MODIFIED VALIDATION LOGIC ---
 
         const newAnnouncement = {
             id: new Date().getTime(),
@@ -2049,7 +2055,7 @@ ${_('whatsapp_closing')}
             },
             message: {
                 en: messageEn,
-                zh: form.querySelector('#announcementMessageZh').value.trim()
+                zh: messageZh
             },
             postedBy: appState.currentUser.name,
             postedAt: new Date().toISOString()
@@ -2076,13 +2082,15 @@ ${_('whatsapp_closing')}
             return;
         }
         
-        // Helper to get the correct text with fallback logic
+        // Helper to get the correct text with the new flexible fallback logic
         const getTranslatedText = (field) => {
-            if (!field) return '';
-            if (appState.currentLanguage === 'zh-TW' && field.zh) {
-                return field.zh;
-            }
-            return field.en || ''; // Fallback to English
+            if (!field) return ''; // Handles cases where the title/message object might not exist
+            
+            const preferredText = (appState.currentLanguage === 'zh-TW') ? field.zh : field.en;
+            const fallbackText = (appState.currentLanguage === 'zh-TW') ? field.en : field.zh;
+
+            // Return the first available text: preferred or fallback.
+            return preferredText || fallbackText || '';
         };
 
         const title = getTranslatedText(announcement.title);
@@ -2676,20 +2684,28 @@ ${_('whatsapp_closing')}
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-xs transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                 <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">${_('title_goto_date')}</h2>
-                <form id="goToDateForm" class="space-y-4">
+                <form id="goToDateForm" class="space-y-2">
                     <div>
                         <label for="goToDatePicker" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_select_date')}</label>
                         <input type="date" id="goToDatePicker" class="form-input w-full" value="${getIsoDate(new Date())}">
                     </div>
-                    <div class="pt-2">
+                    <div class="pt-2 space-y-2">
                         <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition">${_('btn_go')}</button>
+                        
+                        <!-- START: New Button Added -->
+                        <button type="button" id="jumpToTodayBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-lg transition">${_('btn_jump_to_today')}</button>
+                        <!-- END: New Button Added -->
+
                     </div>
                 </form>
             </div>
         `;
 
-        const form = DOMElements.goToDateModal.querySelector('#goToDateForm');
+        const modal = DOMElements.goToDateModal;
+        const form = modal.querySelector('#goToDateForm');
+        const jumpToTodayBtn = modal.querySelector('#jumpToTodayBtn'); // Get the new button
 
+        // Logic for the original "Go" button
         form.onsubmit = (e) => {
             e.preventDefault();
             const targetDateIso = form.querySelector('#goToDatePicker').value;
@@ -2708,11 +2724,28 @@ ${_('whatsapp_closing')}
 
             if (daysAgo > appState.ownerPastDaysVisible) {
                 appState.ownerPastDaysVisible = daysAgo + 7;
+                detachDataListeners();
+                initDataListeners();
             }
             
             switchPage('schedule');
             closeModal(DOMElements.goToDateModal);
         };
+
+        // --- START: New Logic for the "Jump to Today" button ---
+        jumpToTodayBtn.onclick = () => {
+            const todayIso = getIsoDate(new Date());
+            
+            // Set the scroll target for the next schedule render
+            appState.scrollToDateOnNextLoad = todayIso;
+            
+            // Switch to the schedule page (if not already there)
+            switchPage('schedule');
+            
+            // Close the modal
+            closeModal(DOMElements.goToDateModal);
+        };
+        // --- END: New Logic for the "Jump to Today" button ---
 
         openModal(DOMElements.goToDateModal);
     }
@@ -3510,25 +3543,81 @@ ${_('whatsapp_closing')}
                 return 0;
             });
 
-            tableBody.innerHTML = sortedUsers.map(member => {
-                const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
+        tableBody.innerHTML = sortedUsers.map(member => {
+            const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
+            
+            // --- START: New Indicator Logic ---
+            let statusIndicatorHTML = '';
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-                return `
-                <tr class="border-b border-slate-100">
-                    <td class="p-2 font-semibold"><button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
-                    <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
-                    <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
-                    <td class="p-2">${member.monthlyPlan 
-                        ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
-                        : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span>`}
-                    </td>
-                    <td class="p-2 text-sm">${expiryOrDueDate}</td>
-                    <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
-                    <td class="p-2 text-right space-x-2">
-                        <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">${_('btn_edit')}</button>
-                        <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">${_('btn_delete')}</button>
-                    </td>
-                </tr>
+            const sevenDaysFromNow = new Date();
+            sevenDaysFromNow.setDate(today.getDate() + 7);
+
+            let isCritical = false;
+            let tooltipText = '';
+
+            // --- Check for CRITICAL (Red) status first ---
+            if (member.monthlyPlan) {
+                const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
+                if (dueDate && dueDate < today) {
+                    isCritical = true;
+                    tooltipText = _('status_overdue');
+                }
+            } else { // Credit member
+                if ((member.credits || 0) <= 0) {
+                    isCritical = true;
+                    tooltipText = _('status_no_credits');
+                }
+            }
+
+            if (isCritical) {
+                statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500" title="${tooltipText}"></span>`;
+            } else {
+                // --- If not critical, check for WARNING (Yellow) status ---
+                let isWarning = false;
+                if (member.monthlyPlan) {
+                    const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
+                    if (dueDate && dueDate <= sevenDaysFromNow) {
+                        isWarning = true;
+                        const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+                        tooltipText = _('status_due_soon').replace('{days}', Math.max(0, daysDiff));
+                    }
+                } else { // Credit member
+                    const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null;
+                    if ((member.credits || 0) < 5 && (member.credits || 0) > 0) {
+                         isWarning = true;
+                         tooltipText = _('status_low_credits').replace('{count}', formatCredits(member.credits));
+                    }
+                    if (expiryDate && expiryDate <= sevenDaysFromNow) {
+                        isWarning = true;
+                        const daysDiff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                        // Overwrite tooltip with expiry if it's more urgent
+                        tooltipText = _('status_expiring_soon').replace('{days}', Math.max(0, daysDiff));
+                    }
+                }
+                if (isWarning) {
+                    statusIndicatorHTML = `<span class="status-indicator-dot bg-yellow-400" title="${tooltipText}"></span>`;
+                }
+            }
+            // --- END: New Indicator Logic ---
+
+            return `
+            <tr class="border-b border-slate-100">
+                <td class="p-2 font-semibold">${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
+                <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
+                <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
+                <td class="p-2">${member.monthlyPlan 
+                    ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
+                    : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span>`}
+                </td>
+                <td class="p-2 text-sm">${expiryOrDueDate}</td>
+                <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
+                <td class="p-2 text-right space-x-2">
+                    <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">${_('btn_edit')}</button>
+                    <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">${_('btn_delete')}</button>
+                </td>
+            </tr>
             `}).join('');
             tableBody.querySelectorAll('.edit-member-btn').forEach(btn => {
                 btn.onclick = () => openMemberModal(appState.users.find(u => u.id === btn.dataset.id));
@@ -3994,6 +4083,10 @@ ${_('whatsapp_closing')}
                         <div><label for="memberPhone" class="block text-slate-600 text-sm font-semibold mb-2">${_('auth_mobile_number')}</label><div class="flex gap-2"><input type="text" id="memberCountryCode" class="form-input w-24" placeholder="${_('placeholder_country_code')}"><input type="tel" id="memberPhone" required class="form-input flex-grow"></div></div>
                         <div><label class="block text-slate-600 text-sm font-semibold mb-2">${_('auth_password')}</label><button type="button" id="resetPasswordBtn" class="form-input text-left text-indigo-600 hover:bg-slate-100">${_('label_reset_password')}</button></div>
                     </div>
+                    <div class="mb-4">
+                        <label for="adminNotes" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_admin_notes')}</label>
+                        <textarea id="adminNotes" class="form-input w-full" rows="3" placeholder="${_('placeholder_admin_notes')}"></textarea>
+                    </div>
                     <div class="pt-4 border-t">
                         <div class="flex items-center mb-4"><input type="checkbox" id="monthlyPlan" class="h-4 w-4 rounded text-indigo-600"><label for="monthlyPlan" class="ml-2 text-slate-700">${_('label_monthly_plan')}</label></div>
                         <div id="creditFields" class="space-y-4">
@@ -4234,6 +4327,7 @@ ${_('whatsapp_closing')}
         const { countryCode, number } = parsePhoneNumber(memberToEdit.phone);
         memberCountryCodeInput.value = countryCode;
         memberPhoneInput.value = number;
+        form.querySelector('#adminNotes').value = memberToEdit.notes || ''; 
         
         form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
         expiryDateInput.value = memberToEdit.expiryDate;
@@ -4340,6 +4434,7 @@ ${_('whatsapp_closing')}
         let updates = {};
         updates[`/users/${id}/name`] = form.querySelector('#memberName').value;
         updates[`/users/${id}/phone`] = fullPhoneNumber;
+        updates[`/users/${id}/notes`] = form.querySelector('#adminNotes').value.trim(); // ADD THIS LINE
         updates[`/users/${id}/monthlyPlan`] = isMonthly;
 
         updates[`/users/${id}/monthlyPlanAmount`] = isMonthly ? monthlyPlanAmount : null;
@@ -5033,7 +5128,7 @@ ${_('whatsapp_closing')}
                     <div class="space-y-4">
                         <div>
                             <label for="sportTypeName" data-lang-key="admin_sport_type_name" class="block text-slate-600 text-sm font-semibold mb-2"></label>
-                            <input type="text" id="sportTypeName" required class="form-input">
+                            <input type="text" id="sportTypeName" class="form-input">
                         </div>
                         <div>
                             <label for="sportTypeNameZh" data-lang-key="admin_sport_type_name_zh" class="block text-slate-600 text-sm font-semibold mb-2"></label>
@@ -5079,30 +5174,32 @@ ${_('whatsapp_closing')}
         e.preventDefault();
         const form = e.target;
         const id = form.querySelector('#sportTypeModalId').value;
+        
+        // --- START: NEW VALIDATION LOGIC ---
+        const nameEn = form.querySelector('#sportTypeName').value.trim();
+        const nameZh = form.querySelector('#sportTypeNameZh').value.trim();
+
+        if (!nameEn && !nameZh) {
+            showMessageBox(_('error_sport_type_name_required'), 'error');
+            return;
+        }
+        // --- END: NEW VALIDATION LOGIC ---
+
         const sportTypeData = {
-            name: form.querySelector('#sportTypeName').value,
-            name_zh: form.querySelector('#sportTypeNameZh').value || '', // Get the new field's value
+            name: nameEn,
+            name_zh: nameZh,
             color: form.querySelector('#sportTypeColor').value
         };
 
         let promise;
         if (id) {
-            // This is an EDIT operation, no change in pagination needed.
             promise = database.ref('/sportTypes/' + id).update(sportTypeData);
         } else {
-            // --- START: NEW LOGIC FOR ADDING ---
-            // Clear any search filters to show the full list.
             appState.searchTerms.sports = '';
-
-            // Calculate which page the new item will be on.
             const totalItemsAfterAdd = appState.sportTypes.length + 1;
             const itemsPerPage = appState.itemsPerPage.sports;
             const lastPage = Math.ceil(totalItemsAfterAdd / itemsPerPage);
-
-            // Update the state to navigate to the last page.
             appState.pagination.sports.page = lastPage;
-            // --- END: NEW LOGIC FOR ADDING ---
-
             promise = database.ref('/sportTypes').push(sportTypeData);
         }
         promise.then(() => {
