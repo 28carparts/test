@@ -1962,24 +1962,31 @@ ${_('whatsapp_closing')}
 
     function createParticipantCounter(current, max, isEditable = false) {
         const fillRate = max > 0 ? current / max : 0;
+        const spotsRemaining = max - current;
         
         let statusCls = 'status-low';
+        let urgencyText = '';
+
         if (fillRate >= 1) {
             statusCls = 'status-full';
-        } else if (fillRate >= 0.75) {
-            statusCls = 'status-high';
-        } else if (fillRate >= 0.5) {
+        } else if (spotsRemaining === 1) {
+            statusCls = 'status-high'; // Use orange for urgency
+            urgencyText = `<span class="urgency-indicator-text">${_('label_last_spot')}</span>`;
+        } else if (spotsRemaining === 2) {
+            statusCls = 'status-high'; // Use orange for urgency
+            urgencyText = `<span class="urgency-indicator-text">${_('label_few_spots_left')}</span>`;
+        } else if (fillRate >= 0.5) { // Medium is now the fallback for >50%
             statusCls = 'status-medium';
         }
         
         const editableCls = isEditable ? 'participant-counter-editable' : '';
 
-        // Translate the title/tooltip attribute
         const tooltipText = _('tooltip_spots_filled').replace('{current}', current).replace('{max}', max);
 
+        // The inner HTML now includes the urgency text when applicable
         return `
             <div class="participant-counter ${statusCls} ${editableCls}" title="${tooltipText}">
-                ${current}/${max}
+                ${urgencyText}${current}/${max}
             </div>
         `;
     }
@@ -3546,33 +3553,44 @@ ${_('whatsapp_closing')}
         tableBody.innerHTML = sortedUsers.map(member => {
             const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
             
-            // --- START: New Indicator Logic ---
             let statusIndicatorHTML = '';
+            let tooltipContent = '';
+            let hasStatus = false;
+
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
             const sevenDaysFromNow = new Date();
             sevenDaysFromNow.setDate(today.getDate() + 7);
 
+            let statusText = '';
             let isCritical = false;
-            let tooltipText = '';
 
             // --- Check for CRITICAL (Red) status first ---
             if (member.monthlyPlan) {
                 const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
                 if (dueDate && dueDate < today) {
                     isCritical = true;
-                    tooltipText = _('status_overdue');
+                    statusText = _('status_overdue');
                 }
             } else { // Credit member
+                const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null; // Get the expiry date
+                
                 if ((member.credits || 0) <= 0) {
                     isCritical = true;
-                    tooltipText = _('status_no_credits');
+                    statusText = _('status_no_credits');
+                } else if (expiryDate && expiryDate < today) { // ADD THIS ELSE IF BLOCK
+                    isCritical = true;
+                    // We can reuse the "expiring soon" key, but it will be in a critical context.
+                    // Or create a new key `status_expired` for more clarity. Let's reuse for simplicity.
+                    statusText = _('status_expiring_soon').replace('{days}', '0'); // Indicates it has passed
                 }
             }
 
             if (isCritical) {
-                statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500" title="${tooltipText}"></span>`;
+                hasStatus = true;
+                statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
+                tooltipContent = statusText;
             } else {
                 // --- If not critical, check for WARNING (Yellow) status ---
                 let isWarning = false;
@@ -3581,30 +3599,75 @@ ${_('whatsapp_closing')}
                     if (dueDate && dueDate <= sevenDaysFromNow) {
                         isWarning = true;
                         const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                        tooltipText = _('status_due_soon').replace('{days}', Math.max(0, daysDiff));
+                        statusText = _('status_due_soon').replace('{days}', Math.max(0, daysDiff));
                     }
-                } else { // Credit member
+                } else {
                     const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null;
                     if ((member.credits || 0) < 5 && (member.credits || 0) > 0) {
                          isWarning = true;
-                         tooltipText = _('status_low_credits').replace('{count}', formatCredits(member.credits));
+                         statusText = _('status_low_credits').replace('{count}', formatCredits(member.credits));
                     }
                     if (expiryDate && expiryDate <= sevenDaysFromNow) {
                         isWarning = true;
                         const daysDiff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                        // Overwrite tooltip with expiry if it's more urgent
-                        tooltipText = _('status_expiring_soon').replace('{days}', Math.max(0, daysDiff));
+                        statusText = _('status_expiring_soon').replace('{days}', Math.max(0, daysDiff));
                     }
                 }
                 if (isWarning) {
-                    statusIndicatorHTML = `<span class="status-indicator-dot bg-yellow-400" title="${tooltipText}"></span>`;
+                    hasStatus = true;
+                    statusIndicatorHTML = `<span class="status-indicator-dot bg-yellow-400"></span>`;
+                    tooltipContent = statusText;
                 }
             }
-            // --- END: New Indicator Logic ---
+            
+            // --- Tooltip History Logic with Spacing Fix ---
+            if (hasStatus) {
+                // Use a single newline character for spacing instead of two.
+                const sectionSpacer = '\n\n'; 
+
+                const purchaseHistory = firebaseObjectToArray(member.purchaseHistory)
+                    .filter(p => p.status !== 'deleted')
+                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                    .slice(0, 3);
+
+                if (purchaseHistory.length > 0) {
+                    tooltipContent += `${sectionSpacer}${_('tooltip_header_purchase_history')}`;
+                    purchaseHistory.forEach(p => {
+                        const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural');
+                        const entryText = _('history_purchase_entry')
+                            .replace('{amount}', formatCurrency(p.amount))
+                            .replace('{quantity}', p.credits)
+                            .replace('{unit}', creditsUnit);
+                        tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
+                    });
+                }
+
+                const paymentHistory = firebaseObjectToArray(member.paymentHistory)
+                    .filter(p => p.status !== 'deleted')
+                    .sort((a,b) => new Date(b.date) - new Date(a.date))
+                    .slice(0, 3);
+
+                if (paymentHistory.length > 0) {
+                    tooltipContent += `${sectionSpacer}${_('tooltip_header_payment_history')}`;
+                    paymentHistory.forEach(p => {
+                        const monthUnit = p.monthsPaid === 1 ? _('label_month_singular') : _('label_month_plural');
+                        const entryText = _('history_payment_entry')
+                            .replace('{amount}', formatCurrency(p.amount))
+                            .replace('{quantity}', p.monthsPaid)
+                            .replace('{unit}', monthUnit);
+                        tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
+                    });
+                }
+            }
+            
+            const tooltipHTML = hasStatus ? `<span class="member-tooltip">${tooltipContent}</span>` : '';
+            // Add 'has-tooltip' to <tr> if needed, and 'has-tooltip-content' to <td>
+            const trClass = hasStatus ? 'has-tooltip' : '';
+            const tdClass = hasStatus ? 'has-tooltip-content' : '';
 
             return `
-            <tr class="border-b border-slate-100">
-                <td class="p-2 font-semibold">${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button></td>
+            <tr class="border-b border-slate-100 ${trClass}">
+                <td class="p-2 font-semibold ${tdClass}">${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
                 <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
                 <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
                 <td class="p-2">${member.monthlyPlan 
