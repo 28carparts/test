@@ -3550,138 +3550,128 @@ ${_('whatsapp_closing')}
                 return 0;
             });
 
-        tableBody.innerHTML = sortedUsers.map(member => {
-            const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
-            
-            let statusIndicatorHTML = '';
-            let tooltipContent = '';
-            let hasStatus = false;
-
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const sevenDaysFromNow = new Date();
-            sevenDaysFromNow.setDate(today.getDate() + 7);
-
-            let statusText = '';
-            let isCritical = false;
-
-            // --- Check for CRITICAL (Red) status first ---
-            if (member.monthlyPlan) {
-                const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
-                if (dueDate && dueDate < today) {
-                    isCritical = true;
-                    statusText = _('status_overdue');
-                }
-            } else { // Credit member
-                const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null; // Get the expiry date
+            tableBody.innerHTML = sortedUsers.map(member => {
+                const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
                 
-                if ((member.credits || 0) <= 0) {
-                    isCritical = true;
-                    statusText = _('status_no_credits');
-                } else if (expiryDate && expiryDate < today) { // ADD THIS ELSE IF BLOCK
-                    isCritical = true;
-                    // We can reuse the "expiring soon" key, but it will be in a critical context.
-                    // Or create a new key `status_expired` for more clarity. Let's reuse for simplicity.
-                    statusText = _('status_expiring_soon').replace('{days}', '0'); // Indicates it has passed
-                }
-            }
-
-            if (isCritical) {
-                hasStatus = true;
-                statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
-                tooltipContent = statusText;
-            } else {
-                // --- If not critical, check for WARNING (Yellow) status ---
-                let isWarning = false;
+                let statusIndicatorHTML = '';
+                let tooltipContent = '';
+                let hasStatus = false;
+        
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+        
+                const sevenDaysFromNow = new Date();
+                sevenDaysFromNow.setDate(today.getDate() + 7);
+        
+                let statusText = '';
+                let isCritical = false;
+        
                 if (member.monthlyPlan) {
                     const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
-                    if (dueDate && dueDate <= sevenDaysFromNow) {
-                        isWarning = true;
-                        const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                        statusText = _('status_due_soon').replace('{days}', Math.max(0, daysDiff));
+                    if (dueDate && dueDate < today) {
+                        isCritical = true;
+                        statusText = _('status_overdue');
                     }
                 } else {
                     const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null;
-                    if ((member.credits || 0) < 5 && (member.credits || 0) > 0) {
-                         isWarning = true;
-                         statusText = _('status_low_credits').replace('{count}', formatCredits(member.credits));
-                    }
-                    if (expiryDate && expiryDate <= sevenDaysFromNow) {
-                        isWarning = true;
-                        const daysDiff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                        statusText = _('status_expiring_soon').replace('{days}', Math.max(0, daysDiff));
+                    if ((member.credits || 0) <= 0) {
+                        isCritical = true;
+                        statusText = _('status_no_credits');
+                    } else if (expiryDate && expiryDate < today) {
+                        isCritical = true;
+                        statusText = _('status_expiring_soon').replace('{days}', '0');
                     }
                 }
-                if (isWarning) {
+        
+                if (isCritical) {
                     hasStatus = true;
-                    statusIndicatorHTML = `<span class="status-indicator-dot bg-yellow-400"></span>`;
+                    statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
                     tooltipContent = statusText;
+                } else {
+                    let isWarning = false;
+                    if (member.monthlyPlan) {
+                        const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
+                        if (dueDate && dueDate <= sevenDaysFromNow) {
+                            isWarning = true;
+                            const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+                            statusText = _('status_due_soon').replace('{days}', Math.max(0, daysDiff));
+                        }
+                    } else {
+                        const expiryDate = member.expiryDate ? new Date(member.expiryDate) : null;
+                        if ((member.credits || 0) < 5 && (member.credits || 0) > 0) {
+                             isWarning = true;
+                             statusText = _('status_low_credits').replace('{count}', formatCredits(member.credits));
+                        }
+                        if (expiryDate && expiryDate <= sevenDaysFromNow) {
+                            isWarning = true;
+                            const daysDiff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                            statusText = _('status_expiring_soon').replace('{days}', Math.max(0, daysDiff));
+                        }
+                    }
+                    if (isWarning) {
+                        hasStatus = true;
+                        statusIndicatorHTML = `<span class="status-indicator-dot bg-yellow-400"></span>`;
+                        tooltipContent = statusText;
+                    }
                 }
-            }
-            
-            // --- Tooltip History Logic with Spacing Fix ---
-            if (hasStatus) {
-                // Use a single newline character for spacing instead of two.
-                const sectionSpacer = '\n\n'; 
-
-                const purchaseHistory = firebaseObjectToArray(member.purchaseHistory)
-                    .filter(p => p.status !== 'deleted')
-                    .sort((a,b) => new Date(b.date) - new Date(a.date))
-                    .slice(0, 3);
-
-                if (purchaseHistory.length > 0) {
-                    tooltipContent += `${sectionSpacer}${_('tooltip_header_purchase_history')}`;
-                    purchaseHistory.forEach(p => {
-                        const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural');
-                        const entryText = _('history_purchase_entry')
-                            .replace('{amount}', formatCurrency(p.amount))
-                            .replace('{quantity}', p.credits)
-                            .replace('{unit}', creditsUnit);
-                        tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
-                    });
+                
+                if (hasStatus) {
+                    const sectionSpacer = '\n\n';
+                    const purchaseHistory = firebaseObjectToArray(member.purchaseHistory)
+                        .filter(p => p.status !== 'deleted')
+                        .sort((a,b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 3);
+        
+                    if (purchaseHistory.length > 0) {
+                        tooltipContent += `${sectionSpacer}${_('tooltip_header_purchase_history')}`;
+                        purchaseHistory.forEach(p => {
+                            const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural');
+                            const entryText = _('history_purchase_entry')
+                                .replace('{amount}', formatCurrency(p.amount))
+                                .replace('{quantity}', p.credits)
+                                .replace('{unit}', creditsUnit);
+                            tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
+                        });
+                    }
+        
+                    const paymentHistory = firebaseObjectToArray(member.paymentHistory)
+                        .filter(p => p.status !== 'deleted')
+                        .sort((a,b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 3);
+        
+                    if (paymentHistory.length > 0) {
+                        tooltipContent += `${sectionSpacer}${_('tooltip_header_payment_history')}`;
+                        paymentHistory.forEach(p => {
+                            const monthUnit = p.monthsPaid === 1 ? _('label_month_singular') : _('label_month_plural');
+                            const entryText = _('history_payment_entry')
+                                .replace('{amount}', formatCurrency(p.amount))
+                                .replace('{quantity}', p.monthsPaid)
+                                .replace('{unit}', monthUnit);
+                            tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
+                        });
+                    }
                 }
+                
+                const tooltipHTML = hasStatus ? `<span class="member-tooltip">${tooltipContent}</span>` : '';
 
-                const paymentHistory = firebaseObjectToArray(member.paymentHistory)
-                    .filter(p => p.status !== 'deleted')
-                    .sort((a,b) => new Date(b.date) - new Date(a.date))
-                    .slice(0, 3);
+                return `
+                <tr class="border-b border-slate-100">
+                    <td class="p-2 font-semibold" ${hasStatus ? `data-tooltip-content` : ''}>${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
+                    <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
+                    <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
+                    <td class="p-2">${member.monthlyPlan 
+                        ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
+                        : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span>`}
+                    </td>
+                    <td class="p-2 text-sm">${expiryOrDueDate}</td>
+                    <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
+                    <td class="p-2 text-right space-x-2">
+                        <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">${_('btn_edit')}</button>
+                        <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">${_('btn_delete')}</button>
+                    </td>
+                </tr>
+                `}).join('');
 
-                if (paymentHistory.length > 0) {
-                    tooltipContent += `${sectionSpacer}${_('tooltip_header_payment_history')}`;
-                    paymentHistory.forEach(p => {
-                        const monthUnit = p.monthsPaid === 1 ? _('label_month_singular') : _('label_month_plural');
-                        const entryText = _('history_payment_entry')
-                            .replace('{amount}', formatCurrency(p.amount))
-                            .replace('{quantity}', p.monthsPaid)
-                            .replace('{unit}', monthUnit);
-                        tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
-                    });
-                }
-            }
-            
-            const tooltipHTML = hasStatus ? `<span class="member-tooltip">${tooltipContent}</span>` : '';
-            // Add 'has-tooltip' to <tr> if needed, and 'has-tooltip-content' to <td>
-            const trClass = hasStatus ? 'has-tooltip' : '';
-            const tdClass = hasStatus ? 'has-tooltip-content' : '';
-
-            return `
-            <tr class="border-b border-slate-100 ${trClass}">
-                <td class="p-2 font-semibold ${tdClass}">${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
-                <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
-                <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
-                <td class="p-2">${member.monthlyPlan 
-                    ? `<span class="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCurrency(member.monthlyPlanAmount)}/mo</span>` 
-                    : `<span class="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">${formatCredits(member.credits)}/${formatCredits(member.initialCredits) || _('label_na')}</span>`}
-                </td>
-                <td class="p-2 text-sm">${expiryOrDueDate}</td>
-                <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
-                <td class="p-2 text-right space-x-2">
-                    <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">${_('btn_edit')}</button>
-                    <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">${_('btn_delete')}</button>
-                </td>
-            </tr>
-            `}).join('');
             tableBody.querySelectorAll('.edit-member-btn').forEach(btn => {
                 btn.onclick = () => openMemberModal(appState.users.find(u => u.id === btn.dataset.id));
             });
@@ -3803,11 +3793,11 @@ ${_('whatsapp_closing')}
                     exportData.sort((a, b) => {
                         const nameKey = _('export_header_name');
                         const dateKey = _('export_header_booking_date');
-                        const nameComparison = a[nameKey].localeCompare(b[nameKey]); // <<< FIX
+                        const nameComparison = a[nameKey].localeCompare(b[nameKey]);
                         if (nameComparison !== 0) {
                             return nameComparison;
                         }
-                        return a[dateKey].localeCompare(b[dateKey]); // <<< FIX
+                        return a[dateKey].localeCompare(b[dateKey]);
                     });
                     
                     exportToCsv('member-full-booking-history', exportData);
@@ -3820,7 +3810,7 @@ ${_('whatsapp_closing')}
             container.querySelector('#exportFinancialHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
-                showMessageBox(_('info_generating_financials'), 'info', 5000); //
+                showMessageBox(_('info_generating_financials'), 'info', 5000);
                 try {
                     const usersSnapshot = await database.ref('/users').once('value');
                     const allUsers = firebaseObjectToArray(usersSnapshot.val());
@@ -3865,9 +3855,9 @@ ${_('whatsapp_closing')}
                     exportData.sort((a, b) => {
                         const nameKey = _('export_header_name');
                         const dateKey = _('export_header_transaction_date');
-                        const nameComparison = a[nameKey].localeCompare(b[nameKey]); // <<< FIX
+                        const nameComparison = a[nameKey].localeCompare(b[nameKey]);
                         if (nameComparison !== 0) return nameComparison;
-                        return new Date(a[dateKey]) - new Date(b[dateKey]); // <<< FIX
+                        return new Date(a[dateKey]) - new Date(b[dateKey]);
                     });
                     
                     exportToCsv('member-financial-history', exportData);
@@ -3887,6 +3877,43 @@ ${_('whatsapp_closing')}
                 recalculateMonthlyPlans
             );
         };
+
+        // --- START: New JS-driven Tooltip Logic ---
+        let activeTooltip = null;
+
+        const hideAllTooltips = () => {
+            if (activeTooltip) {
+                activeTooltip.classList.remove('tooltip-visible');
+                activeTooltip = null;
+            }
+        };
+
+        tableBody.addEventListener('mouseenter', (e) => {
+            const cell = e.target.closest('td[data-tooltip-content]');
+            if (!cell) return;
+
+            hideAllTooltips(); // Hide any previous tooltip
+            
+            const tooltip = cell.querySelector('.member-tooltip');
+            if (tooltip) {
+                activeTooltip = tooltip;
+                const cellRect = cell.getBoundingClientRect();
+
+                // Position the tooltip below the cell with a small offset
+                tooltip.style.left = `${cellRect.left + 8}px`; // 8px left offset for padding
+                tooltip.style.top = `${cellRect.bottom + 8}px`; // 8px below the cell
+
+                tooltip.classList.add('tooltip-visible');
+            }
+        }, true);
+
+        tableBody.addEventListener('mouseleave', (e) => {
+            const cell = e.target.closest('td[data-tooltip-content]');
+            if (cell) {
+                hideAllTooltips();
+            }
+        }, true);
+        // --- END: New JS-driven Tooltip Logic ---
     }
 
     function handleMemberDeletion(member) {
