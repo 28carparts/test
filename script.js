@@ -3552,20 +3552,15 @@ ${_('whatsapp_closing')}
 
             tableBody.innerHTML = sortedUsers.map(member => {
                 const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
-                
                 let statusIndicatorHTML = '';
                 let tooltipContent = '';
                 let hasStatus = false;
-        
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-        
                 const sevenDaysFromNow = new Date();
                 sevenDaysFromNow.setDate(today.getDate() + 7);
-        
                 let statusText = '';
                 let isCritical = false;
-        
                 if (member.monthlyPlan) {
                     const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
                     if (dueDate && dueDate < today) {
@@ -3582,7 +3577,6 @@ ${_('whatsapp_closing')}
                         statusText = _('status_expiring_soon').replace('{days}', '0');
                     }
                 }
-        
                 if (isCritical) {
                     hasStatus = true;
                     statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
@@ -3614,14 +3608,12 @@ ${_('whatsapp_closing')}
                         tooltipContent = statusText;
                     }
                 }
-                
                 if (hasStatus) {
                     const sectionSpacer = '\n\n';
                     const purchaseHistory = firebaseObjectToArray(member.purchaseHistory)
                         .filter(p => p.status !== 'deleted')
                         .sort((a,b) => new Date(b.date) - new Date(a.date))
                         .slice(0, 3);
-        
                     if (purchaseHistory.length > 0) {
                         tooltipContent += `${sectionSpacer}${_('tooltip_header_purchase_history')}`;
                         purchaseHistory.forEach(p => {
@@ -3633,12 +3625,10 @@ ${_('whatsapp_closing')}
                             tooltipContent += `\n- ${formatShortDateWithYear(p.date)}: ${entryText}`;
                         });
                     }
-        
                     const paymentHistory = firebaseObjectToArray(member.paymentHistory)
                         .filter(p => p.status !== 'deleted')
                         .sort((a,b) => new Date(b.date) - new Date(a.date))
                         .slice(0, 3);
-        
                     if (paymentHistory.length > 0) {
                         tooltipContent += `${sectionSpacer}${_('tooltip_header_payment_history')}`;
                         paymentHistory.forEach(p => {
@@ -3651,9 +3641,7 @@ ${_('whatsapp_closing')}
                         });
                     }
                 }
-                
                 const tooltipHTML = hasStatus ? `<span class="member-tooltip">${tooltipContent}</span>` : '';
-
                 return `
                 <tr class="border-b border-slate-100">
                     <td class="p-2 font-semibold" ${hasStatus ? `data-tooltip-content` : ''}>${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
@@ -3671,7 +3659,6 @@ ${_('whatsapp_closing')}
                     </td>
                 </tr>
                 `}).join('');
-
             tableBody.querySelectorAll('.edit-member-btn').forEach(btn => {
                 btn.onclick = () => openMemberModal(appState.users.find(u => u.id === btn.dataset.id));
             });
@@ -3878,7 +3865,6 @@ ${_('whatsapp_closing')}
             );
         };
 
-        // --- START: New JS-driven Tooltip Logic ---
         let activeTooltip = null;
 
         const hideAllTooltips = () => {
@@ -3892,16 +3878,22 @@ ${_('whatsapp_closing')}
             const cell = e.target.closest('td[data-tooltip-content]');
             if (!cell) return;
 
-            hideAllTooltips(); // Hide any previous tooltip
+            hideAllTooltips();
             
             const tooltip = cell.querySelector('.member-tooltip');
             if (tooltip) {
                 activeTooltip = tooltip;
                 const cellRect = cell.getBoundingClientRect();
+                const tooltipHeight = tooltip.offsetHeight;
+                const viewportHeight = window.innerHeight;
 
-                // Position the tooltip below the cell with a small offset
-                tooltip.style.left = `${cellRect.left + 8}px`; // 8px left offset for padding
-                tooltip.style.top = `${cellRect.bottom + 8}px`; // 8px below the cell
+                tooltip.style.left = `${cellRect.left + 8}px`;
+
+                if (cellRect.bottom + tooltipHeight + 8 > viewportHeight) {
+                    tooltip.style.top = `${cellRect.top - tooltipHeight - 8}px`;
+                } else {
+                    tooltip.style.top = `${cellRect.bottom + 8}px`;
+                }
 
                 tooltip.classList.add('tooltip-visible');
             }
@@ -3913,7 +3905,6 @@ ${_('whatsapp_closing')}
                 hideAllTooltips();
             }
         }, true);
-        // --- END: New JS-driven Tooltip Logic ---
     }
 
     function handleMemberDeletion(member) {
