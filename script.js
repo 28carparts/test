@@ -333,7 +333,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     };
+    
     const formatTime = (date) => date.toTimeString().slice(0, 5);
+
+    const getLocalDateForFilename = () => {
+        const localDate = new Date();
+        const year = localDate.getFullYear();
+        const month = String(localDate.getMonth() + 1).padStart(2, '0');
+        const day = String(localDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     const getTimeRange = (startTime, duration) => {
         if (!startTime || !duration) return 'Invalid Time';
         const start = new Date(`1970-01-01T${startTime}`);
@@ -506,7 +516,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = URL.createObjectURL(blob);
 
         link.setAttribute("href", url);
-        link.setAttribute("download", `${filename}_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute("download", `${filename}_${getLocalDateForFilename()}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
