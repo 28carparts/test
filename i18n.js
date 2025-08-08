@@ -462,6 +462,7 @@ const LANG_PACK = {
         'check_in_error_all_checked_in': 'Complete! {name} has already checked in for all their classes today.',
         'check_in_success_all': 'Success! {name} is checked in for all {count} classes.',
         'btn_check_in_all': 'Check-In All',
+        'info_no_booked_class_today': 'No booked class today.',
 
         // --- CSV Export Labels ---
         'export_header_name': 'Name',
@@ -988,6 +989,7 @@ const LANG_PACK = {
         'check_in_error_all_checked_in': '完成！{name} 今天的所有課程都已簽到。',
         'check_in_success_all': '成功！{name} 已簽到全部 {count} 堂課。',
         'btn_check_in_all': '全部簽到',
+        'info_no_booked_class_today': '今天沒有已預約的課程。',
 
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
