@@ -196,6 +196,8 @@ const LANG_PACK = {
         'notification_booking_3': "Let's go! <strong>{name}</strong> just snagged a spot in <strong>{class}</strong>.",
         'notification_booking_4': 'Awesome! <strong>{name}</strong> is in for <strong>{class}</strong> at <strong>{time}</strong>.',
         'notification_booking_5': 'Score! Another spot filled in <strong>{class}</strong> by <strong>{name}</strong>! 👍',
+        'label_last_spot': 'Last Spot!',
+        'label_few_spots_left': 'Few Spots Left!',
 
         // --- Account Page ---
         'header_my_bookings': 'My Bookings',
@@ -289,6 +291,8 @@ const LANG_PACK = {
         'status_low_credits': 'Low on credits ({count} remaining).',
         'label_admin_notes': 'Admin Notes (Visible to Staff Only)',
         'placeholder_admin_notes': 'e.g., Prefers morning classes, injury info, etc.',
+        'tooltip_header_purchase_history': 'Recent Purchases:',
+        'tooltip_header_payment_history': 'Recent Payments:',
 
         // --- Classes Page ---
         'title_all_classes': 'All Classes',
@@ -718,6 +722,8 @@ const LANG_PACK = {
         'notification_booking_3': '讚！<strong>{name}</strong> 成功預約了 <strong>{class}</strong> 的名額。',
         'notification_booking_4': '很好！<strong>{name}</strong> 將在 <strong>{time}</strong> 參加 <strong>{class}</strong>。',
         'notification_booking_5': '又一個名額被填滿了！由 <strong>{name}</strong> 預約了 <strong>{class}</strong>！👍',
+        'label_last_spot': '最後名額！',
+        'label_few_spots_left': '名額將滿！',
 
         // --- Account Page ---
         'header_my_bookings': '我的預約',
@@ -811,7 +817,9 @@ const LANG_PACK = {
         'status_low_credits': '點數不足 (剩餘 {count} 點)。',
         'label_admin_notes': '管理員備註 (僅供員工查看)',
         'placeholder_admin_notes': '例如：偏好早上的課程、傷患資訊等...',
-        
+        'tooltip_header_purchase_history': '最近購買記錄：',
+        'tooltip_header_payment_history': '最近付款記錄：',
+
         // --- Classes Page ---
         'title_all_classes': '所有課程',
         'label_in_month': '於本月',
