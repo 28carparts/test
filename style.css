@@ -651,19 +651,9 @@ th.sortable:hover .sort-icon {
     margin-right: 6px; /* Space between text and numbers */
     color: white;
 }
-/* --- Custom Member Tooltip --- */
-tr.has-tooltip {
-    position: relative;
-}
-
-td.has-tooltip-content {
-    position: static;
-}
-
+/* --- Custom Member Tooltip (JS-Controlled) --- */
 .member-tooltip {
-    position: absolute;
-    top: 100%; /* CHANGED: Position below the row */
-    left: 0;
+    position: fixed; /* CHANGED: Position relative to the viewport */
     z-index: 30;
 
     /* Appearance */
@@ -684,11 +674,11 @@ td.has-tooltip-content {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+    transition: opacity 0.2s ease-in-out;
 }
 
-/* Show on hover */
-tr.has-tooltip:hover .member-tooltip {
+/* ADDED: New class to show the tooltip via JS */
+.member-tooltip.tooltip-visible {
     opacity: 1;
     visibility: visible;
 }
