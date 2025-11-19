@@ -1143,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
         const tutor = appState.tutors.find(t => t.id === cls.tutorId);
         const dynamicOrigin = window.location.origin;
-        const bookingLink = `${dynamicOrigin}`;
+        const bookingLink = `${dynamicOrigin}/test`;
 
         // Translate the WhatsApp message template
         const message = `
@@ -1207,7 +1207,7 @@ ${_('whatsapp_closing')}
             changesSummary += `*${_('whatsapp_tutor')}:* ~${originalTutor.name}~ -> *${newTutor.name}*\n`;
         }
 
-        const bookingLink = `${window.location.origin}`;
+        const bookingLink = `${window.location.origin}/test`;
 
         // The indentation of the text lines has been removed to fix the formatting issue.
         // The message now uses the new/revised i18n keys for better clarity.
