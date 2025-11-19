@@ -5913,7 +5913,7 @@ ${_('whatsapp_closing')}
         
         let currentStatsForExport = {};
 
-        // --- Helper Function defined inside to access scope ---
+        // --- HELPER FUNCTION MOVED UP AND FIXED ---
         const calculateAndRenderRevenueStats = async (filteredClasses, isFutureView) => {
             const memberIdsInPeriod = new Set();
             filteredClasses.forEach(cls => {
@@ -5939,7 +5939,7 @@ ${_('whatsapp_closing')}
                 });
             }
             
-            // 1. Calculate Projected Revenue (Used as a fallback or for future calculations)
+            // 1. Calculate Projected Revenue
             const { revenueByClsId: projectedRevenueByClsId } = calculateRevenueForBookings(allRelevantBookings, 'projected');
 
             // 2. Determine the Data Source for specific Class Revenue
@@ -5948,14 +5948,14 @@ ${_('whatsapp_closing')}
 
             if (isFutureView) {
                 revenueMapForCalculation = projectedRevenueByClsId;
-                // FIX: Sum ONLY the classes currently in the filtered list
+                // --- FIX APPLIED HERE: Sum ONLY the filtered classes ---
                 grossRevenueForDisplay = filteredClasses.reduce((sum, cls) => {
                     return sum + (projectedRevenueByClsId.get(cls.id) || 0);
                 }, 0);
             } else {
                 const actualData = calculateRevenueForBookings(allRelevantBookings, 'actual');
                 revenueMapForCalculation = actualData.revenueByClsId;
-                // FIX: Sum ONLY the classes currently in the filtered list
+                // --- FIX APPLIED HERE: Sum ONLY the filtered classes ---
                 grossRevenueForDisplay = filteredClasses.reduce((sum, cls) => {
                     return sum + (actualData.revenueByClsId.get(cls.id) || 0);
                 }, 0);
@@ -5965,12 +5965,10 @@ ${_('whatsapp_closing')}
             const netRevenueByClsId = new Map();
 
             filteredClasses.forEach(cls => {
-                // Use the context-aware map determined above
                 const clsGrossRevenue = revenueMapForCalculation.get(cls.id) || 0;
                 
                 let clsPayout = 0;
 
-                // Only calculate payout if there is revenue (or if we are in future view)
                 if (clsGrossRevenue > 0 || isFutureView) {
                     if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
                         const { salaryType, salaryValue } = cls.payoutDetails;
@@ -5981,7 +5979,6 @@ ${_('whatsapp_closing')}
                             const headcount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
                             clsPayout = headcount * salaryValue;
                         } else if (salaryType === 'percentage') {
-                            // Percentage is based on the revenue determined by the current view
                             clsPayout = clsGrossRevenue * (salaryValue / 100);
                         }
                     }
@@ -6043,7 +6040,6 @@ ${_('whatsapp_closing')}
 
                 let startDate, endDate;
                 if (isFutureView) {
-                    // FIX: "Upcoming" starts from Today
                     startDate = new Date(now.getTime()); 
                     endDate = new Date(now.getTime());
                     endDate.setUTCDate(now.getUTCDate() + Math.abs(days));
