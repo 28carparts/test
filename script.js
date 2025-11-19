@@ -530,6 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Use the dynamic locale for date formatting
         return new Intl.DateTimeFormat(getLocale(), { 
             weekday: 'short', 
+            year: '2-digit',
             month: 'short', 
             day: 'numeric', 
             timeZone: 'UTC' 
@@ -1152,7 +1153,7 @@ ${_('whatsapp_greeting').replace('{name}', member.name)}
 ${_('whatsapp_body_1')}
 
 *${_('whatsapp_class')}:* ${getSportTypeName(sportType)}
-*${_('whatsapp_date')}:* ${formatShortDateWithYear(cls.date)}
+*${_('whatsapp_date')}:* ${formatDateWithWeekday(cls.date)}
 *${_('whatsapp_time')}:* ${getTimeRange(cls.time, cls.duration)}
 *${_('whatsapp_tutor')}:* ${tutor.name}
 
@@ -1209,14 +1210,12 @@ ${_('whatsapp_closing')}
 
         const bookingLink = `${window.location.origin}/test`;
 
-        // The indentation of the text lines has been removed to fix the formatting issue.
-        // The message now uses the new/revised i18n keys for better clarity.
         const message = `${_('whatsapp_greeting').replace('{name}', member.name)}
 
 ${_('whatsapp_body_update')}
 
 *${_('whatsapp_class')}:* ${getSportTypeName(sportType)}
-*${_('whatsapp_date')}:* ${formatShortDateWithYear(originalCls.date)}
+*${_('whatsapp_date')}:* ${formatDateWithWeekday(originalCls.date)}
 
 ${_('whatsapp_changes_header')}
 ${changesSummary.trim()}
