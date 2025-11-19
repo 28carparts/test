@@ -60,7 +60,9 @@ document.addEventListener('DOMContentLoaded', function() {
         pagination: {
             classes: { page: 1 },
             sports: { page: 1 },
-            tutors: { page: 1 }
+            tutors: { page: 1 },
+            members: { page: 1 },
+            salary: { page: 1 }
         },
         searchTerms: {
             sports: '',
@@ -69,7 +71,9 @@ document.addEventListener('DOMContentLoaded', function() {
         itemsPerPage: {
             classes: 10,
             sports: 10,
-            tutors: 6 
+            tutors: 6,
+            members: 10,
+            salary: 10
         },
         highlightBookingId: null,
         membersSort: { 
@@ -784,10 +788,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.innerWidth < 1024 && !navEmblaApi) {
                 const navCarouselNode = DOMElements.mainNav.querySelector('#nav-carousel-mobile .embla-nav');
                 if (navCarouselNode) {
+                    // --- START OF FIX ---
+                    // Find the index of the button that matches the current activePage
+                    const activeIndex = navButtonsHTML.findIndex(html => html.includes(`data-page="${appState.activePage}"`));
+                    // If found, use it; otherwise default to 0
+                    const startIndex = activeIndex >= 0 ? activeIndex : 0;
+                    
                     navEmblaApi = EmblaCarousel(navCarouselNode, {
                         align: 'start',
-                        dragFree: true
+                        dragFree: true,
+                        startIndex: startIndex // Initialize carousel at the active tab
                     });
+                    // --- END OF FIX ---
                 }
             } else if (window.innerWidth >= 1024 && navEmblaApi) {
                 navEmblaApi.destroy();
@@ -801,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function() {
         DOMElements.mainNav.querySelectorAll('button').forEach(btn => {
             if (btn.id === 'logoutBtn') {
                 btn.onclick = handleLogout;
-            } else if (btn.id === 'navAnnounceBtn') { // ADD THIS ELSE IF BLOCK
+            } else if (btn.id === 'navAnnounceBtn') {
                 btn.onclick = openAnnouncementModal;
             } else if (btn.id === 'navFilterBtn') {
                 btn.onclick = () => {
@@ -1131,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
         const tutor = appState.tutors.find(t => t.id === cls.tutorId);
         const dynamicOrigin = window.location.origin;
-        const bookingLink = `${dynamicOrigin}/schedule`;
+        const bookingLink = `${dynamicOrigin}`;
 
         // Translate the WhatsApp message template
         const message = `
@@ -1195,7 +1207,7 @@ ${_('whatsapp_closing')}
             changesSummary += `*${_('whatsapp_tutor')}:* ~${originalTutor.name}~ -> *${newTutor.name}*\n`;
         }
 
-        const bookingLink = `${window.location.origin}/schedule`;
+        const bookingLink = `${window.location.origin}`;
 
         // The indentation of the text lines has been removed to fix the formatting issue.
         // The message now uses the new/revised i18n keys for better clarity.
@@ -1899,15 +1911,37 @@ ${_('whatsapp_closing')}
         const submitBtn = form.querySelector('.submit-btn');
         submitBtn.disabled = true;
 
-        // NOTE: The 'async' keyword is removed because the problematic 'await' for
-        // the refund logic has been taken out. This is the intended fix.
-        
+        const newCredits = parseFloat(form.querySelector('#clsCredits').value);
+
+        // --- START OF FIX: Percentage Model Safeguard ---
+        if (clsId) {
+            const originalCls = appState.classes.find(c => c.id === clsId);
+            
+            if (originalCls) {
+                const creditsChanged = originalCls.credits !== newCredits;
+                const isPercentageModel = originalCls.payoutDetails && originalCls.payoutDetails.salaryType === 'percentage';
+                const hasBookings = originalCls.bookedBy && Object.keys(originalCls.bookedBy).length > 0;
+
+                if (creditsChanged && isPercentageModel && hasBookings) {
+                    // Determine the correct error message (fallback to English if key missing)
+                    const errorMsg = _('error_credits_locked_percentage') === 'error_credits_locked_percentage' 
+                        ? "Cannot change credits: This class has bookings and uses a Percentage salary model. Changing credits affects salary accuracy." 
+                        : _('error_credits_locked_percentage');
+                    
+                    showMessageBox(errorMsg, 'error');
+                    submitBtn.disabled = false;
+                    return; // Stop execution immediately
+                }
+            }
+        }
+        // --- END OF FIX ---
+
         const newClsDataFromForm = {
             sportTypeId: form.querySelector('#clsSportType').value,
             tutorId: form.querySelector('#clsTutor').value,
             duration: parseInt(form.querySelector('#clsDuration').value),
             time: form.querySelector('#clsTime').value,
-            credits: parseFloat(form.querySelector('#clsCredits').value),
+            credits: newCredits, // Use the variable we parsed earlier
             maxParticipants: parseInt(form.querySelector('#clsMaxParticipants').value),
             date: form.querySelector('#clsDate').value,
             notForMonthly: form.querySelector('#notForMonthlyCheckbox').checked
@@ -1954,14 +1988,16 @@ ${_('whatsapp_closing')}
             promise = database.ref().update(updates);
         }
 
-        promise.then(() => {
-            showMessageBox(_(clsId ? 'success_class_updated' : 'success_class_added'), 'success');
-            closeModal(DOMElements.clsModal);
-        }).catch(error => {
-            showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error');
-        }).finally(() => {
-            submitBtn.disabled = false;
-        });
+        if (promise) { // Only run this block for NEW classes (promise is undefined for updates via handleClsUpdateRequest)
+            promise.then(() => {
+                showMessageBox(_('success_class_added'), 'success');
+                closeModal(DOMElements.clsModal);
+            }).catch(error => {
+                showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error');
+            }).finally(() => {
+                submitBtn.disabled = false;
+            });
+        }
     }
 
     function createParticipantCounter(current, max, isEditable = false) {
@@ -3486,11 +3522,13 @@ ${_('whatsapp_closing')}
                         <tbody id="membersTableBody"></tbody>
                     </table>
                 </div>
+                <div id="membersPagination" class="flex justify-between items-center mt-4"></div>
             </div>`;
         
         const searchInput = container.querySelector('#memberSearchInput');
         const clearBtn = container.querySelector('#clearSearchBtn');
         const tableBody = container.querySelector('#membersTableBody');
+        const paginationContainer = container.querySelector('#membersPagination');
 
         const exportMenuContainer = container.querySelector('#exportMenuContainer');
         const exportBtn = container.querySelector('#exportMembersBtn');
@@ -3545,7 +3583,16 @@ ${_('whatsapp_closing')}
                 return 0;
             });
 
-            tableBody.innerHTML = sortedUsers.map(member => {
+            // --- PAGINATION LOGIC ---
+            const { itemsPerPage } = appState;
+            const totalPages = Math.ceil(sortedUsers.length / itemsPerPage.members) || 1;
+            let page = appState.pagination.members.page;
+            if (page > totalPages) page = totalPages;
+
+            const paginatedUsers = sortedUsers.slice((page - 1) * itemsPerPage.members, page * itemsPerPage.members);
+            // ------------------------
+
+            tableBody.innerHTML = paginatedUsers.map(member => {
                 const expiryOrDueDate = formatShortDateWithYear(member.monthlyPlan ? member.paymentDueDate : member.expiryDate);
                 let statusIndicatorHTML = '';
                 let tooltipContent = '';
@@ -3654,6 +3701,12 @@ ${_('whatsapp_closing')}
                     </td>
                 </tr>
                 `}).join('');
+
+            renderPaginationControls(paginationContainer, page, totalPages, sortedUsers.length, itemsPerPage.members, (newPage) => {
+                appState.pagination.members.page = newPage;
+                updateTable(searchInput.value);
+            });
+
             tableBody.querySelectorAll('.edit-member-btn').forEach(btn => {
                 btn.onclick = () => openMemberModal(appState.users.find(u => u.id === btn.dataset.id));
             });
@@ -3697,12 +3750,14 @@ ${_('whatsapp_closing')}
 
         searchInput.oninput = () => {
             const term = searchInput.value;
+            appState.pagination.members.page = 1; // Reset to page 1 on search
             updateTable(term);
             clearBtn.style.display = term ? 'flex' : 'none';
         };
 
         clearBtn.onclick = () => {
             searchInput.value = '';
+            appState.pagination.members.page = 1; // Reset to page 1 on clear
             updateTable('');
             clearBtn.style.display = 'none';
             searchInput.focus();
@@ -5564,6 +5619,9 @@ ${_('whatsapp_closing')}
                 return;
             }
 
+            // Reset pagination when filters change
+            appState.pagination.salary.page = 1;
+
             detailsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('status_loading')}...</p>`;
             
             const allClassesSnapshot = await database.ref('/classes').once('value');
@@ -5633,7 +5691,6 @@ ${_('whatsapp_closing')}
                         earnings = clsGrossRevenue * (salaryValue / 100);
                         calculation = _('salary_calculation_percentage').replace('{revenue}', formatCurrency(clsGrossRevenue)).replace('{percentage}', salaryValue);
                     } else if (salaryType === 'perHeadcount') {
-                        // --- START OF CHANGE: Use booked count instead of attended count ---
                         const headcount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
                         earnings = headcount * salaryValue;
                         const headcountUnit = _(headcount === 1 ? 'salary_unit_attendee' : 'salary_unit_attendees');
@@ -5641,7 +5698,6 @@ ${_('whatsapp_closing')}
                             .replace('{count}', headcount)
                             .replace('{unit}', headcountUnit)
                             .replace('{amount}', formatCurrency(salaryValue));
-                        // --- END OF CHANGE ---
                     }
                 }
                 return { ...cls, sportTypeName: getSportTypeName(sportType), earnings, calculation, attendeesCount };
@@ -5721,7 +5777,6 @@ ${_('whatsapp_closing')}
                     earnings = clsGrossRevenue * (salaryValue / 100);
                     calculation = _('template_salary_percentage').replace('{revenue}', formatCurrency(clsGrossRevenue)).replace('{percentage}', salaryValue);
                 } else if (salaryType === 'perHeadcount') {
-                    // --- START OF CHANGE: Use booked count instead of attended count ---
                     const headcount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
                     earnings = headcount * salaryValue;
                     const headcountUnit = _(headcount === 1 ? 'salary_unit_attendee' : 'salary_unit_attendees');
@@ -5729,7 +5784,6 @@ ${_('whatsapp_closing')}
                         .replace('{count}', headcount)
                         .replace('{unit}', headcountUnit)
                         .replace('{amount}', formatCurrency(salaryValue));
-                    // --- END OF CHANGE ---
                 }
             }
 
@@ -5754,6 +5808,15 @@ ${_('whatsapp_closing')}
             return 0;
         });
 
+        // --- PAGINATION LOGIC ---
+        const { itemsPerPage } = appState;
+        const totalPages = Math.ceil(clsDetails.length / itemsPerPage.salary) || 1;
+        let page = appState.pagination.salary.page;
+        if (page > totalPages) page = totalPages;
+
+        const paginatedClsDetails = clsDetails.slice((page - 1) * itemsPerPage.salary, page * itemsPerPage.salary);
+        // ------------------------
+
         container.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div class="bg-slate-100 p-4 rounded-lg"><p class="text-sm text-slate-500">${_('label_total_earnings')}</p><p class="text-3xl font-bold text-slate-800">${formatCurrency(totalEarnings)}</p></div>
@@ -5773,7 +5836,7 @@ ${_('whatsapp_closing')}
                         </tr>
                     </thead>
                     <tbody>
-                        ${clsDetails.map(c => `
+                        ${paginatedClsDetails.map(c => `
                             <tr class="border-b border-slate-100">
                                 <td class="p-2">${formatShortDateWithYear(c.date)}</td>
                                 <td class="p-2">${c.sportTypeName}</td>
@@ -5783,7 +5846,14 @@ ${_('whatsapp_closing')}
                             </tr>`).join('') || `<tr><td colspan="5" class="text-center p-4 text-slate-500">${_('info_no_classes_in_period')}</td></tr>`}
                     </tbody>
                 </table></div>
+                <div id="salaryPagination" class="flex justify-between items-center mt-4"></div>
             </div>`;
+
+            const paginationContainer = container.querySelector('#salaryPagination');
+            renderPaginationControls(paginationContainer, page, totalPages, clsDetails.length, itemsPerPage.salary, (newPage) => {
+                appState.pagination.salary.page = newPage;
+                renderSalaryDetails(allClasses);
+            });
 
             const sortState = appState.salarySort;
 
@@ -5840,18 +5910,122 @@ ${_('whatsapp_closing')}
         };
         periodSelect.innerHTML = Object.keys(periods).map(p => `<option value="${periods[p]}">${p}</option>`).join('');
         
-        // --- CHANGE START: Use the persistent state to set the dropdown value ---
         periodSelect.value = appState.selectedFilters.statsPeriod;
-        // --- CHANGE END ---
         
         let currentStatsForExport = {};
+
+        // --- Helper Function defined inside to access scope ---
+        const calculateAndRenderRevenueStats = async (filteredClasses, isFutureView) => {
+            const memberIdsInPeriod = new Set();
+            filteredClasses.forEach(cls => {
+                if (cls.bookedBy) {
+                    Object.keys(cls.bookedBy).forEach(id => memberIdsInPeriod.add(id));
+                }
+            });
+
+            const allClassesSnapshot = await database.ref('/classes').once('value');
+            const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
+
+            const allRelevantBookings = [];
+            if (memberIdsInPeriod.size > 0) {
+                allClassesForCalc.forEach(cls => {
+                    if (cls.bookedBy) {
+                        for (const memberId of Object.keys(cls.bookedBy)) {
+                            if (memberIdsInPeriod.has(memberId)) {
+                                const member = appState.users.find(u => u.id === memberId);
+                                if (member) allRelevantBookings.push({ member, cls });
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 1. Calculate Projected Revenue (Used as a fallback or for future calculations)
+            const { revenueByClsId: projectedRevenueByClsId } = calculateRevenueForBookings(allRelevantBookings, 'projected');
+
+            // 2. Determine the Data Source for specific Class Revenue
+            let revenueMapForCalculation;
+            let grossRevenueForDisplay = 0;
+
+            if (isFutureView) {
+                revenueMapForCalculation = projectedRevenueByClsId;
+                // FIX: Sum ONLY the classes currently in the filtered list
+                grossRevenueForDisplay = filteredClasses.reduce((sum, cls) => {
+                    return sum + (projectedRevenueByClsId.get(cls.id) || 0);
+                }, 0);
+            } else {
+                const actualData = calculateRevenueForBookings(allRelevantBookings, 'actual');
+                revenueMapForCalculation = actualData.revenueByClsId;
+                // FIX: Sum ONLY the classes currently in the filtered list
+                grossRevenueForDisplay = filteredClasses.reduce((sum, cls) => {
+                    return sum + (actualData.revenueByClsId.get(cls.id) || 0);
+                }, 0);
+            }
+
+            let totalTutorPayout = 0;
+            const netRevenueByClsId = new Map();
+
+            filteredClasses.forEach(cls => {
+                // Use the context-aware map determined above
+                const clsGrossRevenue = revenueMapForCalculation.get(cls.id) || 0;
+                
+                let clsPayout = 0;
+
+                // Only calculate payout if there is revenue (or if we are in future view)
+                if (clsGrossRevenue > 0 || isFutureView) {
+                    if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
+                        const { salaryType, salaryValue } = cls.payoutDetails;
+                        
+                        if (salaryType === 'perCls') {
+                            clsPayout = salaryValue;
+                        } else if (salaryType === 'perHeadcount') {
+                            const headcount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
+                            clsPayout = headcount * salaryValue;
+                        } else if (salaryType === 'percentage') {
+                            // Percentage is based on the revenue determined by the current view
+                            clsPayout = clsGrossRevenue * (salaryValue / 100);
+                        }
+                    }
+                }
+
+                totalTutorPayout += clsPayout;
+
+                const clsNetRevenue = clsGrossRevenue - clsPayout;
+                netRevenueByClsId.set(cls.id, clsNetRevenue);
+            });
+
+            const totalNetRevenue = grossRevenueForDisplay - totalTutorPayout;
+            
+            const topClassesByRevenue = rankByGroupedRevenue(filteredClasses, netRevenueByClsId, appState.sportTypes, 'sportTypeId');
+            const topTutorsByRevenue = rankByGroupedRevenue(filteredClasses, netRevenueByClsId, appState.tutors, 'tutorId');
+
+            const grossRevenueCard = document.getElementById('grossRevenueCard');
+            if (grossRevenueCard) grossRevenueCard.innerHTML = `<p class="text-sm text-slate-500">${_('label_gross_revenue')}</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(grossRevenueForDisplay)}</p>`;
+
+            const netRevenueCard = document.getElementById('netRevenueCard');
+            if (netRevenueCard) {
+                const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
+                netRevenueCard.innerHTML = `<p class="text-sm text-slate-500">${_('label_net_revenue')}</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p>`;
+            }
+            
+            const topEarningClassesCard = document.getElementById('topEarningClassesCard');
+            if(topEarningClassesCard) topEarningClassesCard.innerHTML = createRankingCard(_('header_top_earning_classes'), topClassesByRevenue, _('label_revenue'), '#22c55e', true);
+
+            const topTutorsByRevenueCard = document.getElementById('topTutorsByRevenueCard');
+            if(topTutorsByRevenueCard) topTutorsByRevenueCard.innerHTML = createRankingCard(_('header_top_tutors_revenue'), topTutorsByRevenue, _('label_revenue'), '#22c55e');
+
+            currentStatsForExport.summary.push(
+                { key: 'grossRevenue', value: formatCurrency(grossRevenueForDisplay) },
+                { key: 'netRevenue', value: formatCurrency(totalNetRevenue) }
+            );
+            currentStatsForExport.topClassesByRevenue = topClassesByRevenue.map(item => ({ Ranking: 'Class by Revenue', name: item.name, value: item.value }));
+            currentStatsForExport.topTutorsByRevenue = topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', name: item.name, value: item.value }));
+        };
 
         const renderFilteredStats = async () => {
             statsContainer.innerHTML = `<p class="text-center text-slate-500 p-8">${_('status_loading')}...</p>`;
             
-            // --- CHANGE START: Read the value from the persistent state ---
             const days = parseFloat(appState.selectedFilters.statsPeriod);
-            // --- CHANGE END ---
             
             const isFutureView = days < 0;
             const primaryStatKey = isFutureView ? 'bookedBy' : 'attendedBy';
@@ -5870,8 +6044,8 @@ ${_('whatsapp_closing')}
 
                 let startDate, endDate;
                 if (isFutureView) {
-                    startDate = new Date(now.getTime());
-                    startDate.setUTCDate(now.getUTCDate() + 1);
+                    // FIX: "Upcoming" starts from Today
+                    startDate = new Date(now.getTime()); 
                     endDate = new Date(now.getTime());
                     endDate.setUTCDate(now.getUTCDate() + Math.abs(days));
                 } else {
@@ -5941,92 +6115,6 @@ ${_('whatsapp_closing')}
             }
             
             await calculateAndRenderRevenueStats(filteredClasses, isFutureView);
-        };
-
-        const calculateAndRenderRevenueStats = async (filteredClasses, isFutureView) => {
-            const memberIdsInPeriod = new Set();
-            filteredClasses.forEach(cls => {
-                if (cls.bookedBy) {
-                    Object.keys(cls.bookedBy).forEach(id => memberIdsInPeriod.add(id));
-                }
-            });
-
-            const allClassesSnapshot = await database.ref('/classes').once('value');
-            const allClassesForCalc = firebaseObjectToArray(allClassesSnapshot.val());
-
-            const allRelevantBookings = [];
-            if (memberIdsInPeriod.size > 0) {
-                allClassesForCalc.forEach(cls => {
-                    if (cls.bookedBy) {
-                        for (const memberId of Object.keys(cls.bookedBy)) {
-                            if (memberIdsInPeriod.has(memberId)) {
-                                const member = appState.users.find(u => u.id === memberId);
-                                if (member) allRelevantBookings.push({ member, cls });
-                            }
-                        }
-                    }
-                });
-            }
-            
-            const { revenueByClsId: projectedRevenueByClsId } = calculateRevenueForBookings(allRelevantBookings, 'projected');
-
-            const revenueForSummaryCards = isFutureView ? 
-                { grossRevenue: Array.from(projectedRevenueByClsId.values()).reduce((a, b) => a + b, 0) } :
-                calculateRevenueForBookings(allRelevantBookings, 'actual');
-            
-            const grossRevenueForDisplay = revenueForSummaryCards.grossRevenue;
-
-            let totalTutorPayout = 0;
-            const netRevenueByClsId = new Map();
-
-            filteredClasses.forEach(cls => {
-                const clsGrossRevenueForPayout = projectedRevenueByClsId.get(cls.id) || 0;
-                
-                let clsPayout = 0;
-                if (cls.payoutDetails && typeof cls.payoutDetails.salaryValue !== 'undefined') {
-                    const { salaryType, salaryValue } = cls.payoutDetails;
-                    
-                    if (salaryType === 'perCls') {
-                        clsPayout = salaryValue;
-                    } else if (salaryType === 'perHeadcount') {
-                        const headcount = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
-                        clsPayout = headcount * salaryValue;
-                    } else if (salaryType === 'percentage') {
-                        clsPayout = clsGrossRevenueForPayout * (salaryValue / 100);
-                    }
-                }
-                totalTutorPayout += clsPayout;
-
-                const clsNetRevenue = clsGrossRevenueForPayout - clsPayout;
-                netRevenueByClsId.set(cls.id, clsNetRevenue);
-            });
-
-            const totalNetRevenue = grossRevenueForDisplay - totalTutorPayout;
-            
-            const topClassesByRevenue = rankByGroupedRevenue(filteredClasses, netRevenueByClsId, appState.sportTypes, 'sportTypeId');
-            const topTutorsByRevenue = rankByGroupedRevenue(filteredClasses, netRevenueByClsId, appState.tutors, 'tutorId');
-
-            const grossRevenueCard = document.getElementById('grossRevenueCard');
-            if (grossRevenueCard) grossRevenueCard.innerHTML = `<p class="text-sm text-slate-500">${_('label_gross_revenue')}</p><p class="text-2xl font-bold text-slate-800">${formatCurrency(grossRevenueForDisplay)}</p>`;
-
-            const netRevenueCard = document.getElementById('netRevenueCard');
-            if (netRevenueCard) {
-                const netRevenueColor = totalNetRevenue >= 0 ? 'text-green-600' : 'text-red-600';
-                netRevenueCard.innerHTML = `<p class="text-sm text-slate-500">${_('label_net_revenue')}</p><p class="text-2xl font-bold ${netRevenueColor}">${formatCurrency(totalNetRevenue)}</p>`;
-            }
-            
-            const topEarningClassesCard = document.getElementById('topEarningClassesCard');
-            if(topEarningClassesCard) topEarningClassesCard.innerHTML = createRankingCard(_('header_top_earning_classes'), topClassesByRevenue, _('label_revenue'), '#22c55e', true);
-
-            const topTutorsByRevenueCard = document.getElementById('topTutorsByRevenueCard');
-            if(topTutorsByRevenueCard) topTutorsByRevenueCard.innerHTML = createRankingCard(_('header_top_tutors_revenue'), topTutorsByRevenue, _('label_revenue'), '#22c55e');
-
-            currentStatsForExport.summary.push(
-                { key: 'grossRevenue', value: formatCurrency(grossRevenueForDisplay) },
-                { key: 'netRevenue', value: formatCurrency(totalNetRevenue) }
-            );
-            currentStatsForExport.topClassesByRevenue = topClassesByRevenue.map(item => ({ Ranking: 'Class by Revenue', name: item.name, value: item.value }));
-            currentStatsForExport.topTutorsByRevenue = topTutorsByRevenue.map(item => ({ Ranking: 'Tutor by Revenue', name: item.name, value: item.value }));
         };
 
         exportBtn.onclick = () => {
@@ -6112,13 +6200,11 @@ ${_('whatsapp_closing')}
             exportBtn.innerHTML = exportBtnDefaultHTML;
         };
 
-        // --- CHANGE START: Save the new selection to the state ---
         periodSelect.onchange = () => {
             appState.selectedFilters.statsPeriod = periodSelect.value;
             renderFilteredStats();
         };
-        // --- CHANGE END ---
-
+        
         renderFilteredStats();
     }
 
