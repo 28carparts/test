@@ -261,6 +261,10 @@ const LANG_PACK = {
         'success_announcement_cleared': 'Current announcement cleared.',
         'error_sport_type_name_required': 'A sport type name is required (in at least one language).',
         'error_announcement_message_required': 'An announcement message is required (in at least one language).',
+        'label_cancellation_cutoff': 'Cancellation Cutoff (Hours)',
+        'placeholder_cancellation_cutoff': '0 = until start',
+        'tooltip_cancellation_closed': 'Cancellation is closed within {hours} hours of start time.',
+        'label_default_est_attendance': 'Est. Monthly Attendance',
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -790,6 +794,10 @@ const LANG_PACK = {
         'success_announcement_cleared': '目前公告已清除。',
         'error_sport_type_name_required': '必須輸入運動類型名稱（至少一種語言）。',
         'error_announcement_message_required': '必須輸入公告訊息（至少一種語言）。',
+        'label_cancellation_cutoff': '取消截止時間 (小時)',
+        'placeholder_cancellation_cutoff': '0 = 直到開始前',
+        'tooltip_cancellation_closed': '開課前 {hours} 小時內無法取消。',
+        'label_default_est_attendance': '每月預估出席次數',
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
