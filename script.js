@@ -2176,15 +2176,13 @@ ${_('whatsapp_closing')}
         const isAdmin = isOwner || isStaff;
         const currentBookings = cls.bookedBy ? Object.keys(cls.bookedBy).length : 0;
         
+        // Determine if the class has actually ended today (for display purposes)
         const isEndedToday = !isAdmin && cls.date === getIsoDate(new Date()) && (() => {
             const now = new Date();
             const [hours, minutes] = cls.time.split(':').map(Number);
-            
-            // Create a date object for the class's end time *today*
             const classEndTime = new Date(); 
-            classEndTime.setHours(hours, minutes, 0, 0); // Set start time
-            classEndTime.setMinutes(classEndTime.getMinutes() + (cls.duration || 0)); // Add duration
-
+            classEndTime.setHours(hours, minutes, 0, 0);
+            classEndTime.setMinutes(classEndTime.getMinutes() + (cls.duration || 0));
             return now > classEndTime;
         })();
 
@@ -2229,26 +2227,34 @@ ${_('whatsapp_closing')}
             mainAction = () => openBookingModal(cls);
         }
 
-        // Translate the credit text with pluralization
         const creditText = `${cls.credits} ${_(cls.credits === 1 ? 'label_credit_single' : 'label_credit_plural')}`;
 
         let memberActionHTML;
         if (isBookedByCurrentUser) {
-            // --- START OF CHANGE: Add time check logic here ---
+            // --- START OF TIME CHECK LOGIC ---
             const now = new Date();
             const classStartDateTime = new Date(`${cls.date}T${cls.time}`);
             const hasClassStarted = now > classStartDateTime;
+
+            // Cancellation Cutoff Check
+            const settings = appState.studioSettings.clsDefaults || {};
+            const cutoffHours = settings.cancellationCutoff || 0;
+            const cutoffTime = new Date(classStartDateTime.getTime() - (cutoffHours * 60 * 60 * 1000));
+            
+            const isCancellationClosed = (now > cutoffTime) && !hasClassStarted;
             
             if (isAttendedByCurrentUser) {
                 memberActionHTML = `<span class="bg-white/90 text-green-600 font-bold text-xs px-2 py-1 rounded-full">${_('status_completed')}</span>`;
             } else if (hasClassStarted) {
-                // If the class has started and they haven't attended, show "No Show"
                 memberActionHTML = `<span class="bg-white/90 text-slate-500 font-bold text-xs px-3 py-1 rounded-full">${_('status_no_show')}</span>`;
+            } else if (isCancellationClosed) {
+                // --- UPDATED: Uses the new translation key ---
+                const tooltipText = _('tooltip_cancellation_closed').replace('{hours}', cutoffHours);
+                memberActionHTML = `<span class="bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full opacity-80 cursor-not-allowed" title="${tooltipText}">${_('status_booked')}</span>`;
             } else {
-                // Otherwise, show the interactive cancel button
                 memberActionHTML = `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="${_('status_booked')}" data-cancel-text="${_('status_cancel_prompt')}">${_('status_booked')}</button>`;
             }
-            // --- END OF CHANGE ---
+            // --- END OF TIME CHECK LOGIC ---
         } else if (isMonthlyMember && isRestrictedForMonthly) {
             memberActionHTML = `<span class="bg-white text-slate-600 font-bold text-xs px-3 py-1 rounded-full">${_('status_not_available')}</span>`;
         } else if (isFull) {
@@ -3223,11 +3229,18 @@ ${_('whatsapp_closing')}
                                 const bookingDetails = cls.bookedBy[member.id];
                                 const creditsUsed = bookingDetails.creditsPaid;
 
-                                // --- START OF CHANGE: Check if the class has started ---
+                                // --- Time and Cutoff Check ---
                                 const now = new Date();
-                                const classStartDateTime = new Date(`${cls.date}T${cls.time}`); // Creates date in the browser's local timezone
+                                const classStartDateTime = new Date(`${cls.date}T${cls.time}`); 
                                 const hasClassStarted = now > classStartDateTime;
-                                // --- END OF CHANGE ---
+
+                                // Calculate Cancellation Cutoff
+                                const settings = appState.studioSettings.clsDefaults || {};
+                                const cutoffHours = settings.cancellationCutoff || 0;
+                                const cutoffTime = new Date(classStartDateTime.getTime() - (cutoffHours * 60 * 60 * 1000));
+                                
+                                const isCancellationClosed = (now > cutoffTime) && !hasClassStarted;
+                                // -----------------------------
 
                                 return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-cls-id="${cls.id}">
                                     <div>
@@ -3237,15 +3250,18 @@ ${_('whatsapp_closing')}
                                         <p class="text-xs text-slate-500">${formatBookingAuditText(bookingDetails)}</p>
                                     </div>
                                     ${(() => {
-                                        // --- START OF CHANGE: Conditionally render Cancel button or a status message ---
                                         if (isAttended) {
                                             return `<span class="text-sm font-semibold text-green-600">${_('status_completed')}</span>`;
                                         }
                                         if (hasClassStarted) {
                                             return `<span class="text-sm font-semibold text-slate-500">${_('status_no_show')}</span>`;
                                         }
+                                        // --- Updated to use the translated key ---
+                                        if (isCancellationClosed) {
+                                            const tooltipText = _('tooltip_cancellation_closed').replace('{hours}', cutoffHours);
+                                            return `<span class="text-sm font-semibold text-indigo-600 opacity-70 cursor-not-allowed" title="${tooltipText}">${_('status_booked')}</span>`;
+                                        }
                                         return `<button class="cancel-booking-btn-dash text-sm font-semibold text-red-600 hover:text-red-800" data-cls-id="${cls.id}">${_('btn_cancel')}</button>`;
-                                        // --- END OF CHANGE ---
                                     })()}
                                 </div>`
                             }).join('')}
@@ -4484,7 +4500,11 @@ ${_('whatsapp_closing')}
         
         monthlyPlanAmountInput.value = memberToEdit.monthlyPlanAmount || '';
         planStartDateInput.value = memberToEdit.planStartDate || '';
-        estimatedAttendanceInput.value = memberToEdit.monthlyPlanEstimatedAttendance || '';
+        
+        // --- NEW: Apply Default Estimated Attendance ---
+        const defaults = appState.studioSettings.clsDefaults || {};
+        estimatedAttendanceInput.value = memberToEdit.monthlyPlanEstimatedAttendance || defaults.defaultEstAttendance || '';
+        
         updateCalculatedValue();
         
         _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode);
@@ -4977,7 +4997,10 @@ ${_('whatsapp_closing')}
             time: form.querySelector('#defaultTime').value,
             duration: parseInt(form.querySelector('#defaultDuration').value),
             credits: parseFloat(form.querySelector('#defaultCredits').value),
-            maxParticipants: parseInt(form.querySelector('#defaultMaxParticipants').value)
+            maxParticipants: parseInt(form.querySelector('#defaultMaxParticipants').value),
+            cancellationCutoff: parseFloat(form.querySelector('#defaultCancellationCutoff').value) || 0,
+            // --- NEW: Capture Default Estimated Attendance ---
+            defaultEstAttendance: parseInt(form.querySelector('#defaultEstAttendance').value) || 0
         };
 
         database.ref('/studioSettings/clsDefaults').set(newDefaults)
@@ -5066,6 +5089,15 @@ ${_('whatsapp_closing')}
                                 <label for="defaultMaxParticipants" data-lang-key="label_max_participants" class="block text-slate-600 text-sm font-semibold mb-2"></label>
                                 <input type="number" id="defaultMaxParticipants" class="form-input" min="1" step="1" required>
                             </div>
+                            <div>
+                                <label for="defaultCancellationCutoff" data-lang-key="label_cancellation_cutoff" class="block text-slate-600 text-sm font-semibold mb-2"></label>
+                                <input type="number" id="defaultCancellationCutoff" class="form-input" min="0" step="0.5" data-lang-key="placeholder_cancellation_cutoff">
+                            </div>
+                            <!-- NEW: Default Estimated Attendance Field -->
+                            <div>
+                                <label for="defaultEstAttendance" data-lang-key="label_default_est_attendance" class="block text-slate-600 text-sm font-semibold mb-2"></label>
+                                <input type="number" id="defaultEstAttendance" class="form-input" min="0" step="1" placeholder="e.g., 8">
+                            </div>
                         </div>
                         <div class="flex justify-end mt-6">
                             <button type="submit" data-lang-key="btn_save_changes" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition"></button>
@@ -5121,6 +5153,10 @@ ${_('whatsapp_closing')}
             settingsForm.querySelector('#defaultDuration').value = defaults.duration;
             settingsForm.querySelector('#defaultCredits').value = defaults.credits;
             settingsForm.querySelector('#defaultMaxParticipants').value = defaults.maxParticipants;
+            settingsForm.querySelector('#defaultCancellationCutoff').value = defaults.cancellationCutoff || 0;
+            // --- NEW: Populate existing value ---
+            settingsForm.querySelector('#defaultEstAttendance').value = defaults.defaultEstAttendance || '';
+            
             settingsForm.onsubmit = handleAdminSettingsSave;
         }
 
@@ -6914,6 +6950,7 @@ ${_('whatsapp_closing')}
         // Detach any existing listeners from this section to be safe
         if (dataListeners.tutors) database.ref('/tutors').off('value', dataListeners.tutors);
         if (dataListeners.sportTypes) database.ref('/sportTypes').off('value', dataListeners.sportTypes);
+        if (dataListeners.studioSettings) database.ref('/studioSettings').off('value', dataListeners.studioSettings); // Added cleanup
         if (dataListeners.currentUser) database.ref('/users/' + appState.currentUser.id).off('value', dataListeners.currentUser);
         if (dataListeners.scheduleStatus) database.ref('/scheduleStatus').off('value', dataListeners.scheduleStatus);
         if (activeClassesRef) activeClassesRef.off();
@@ -6921,6 +6958,8 @@ ${_('whatsapp_closing')}
         const refs = {
             tutors: database.ref('/tutors'),
             sportTypes: database.ref('/sportTypes'),
+            // --- NEW: Fetch settings for members ---
+            studioSettings: database.ref('/studioSettings') 
         };
         
         const currentUserRef = database.ref('/users/' + appState.currentUser.id);
@@ -6937,7 +6976,28 @@ ${_('whatsapp_closing')}
 
         Object.entries(refs).forEach(([key, ref]) => {
             dataListeners[key] = (snapshot) => {
-                appState[key] = firebaseObjectToArray(snapshot.val());
+                const val = snapshot.val();
+                
+                // --- NEW: specific handling for studioSettings object ---
+                if (key === 'studioSettings') {
+                    if (val) {
+                        appState.studioSettings = { 
+                            ...appState.studioSettings, 
+                            ...val, 
+                            clsDefaults: { 
+                                ...appState.studioSettings.clsDefaults, 
+                                ...(val.clsDefaults || {}) 
+                            } 
+                        };
+                        // Re-render if on schedule page to apply new button logic immediately
+                        if (appState.activePage === 'schedule') {
+                            renderCurrentPage();
+                        }
+                    }
+                } else {
+                    // Standard handling for lists (tutors, sportTypes)
+                    appState[key] = firebaseObjectToArray(val);
+                }
             };
             ref.on('value', dataListeners[key], (error) => console.error(`Listener error on /${key}`, error));
         });
@@ -7047,7 +7107,6 @@ ${_('whatsapp_closing')}
         });
 
         initialFetchAndRender();
-        // --- END OF NEW LOGIC FOR MEMBERS ---
     };
 
     const detachDataListeners = () => {
