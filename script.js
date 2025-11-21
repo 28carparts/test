@@ -7278,6 +7278,13 @@ ${_('whatsapp_closing')}
 
     // --- Initialization ---
     const init = () => {
+        const currentYear = new Date().getFullYear();
+        const authYearEl = document.getElementById('copyright-year-auth');
+        const appYearEl = document.getElementById('copyright-year-app');
+        
+        if (authYearEl) authYearEl.textContent = currentYear;
+        if (appYearEl) appYearEl.textContent = currentYear;
+        
         setupAuthFormListeners();
 
         DOMElements.cancelCopyBtn.onclick = cancelCopy;
@@ -7536,3 +7543,4 @@ ${_('whatsapp_closing')}
     // --- Run Application ---
     init();
 });
+
