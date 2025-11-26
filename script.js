@@ -3484,7 +3484,6 @@ ${_('whatsapp_closing')}
                     creditsListHtml = entries.map(([typeId, data]) => {
                         const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                         const color = typeDef?.color || '#64748b';
-                        // USE HELPER
                         const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Credits');
                         const initial = data.initialCredits || data.balance;
                         const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date();
@@ -3492,13 +3491,13 @@ ${_('whatsapp_closing')}
 
                         const statusLabel = isExpired ? _('label_expired') : _('label_expires');
 
+                        // UPDATED: Unified Pill Style (Light Bg + Colored Text)
                         return `
                         <div class="mb-3 last:mb-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-bold text-sm px-2.5 py-0.5 rounded-full text-white shadow-sm" style="background-color: ${color}">
-                                    ${formatCredits(data.balance)} / ${formatCredits(initial)}
+                            <div class="mb-1" title="${name}">
+                                <span class="font-bold text-sm px-2.5 py-1 rounded-full inline-block" style="background-color: ${color}26; color: ${color};">
+                                    ${formatCredits(data.balance)} / ${formatCredits(initial)} ${name}
                                 </span>
-                                <span class="font-medium text-slate-700">${name}</span>
                             </div>
                             <div class="text-xs text-slate-500 ml-1">
                                 <span class="${isExpired ? 'text-red-600 font-bold' : ''}">${statusLabel}: ${expiryText}</span>
@@ -3588,14 +3587,14 @@ ${_('whatsapp_closing')}
                                             .replace('{quantity}', p.credits)
                                             .replace('{unit}', creditsUnit);
 
-                                        // --- NEW: Resolve Credit Type ---
+                                        // Resolve Credit Type (Keep existing logic here)
                                         const typeId = p.creditTypeId || 'general';
                                         const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                         const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Credits');
                                         const typeColor = typeDef?.color || '#64748b';
                                         
-                                        const typePill = `<span class="inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}">${typeName}</span>`;
-                                        // ---------------------------------
+                                        // Matching Pill Style for History as well
+                                        const typePill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}26; color: ${typeColor}">${typeName}</span>`;
 
                                         let auditMessage = '';
                                         if (p.lastModifiedBy) {
@@ -3638,13 +3637,14 @@ ${_('whatsapp_closing')}
                                 
                                 const isCancellationClosed = (now > cutoffTime) && !hasClassStarted;
 
-                                // --- Resolve Credit Type Pill ---
+                                // --- NEW: Resolve Credit Type Pill ---
                                 const typeId = bookingDetails.creditTypeId || cls.costCreditTypeId || 'general';
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Credits');
                                 const typeColor = typeDef?.color || '#64748b';
                                 
-                                const typePill = `<span class="inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}">${typeName}</span>`;
+                                // Updated Pill Style
+                                const typePill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}26; color: ${typeColor}">${typeName}</span>`;
                                 // -------------------------------------
 
                                 return `<div class="${isHighlighted ? 'booking-highlight' : 'bg-slate-100'} p-4 rounded-lg flex justify-between items-center" data-cls-id="${cls.id}">
@@ -3890,7 +3890,7 @@ ${_('whatsapp_closing')}
                         <div class="relative w-64">
                             <input type="text" id="memberSearchInput" placeholder="${_('placeholder_search')}" class="form-input w-full pr-10">
                             <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
-                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                         ${isOwner ? `
@@ -3988,6 +3988,7 @@ ${_('whatsapp_closing')}
                 let valA, valB;
 
                 if (key === 'credits') {
+                    // Sort by Total Wallet Balance
                     valA = getWalletStatus(a).totalBalance;
                     valB = getWalletStatus(b).totalBalance;
                     if (a.monthlyPlan) valA = Infinity;
@@ -4012,57 +4013,69 @@ ${_('whatsapp_closing')}
                 return 0;
             });
 
+            // --- PAGINATION LOGIC ---
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(sortedUsers.length / itemsPerPage.members) || 1;
             let page = appState.pagination.members.page;
             if (page > totalPages) page = totalPages;
 
             const paginatedUsers = sortedUsers.slice((page - 1) * itemsPerPage.members, page * itemsPerPage.members);
+            // ------------------------
 
             tableBody.innerHTML = paginatedUsers.map(member => {
+                
+                // --- NEW MULTI-CREDIT RENDERING LOGIC (Updated Style) ---
                 const wallet = getMemberWallet(member);
                 let creditsHtml = '';
                 let expiryHtml = '';
 
                 if (member.monthlyPlan) {
-                    creditsHtml = `<span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded-full block w-fit mb-1">${formatCurrency(member.monthlyPlanAmount)}/mo</span>`;
-                    // Use the translated prefix
-                    expiryHtml = `<span class="text-xs text-slate-700 block mb-1">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</span>`;
+                    creditsHtml = `<span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full block w-fit mb-1">${formatCurrency(member.monthlyPlanAmount)}/mo</span>`;
+                    // UPDATED: Changed font size to text-sm for consistency
+                    expiryHtml = `<span class="text-sm block mb-1">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</span>`;
                 } else {
+                    // Iterate over every credit bucket in the wallet
                     const walletEntries = Object.entries(wallet);
                     if (walletEntries.length === 0) {
                         creditsHtml = `<span class="text-slate-400 text-xs">0 Credits</span>`;
-                        expiryHtml = `<span class="text-slate-400 text-xs">--</span>`;
+                        expiryHtml = `<span class="text-slate-400 text-sm">--</span>`;
                     } else {
                         walletEntries.forEach(([typeId, data]) => {
+                            // Attempt to look up definition, fallback to basic style
                             const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                             const color = typeDef?.color || '#64748b'; 
                             const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Credits');
                             const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date();
+                            
+                            // UPDATED: Shows Balance / Initial in Pill with lighter background
                             const initial = data.initialCredits || data.balance;
-
+                            
+                            // Using hex opacity (approx 15%) for background
                             creditsHtml += `
-                                <div class="flex items-center gap-2 mb-1" title="${name}">
-                                    <span class="font-bold text-xs px-2.5 py-0.5 rounded-full text-white shadow-sm" style="background-color: ${color}">
-                                        ${formatCredits(data.balance)} / ${formatCredits(initial)}
+                                <div class="mb-1" title="${name}">
+                                    <span class="font-bold text-xs px-2.5 py-1 rounded-full inline-block" style="background-color: ${color}26; color: ${color};">
+                                        ${formatCredits(data.balance)} / ${formatCredits(initial)} ${name}
                                     </span>
-                                    <span class="text-xs text-slate-700 font-medium">${name}</span>
                                 </div>`;
                             
+                            // UPDATED: Changed font size to text-sm
                             expiryHtml += `
-                                <div class="mb-1 h-5 flex items-center">
-                                    <span class="text-xs ${isExpired ? 'text-red-600 font-bold' : 'text-slate-700'}">
+                                <div class="mb-1 h-6 flex items-center">
+                                    <span class="text-sm ${isExpired ? 'text-red-600 font-bold' : ''}">
                                         ${data.expiryDate ? formatShortDateWithYear(data.expiryDate) : 'No Expiry'}
                                     </span>
                                 </div>`;
                         });
                     }
                 }
+                // --- END NEW LOGIC ---
 
+                // Status Indicator Logic (Using helper)
                 const { isCritical, isWarning, statusText } = getWalletStatus(member);
                 let statusIndicatorHTML = '';
                 let memberNotes = member.notes ? member.notes.trim() : '';
                 
+                // Build Status Dot
                 if (isCritical) {
                     statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
                 } else if (isWarning) {
@@ -4071,6 +4084,7 @@ ${_('whatsapp_closing')}
                     statusIndicatorHTML = `<span class="status-indicator-dot bg-blue-500"></span>`;
                 }
 
+                // Build Tooltip (Status + Notes)
                 let tooltipContent = '';
                 if (isCritical || isWarning) tooltipContent = statusText;
                 if (memberNotes) {
@@ -4081,6 +4095,7 @@ ${_('whatsapp_closing')}
                 const tooltipHTML = tooltipContent ? `<span class="member-tooltip">${tooltipContent}</span>` : '';
                 const hasTooltip = !!tooltipContent;
 
+                // UPDATED: Changed 'align-top' to 'align-middle' for columns 4 and 5
                 return `
                 <tr class="border-b border-slate-100">
                     <td class="p-2 font-semibold" ${hasTooltip ? `data-tooltip-content` : ''}>${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
@@ -4158,7 +4173,7 @@ ${_('whatsapp_closing')}
         };
 
         if (isOwner) {
-            // 1. Export Member Summary
+            // 1. Export Member Summary (Updated for Wallet)
             container.querySelector('#exportSummaryBtn').onclick = (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4175,6 +4190,7 @@ ${_('whatsapp_closing')}
                 filteredUsers.sort((a, b) => a.name.localeCompare(b.name));
     
                 const exportData = filteredUsers.map(member => {
+                    // --- Generate Wallet String for CSV ---
                     let creditsString = _('label_na');
                     let expiryString = _('label_na');
 
@@ -4185,6 +4201,7 @@ ${_('whatsapp_closing')}
                         const wallet = getMemberWallet(member);
                         const entries = Object.entries(wallet);
                         if (entries.length > 0) {
+                            // Format: "General: 10/15; PT: 5/10"
                             creditsString = entries.map(([typeId, data]) => {
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Unknown');
@@ -4192,6 +4209,7 @@ ${_('whatsapp_closing')}
                                 return `${name}: ${data.balance}/${initial}`;
                             }).join('; ');
 
+                            // Format: "General: 2024-12-31; PT: 2025-01-01"
                             expiryString = entries.map(([typeId, data]) => {
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Unknown');
@@ -4201,6 +4219,7 @@ ${_('whatsapp_closing')}
                             creditsString = "0";
                         }
                     }
+                    // -----------------------------------
 
                     return {
                         [_('export_header_name')]: member.name,
@@ -4210,16 +4229,16 @@ ${_('whatsapp_closing')}
                         [_('export_header_plan_type')]: member.monthlyPlan ? _('export_value_monthly') : _('export_value_credits'),
                         [_('export_header_monthly_amount')]: member.monthlyPlanAmount || 0,
                         [_('export_header_due_date')]: member.monthlyPlan ? (member.paymentDueDate || '') : _('label_na'),
-                        [_('export_header_credits_remaining')]: creditsString, 
+                        [_('export_header_credits_remaining')]: creditsString, // Updated
                         [_('export_header_credits_initial')]: member.monthlyPlan ? _('label_na') : (member.initialCredits || 0),
-                        [_('export_header_expiry_date')]: expiryString, 
+                        [_('export_header_expiry_date')]: expiryString, // Updated
                         [_('export_header_last_active')]: member.lastBooking ? member.lastBooking.slice(0, 10) : ''
                     };
                 });
                 exportToCsv('member-summary', exportData);
             };
     
-            // 2. Export Booking History
+            // 2. Export Booking History (Updated for Wallet)
             container.querySelector('#exportBookingHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4239,9 +4258,11 @@ ${_('whatsapp_closing')}
                                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                                 const tutor = appState.tutors.find(t => t.id === cls.tutorId);
                                 
+                                // --- NEW: Resolve Credit Type Name ---
                                 const typeId = bookingInfo.creditTypeId || cls.costCreditTypeId || 'general';
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Unknown');
+                                // -------------------------------------
 
                                 exportData.push({
                                     [_('export_header_name')]: member.name,
@@ -4250,7 +4271,7 @@ ${_('whatsapp_closing')}
                                     [_('export_header_class_name')]: getSportTypeName(sportType),
                                     [_('export_header_tutor_name')]: tutor?.name || _('unknown_tutor'),
                                     [_('export_header_credits_used')]: cls.credits,
-                                    [_('label_credit_type')]: typeName,
+                                    [_('label_credit_type')]: typeName, // Corrected Translation Key
                                     [_('export_header_attended')]: (cls.attendedBy && cls.attendedBy[member.id]) ? _('export_value_yes') : _('export_value_no'),
                                     [_('export_header_booked_on')]: bookingInfo.bookedAt ? bookingInfo.bookedAt.slice(0, 10) : '',
                                     [_('export_header_booked_by')]: bookingInfo.bookedBy || _('export_value_unknown')
@@ -4276,7 +4297,7 @@ ${_('whatsapp_closing')}
                 }
             };
     
-            // 3. Export Financial History
+            // 3. Export Financial History (Preserved)
             container.querySelector('#exportFinancialHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4462,7 +4483,8 @@ ${_('whatsapp_closing')}
                 const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Credits');
                 const typeColor = typeDef?.color || '#64748b';
 
-                const typePill = `<span class="inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}">${typeName}</span>`;
+                // UPDATED: Light background, dark text
+                const typePill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}26; color: ${typeColor}">${typeName}</span>`;
 
                 let auditMessage = '';
                 if (p.lastModifiedBy) {
@@ -4489,7 +4511,7 @@ ${_('whatsapp_closing')}
              container.innerHTML = `<p class="text-sm text-slate-500 text-center py-4">${_('no_purchase_history')}</p>`;
         }
         
-        // ... (Rest of the edit/delete logic remains unchanged)
+        // ... (Event listeners logic remains the same) ...
         container.onclick = (e) => {
             const editTarget = e.target.closest('[data-history-item-id] .flex-grow');
             const removeTarget = e.target.closest('.remove-history-btn');
