@@ -126,6 +126,7 @@ const LANG_PACK = {
         'template_class_on_date': '{class} on {date}',
         'placeholder_yoga_example': 'e.g., Yoga',
         'placeholder_country_code_example': 'e.g., 852',
+        'label_mo': '/mo',
 
         // --- Password Strength ---
         'auth_password_strength': 'Password Strength',
@@ -484,6 +485,20 @@ const LANG_PACK = {
         'label_expires': 'Expires',
         'label_required_credit_type': 'Required Credit Type',
         'label_credit_type': 'Credit Type',
+        'info_no_credit_types_found': 'No credit types defined.',
+
+        // --- Monthly Plan Type ---
+        'header_monthly_tiers': 'Monthly Plan Tiers',
+        'btn_add_monthly_tier': 'Add Plan Tier',
+        'title_add_monthly_tier': 'Add Monthly Plan Tier',
+        'title_edit_monthly_tier': 'Edit Monthly Plan Tier',
+        'label_monthly_tier': 'Monthly Tier',
+        'info_no_monthly_tiers_found': 'No monthly tiers defined.',
+        'label_monthly_access': 'Monthly Plan Access',
+        'option_access_all': 'Open to All Monthly Plans',
+        'option_access_restricted': 'Restrict to Specific Tiers',
+        'error_tier_restricted': 'This class is restricted to specific monthly plan tiers.',
+        'label_legacy_tier': 'Legacy / No Tier',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -693,6 +708,7 @@ const LANG_PACK = {
         'template_class_on_date': '{class} 於 {date}',
         'placeholder_yoga_example': '例如：瑜伽',
         'placeholder_country_code_example': '例如：852',
+        'label_mo': '/月',
 
         // --- Password Strength ---
         'auth_password_strength': '密碼強度',
@@ -1070,6 +1086,20 @@ const LANG_PACK = {
         'label_expires': '到期日',
         'label_required_credit_type': '所需點數類型',
         'label_credit_type': '點數類型',
+        'info_no_credit_types_found': '未定義任何點數類型。',
+
+        // --- Monthly Plan Type ---
+        'header_monthly_tiers': '月費方案等級',
+        'btn_add_monthly_tier': '新增方案等級',
+        'title_add_monthly_tier': '新增月費方案等級',
+        'title_edit_monthly_tier': '編輯月費方案等級',
+        'label_monthly_tier': '方案等級',
+        'info_no_monthly_tiers_found': '未定義月費等級。',
+        'label_monthly_access': '月費會員權限',
+        'option_access_all': '開放給所有月費會員',
+        'option_access_restricted': '限制特定方案等級',
+        'error_tier_restricted': '此課程僅限特定月費方案等級預約。',
+        'label_legacy_tier': '舊制 / 無等級',
         
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
