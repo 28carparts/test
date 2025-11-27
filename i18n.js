@@ -127,6 +127,8 @@ const LANG_PACK = {
         'placeholder_yoga_example': 'e.g., Yoga',
         'placeholder_country_code_example': 'e.g., 852',
         'label_mo': '/mo',
+        'error_booking_not_found': 'Booking not found.',
+        'error_class_not_found': 'Class not found.',
 
         // --- Password Strength ---
         'auth_password_strength': 'Password Strength',
@@ -473,7 +475,7 @@ const LANG_PACK = {
         'label_diff': 'Diff',
         'label_new_price': 'New Credit',
 
-        // --- Credit Type Modal ---
+        // --- New Credit Type ---
         'header_credit_types': 'Credit Types',
         'btn_add_credit_type': 'Add Credit Type',
         'title_add_credit_type': 'Add Credit Type',
@@ -486,8 +488,17 @@ const LANG_PACK = {
         'label_required_credit_type': 'Required Credit Type',
         'label_credit_type': 'Credit Type',
         'info_no_credit_types_found': 'No credit types defined.',
+        'title_migrate_legacy_credits': 'Migrate Legacy Credits?',
+        'desc_migrate_legacy_credits': 'You have created your first credit type. Do you want to migrate all existing member credits (currently "General") to the <strong>{type}</strong> type automatically?',
+        'info_no_credits_to_migrate': 'No legacy credits found to migrate.',
+        'placeholder_select_credit_type': 'Select Credit Type...',
+        'success_credit_type_added': 'Credit Type added!',
+        'success_credit_type_updated': 'Credit Type updated!',
+        'error_select_credit_type': 'Please select a credit type.',
+        'error_cannot_delete_credit_type_in_use': 'Cannot delete "{name}" because some members still hold a balance of this type.',
+        'success_cleanup_complete': 'Cleanup complete. No active credit balances found to migrate.',
 
-        // --- Monthly Plan Type ---
+        // --- Monthly Plan Tier ---
         'header_monthly_tiers': 'Monthly Plan Tiers',
         'btn_add_monthly_tier': 'Add Plan Tier',
         'title_add_monthly_tier': 'Add Monthly Plan Tier',
@@ -499,6 +510,13 @@ const LANG_PACK = {
         'option_access_restricted': 'Restrict to Specific Tiers',
         'error_tier_restricted': 'This class is restricted to specific monthly plan tiers.',
         'label_legacy_tier': 'Legacy / No Tier',
+        'title_migrate_legacy_members': 'Migrate Existing Members?',
+        'desc_migrate_legacy_members': 'You have created your first monthly tier. Do you want to assign all existing monthly members (currently "Legacy") to the <strong>{tier}</strong> tier automatically?',
+        'success_migration_complete': 'Migration complete! {count} members assigned to {tier}.',
+        'info_no_members_to_migrate': 'No legacy members found to migrate.',
+        'success_monthly_tier_added': 'Monthly Tier added!',
+        'success_monthly_tier_updated': 'Monthly Tier updated!',
+        'error_cannot_delete_tier_in_use': 'Cannot delete "{name}" because some members are assigned to this tier.',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -709,6 +727,8 @@ const LANG_PACK = {
         'placeholder_yoga_example': '例如：瑜伽',
         'placeholder_country_code_example': '例如：852',
         'label_mo': '/月',
+        'error_booking_not_found': '找不到預約記錄。',
+        'error_class_not_found': '找不到課程。',
 
         // --- Password Strength ---
         'auth_password_strength': '密碼強度',
@@ -1074,7 +1094,7 @@ const LANG_PACK = {
         'btn_check_in_all': '全部簽到',
         'info_no_booked_class_today': '今天沒有已預約的課程。',
 
-        // --- Credit Type Modal ---
+        // --- New Credit Type ---
         'header_credit_types': '點數類型',
         'btn_add_credit_type': '新增點數類型',
         'title_add_credit_type': '新增點數類型',
@@ -1087,8 +1107,17 @@ const LANG_PACK = {
         'label_required_credit_type': '所需點數類型',
         'label_credit_type': '點數類型',
         'info_no_credit_types_found': '未定義任何點數類型。',
+        'title_migrate_legacy_credits': '遷移舊有點數？',
+        'desc_migrate_legacy_credits': '您已建立第一種點數類型。是否要將所有現有的會員點數（目前為「一般」）自動遷移至 <strong>{type}</strong> 類型？',
+        'info_no_credits_to_migrate': '找不到需要遷移的舊有點數。',
+        'placeholder_select_credit_type': '選擇點數類型...',
+        'success_credit_type_added': '點數類型已新增！',
+        'success_credit_type_updated': '點數類型已更新！',
+        'error_select_credit_type': '請選擇點數類型。',
+        'error_cannot_delete_credit_type_in_use': '無法刪除 "{name}"，因為仍有會員持有此類型的餘額。',
+        'success_cleanup_complete': '清理完成。找不到需要遷移的有效點數餘額。',
 
-        // --- Monthly Plan Type ---
+        // --- Monthly Plan Tier ---
         'header_monthly_tiers': '月費方案等級',
         'btn_add_monthly_tier': '新增方案等級',
         'title_add_monthly_tier': '新增月費方案等級',
@@ -1100,6 +1129,13 @@ const LANG_PACK = {
         'option_access_restricted': '限制特定方案等級',
         'error_tier_restricted': '此課程僅限特定月費方案等級預約。',
         'label_legacy_tier': '舊制 / 無等級',
+        'title_migrate_legacy_members': '遷移現有會員？',
+        'desc_migrate_legacy_members': '您已建立第一個月費等級。是否要將所有現有的月費會員（目前為「舊制」）自動分配到 <strong>{tier}</strong> 等級？',
+        'success_migration_complete': '遷移完成！已將 {count} 位會員分配至 {tier}。',
+        'info_no_members_to_migrate': '找不到需要遷移的舊制會員。',
+        'success_monthly_tier_added': '月費等級已新增！',
+        'success_monthly_tier_updated': '月費等級已更新！',
+        'error_cannot_delete_tier_in_use': '無法刪除 "{name}"，因為仍有會員屬於此等級。',
         
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
