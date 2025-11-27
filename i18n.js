@@ -517,6 +517,9 @@ const LANG_PACK = {
         'success_monthly_tier_added': 'Monthly Tier added!',
         'success_monthly_tier_updated': 'Monthly Tier updated!',
         'error_cannot_delete_tier_in_use': 'Cannot delete "{name}" because some members are assigned to this tier.',
+        'title_tier_change_conflict': 'Change Active Subscription?',
+        'desc_tier_change_conflict': 'Member <strong>{name}</strong> has an active subscription until <strong>{date}</strong>.<br>You are changing their tier from <strong>{oldTier}</strong> to <strong>{newTier}</strong>.<br><br>This will immediately affect their ability to book classes.',
+        'btn_confirm_tier_change': 'Confirm Change',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -1136,6 +1139,9 @@ const LANG_PACK = {
         'success_monthly_tier_added': '月費等級已新增！',
         'success_monthly_tier_updated': '月費等級已更新！',
         'error_cannot_delete_tier_in_use': '無法刪除 "{name}"，因為仍有會員屬於此等級。',
+        'title_tier_change_conflict': '變更有效訂閱？',
+        'desc_tier_change_conflict': '會員 <strong>{name}</strong> 目前擁有有效的訂閱，至 <strong>{date}</strong> 到期。<br>您即將將其等級從 <strong>{oldTier}</strong> 變更為 <strong>{newTier}</strong>。<br><br>這將立即影響他們預約課程的權限。',
+        'btn_confirm_tier_change': '確認變更',
         
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
