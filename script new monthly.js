@@ -1802,24 +1802,47 @@ ${_('whatsapp_closing')}
         const requiredTypeId = cls.costCreditTypeId || 'general'; 
         const creditTypeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === requiredTypeId) : null;
         const creditTypeName = creditTypeDef ? getCreditTypeName(creditTypeDef) : (requiredTypeId === 'general' ? 'General Credits' : 'Credits');
+        
+        // --- 1. Get Color for Pill ---
+        const creditColor = creditTypeDef?.color || '#64748b'; // Default slate if undefined
+        
+        // --- 2. Create Pill Style String ---
+        // Uses 15% opacity (hex '26') for background, solid color for text
+        const pillStyle = `background-color: ${creditColor}26; color: ${creditColor}`;
 
         const userBalance = getCreditBalance(currentUser, requiredTypeId);
         
-        // --- START: Monthly Plan Tier Validation ---
+        // --- Monthly Plan Tier Validation ---
         if (currentUser.monthlyPlan && !cls.notForMonthly) {
-            // If class has restrictions defined (not null/empty)
             if (cls.allowedPlanTiers && Object.keys(cls.allowedPlanTiers).length > 0) {
                 const userTierId = currentUser.monthlyPlanTierId || 'legacy';
-                // Check if user's tier is allowed
                 if (!cls.allowedPlanTiers[userTierId]) {
                     showMessageBox(_('error_tier_restricted'), 'error');
                     return;
                 }
             }
         }
-        // --- END: Monthly Plan Tier Validation ---
 
-        // ... (Rest of the modal generation code remains the same) ...
+        // --- 3. Prepare "Your Balance" HTML ---
+        let balanceHtml = '';
+        if (currentUser.monthlyPlan) {
+            // If monthly, show Monthly Pill (reusing the logic from Account Page)
+            const tierId = currentUser.monthlyPlanTierId;
+            const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
+            
+            let mpPillStyle = 'background-color: #dcfce7; color: #166534;'; // Default Green
+            let tierLabel = '';
+
+            if (tier) {
+                mpPillStyle = `background-color: ${tier.color}26; color: ${tier.color};`;
+                tierLabel = ` ${getMonthlyPlanName(tier)}`;
+            }
+            balanceHtml = `<span class="inline-block text-sm font-bold px-3 py-1 rounded-full" style="${mpPillStyle}">${_('label_monthly_plan')}${tierLabel}</span>`;
+        } else {
+            // If credits, show Credit Pill matching the cost type
+            balanceHtml = `<span class="inline-block text-sm font-bold px-3 py-1 rounded-full" style="${pillStyle}">${formatCredits(userBalance)} ${creditTypeName}</span>`;
+        }
+
         DOMElements.bookingModal.innerHTML = `
             <div class="bg-white p-0 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content overflow-hidden">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -1838,23 +1861,21 @@ ${_('whatsapp_closing')}
                     <div class="flex justify-between items-center"><span class="text-slate-500">${_('label_time')}:</span><strong class="text-slate-800">${formatDateWithWeekday(cls.date)}, ${getTimeRange(cls.time, cls.duration)}</strong></div>
                     <hr class="my-4">
                     
-                    <!-- Cost Section -->
+                    <!-- Cost Section (Updated to Pill) -->
                     <div class="flex justify-between items-center">
                         <span class="text-slate-500">${_('label_credits_required')}:</span>
                         <div class="text-right">
-                            <strong class="text-indigo-600 text-lg block">${cls.credits}</strong>
-                            <span class="text-xs text-slate-400">${creditTypeName}</span>
+                            <span class="inline-block text-sm font-bold px-3 py-1 rounded-full" style="${pillStyle}">
+                                ${cls.credits} ${creditTypeName}
+                            </span>
                         </div>
                     </div>
 
-                    <!-- Balance Section -->
+                    <!-- Balance Section (Updated to Pill) -->
                     <div class="flex justify-between items-center">
                         <span class="text-slate-500">${_('label_your_balance')}:</span>
                         <div class="text-right">
-                            <strong class="text-slate-800 text-lg block">
-                                ${currentUser.monthlyPlan ? _('label_monthly_plan') : formatCredits(userBalance)}
-                            </strong>
-                            ${!currentUser.monthlyPlan ? `<span class="text-xs text-slate-400">${creditTypeName}</span>` : ''}
+                            ${balanceHtml}
                         </div>
                     </div>
                 </div>
@@ -1931,7 +1952,7 @@ ${_('whatsapp_closing')}
 
             const bookingDetails = cls.bookedBy[memberId];
             if (!bookingDetails) {
-                showMessageBox("Booking not found.", 'error');
+                showMessageBox(_('error_booking_not_found'), 'error');
                 return;
             }
 
@@ -2084,12 +2105,19 @@ ${_('whatsapp_closing')}
         if (monthlyTiers.length > 0) {
             tiersContainer.classList.remove('hidden');
             
-            // Generate Checkboxes
-            let checksHTML = `
+            // --- START: Smart Hide Legacy Checkbox ---
+            // Check for any ACTIVE legacy members in the entire studio
+            const hasLegacyMembers = appState.users.some(u => u.role === 'member' && !u.isDeleted && u.monthlyPlan && !u.monthlyPlanTierId);
+            
+            let checksHTML = '';
+            if (hasLegacyMembers) {
+                checksHTML += `
                 <label class="flex items-center">
                     <input type="checkbox" value="legacy" class="tier-checkbox h-4 w-4 text-indigo-600 rounded">
                     <span class="ml-2 text-sm text-slate-600">${_('label_legacy_tier')}</span>
                 </label>`;
+            }
+            // --- END: Smart Hide Legacy Checkbox ---
             
             checksHTML += monthlyTiers.map(t => `
                 <label class="flex items-center">
@@ -2569,23 +2597,33 @@ ${_('whatsapp_closing')}
         el.className = `cls-block p-3 rounded-lg shadow-md text-white mb-2 flex flex-col justify-between ${isEndedToday ? 'cls-block-ended' : ''}`;
         el.style.backgroundColor = sportType?.color || '#64748b';
 
-        // --- NEW: Apply filters for EVERYONE (Admins and Members) ---
-        // (Note: memberDay filter is handled by removing columns in the render function)
+        // --- Filter Logic ---
         const { memberSportType, memberTutor } = appState.selectedFilters;
         const sportMatch = memberSportType === 'all' || cls.sportTypeId === memberSportType;
         const tutorMatch = memberTutor === 'all' || cls.tutorId === memberTutor;
         if (!sportMatch || !tutorMatch) {
             el.classList.add('filtered-out');
         }
-        // ------------------------------------------------------------
         
         let actionButton = '';
         let mainAction = () => {};
         const isBookedByCurrentUser = !isAdmin && appState.currentUser && cls.bookedBy && cls.bookedBy[appState.currentUser.id];
         const isAttendedByCurrentUser = !isAdmin && appState.currentUser && cls.attendedBy && cls.attendedBy[appState.currentUser.id];
         const isFull = currentBookings >= cls.maxParticipants;
+        
         const isMonthlyMember = !isAdmin && appState.currentUser.monthlyPlan;
         const isRestrictedForMonthly = cls.notForMonthly;
+
+        // --- START: NEW TIER RESTRICTION CHECK ---
+        let isTierRestricted = false;
+        if (isMonthlyMember && !isRestrictedForMonthly && cls.allowedPlanTiers) {
+            // If class has specific tier rules, check if user's tier is allowed
+            const userTierId = appState.currentUser.monthlyPlanTierId || 'legacy';
+            if (!cls.allowedPlanTiers[userTierId]) {
+                isTierRestricted = true;
+            }
+        }
+        // --- END: NEW TIER RESTRICTION CHECK ---
 
         if (isAdmin) {
             el.classList.add('cursor-pointer');
@@ -2596,12 +2634,21 @@ ${_('whatsapp_closing')}
                     openJoinedMembersModal(freshClsData);
                 } 
             };
-        } else if (isMonthlyMember && isRestrictedForMonthly) {
+        } 
+        // --- UPDATED: COMBINED RESTRICTION LOGIC ---
+        else if (isMonthlyMember && (isRestrictedForMonthly || isTierRestricted)) {
             el.classList.add('cls-block-restricted', 'cursor-pointer');
             mainAction = () => {
-                showMessageBox(_('error_class_not_for_monthly'), 'info');
+                // Show specific error message based on the reason
+                if (isRestrictedForMonthly) {
+                    showMessageBox(_('error_class_not_for_monthly'), 'info');
+                } else {
+                    showMessageBox(_('error_tier_restricted'), 'info');
+                }
             };
-        } else if (isBookedByCurrentUser) {
+        } 
+        // -------------------------------------------
+        else if (isBookedByCurrentUser) {
             el.classList.add('booked-by-member');
         } else if (appState.currentUser && !isFull) {
             el.classList.add('cursor-pointer');
@@ -2632,9 +2679,13 @@ ${_('whatsapp_closing')}
             } else {
                 memberActionHTML = `<button class="cancel-booking-btn-toggle bg-white/90 text-indigo-600 font-bold text-xs px-3 py-1 rounded-full transition-all duration-200 hover:bg-red-600 hover:text-white" data-booked-text="${_('status_booked')}" data-cancel-text="${_('status_cancel_prompt')}">${_('status_booked')}</button>`;
             }
-        } else if (isMonthlyMember && isRestrictedForMonthly) {
+        } 
+        // --- UPDATED: SHOW "NOT AVAILABLE" FOR TIER RESTRICTIONS TOO ---
+        else if (isMonthlyMember && (isRestrictedForMonthly || isTierRestricted)) {
             memberActionHTML = `<span class="bg-white text-slate-600 font-bold text-xs px-3 py-1 rounded-full">${_('status_not_available')}</span>`;
-        } else if (isFull) {
+        } 
+        // ---------------------------------------------------------------
+        else if (isFull) {
             memberActionHTML = `<span class="bg-white text-red-600 font-bold text-xs px-3 py-1 rounded-full">${_('status_full')}</span>`;
         } else {
             memberActionHTML = `<span class="font-bold text-white">${creditText}</span>`;
@@ -3604,7 +3655,16 @@ ${_('whatsapp_closing')}
                 const entries = Object.entries(wallet);
                 
                 let creditsListHtml = '';
-                if (entries.length === 0) {
+
+                // --- 0/0 FILTERING START ---
+                const activeWalletEntries = entries.filter(([_, data]) => {
+                    const balance = data.balance || 0;
+                    const initial = data.initialCredits || 0;
+                    return !(balance === 0 && initial === 0);
+                });
+                // --- 0/0 FILTERING END ---
+
+                if (activeWalletEntries.length === 0) {
                     const neutralColor = '#94a3b8'; // Slate 400
                     creditsListHtml = `
                         <div class="mb-3">
@@ -3615,7 +3675,7 @@ ${_('whatsapp_closing')}
                             </div>
                         </div>`;
                 } else {
-                    creditsListHtml = entries.map(([typeId, data]) => {
+                    creditsListHtml = activeWalletEntries.map(([typeId, data]) => {
                         const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                         const color = typeDef?.color || '#64748b';
                         const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Credits');
@@ -3691,7 +3751,7 @@ ${_('whatsapp_closing')}
                                             .replace('{quantity}', p.monthsPaid)
                                             .replace('{unit}', monthUnit);
                                         
-                                        // --- START: Payment History Pill (Member View) ---
+                                        // --- Payment History Pill (Member View) ---
                                         const tierId = p.monthlyPlanTierId;
                                         const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
                                         let tierPill = '';
@@ -3700,7 +3760,6 @@ ${_('whatsapp_closing')}
                                             const name = getMonthlyPlanName(tier);
                                             tierPill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${tier.color}26; color: ${tier.color}">${name}</span>`;
                                         }
-                                        // --- END: Payment History Pill (Member View) ---
 
                                         let auditMessage = '';
                                         if (p.lastModifiedBy) {
@@ -4035,7 +4094,7 @@ ${_('whatsapp_closing')}
                         <div class="relative w-64">
                             <input type="text" id="memberSearchInput" placeholder="${_('placeholder_search')}" class="form-input w-full pr-10">
                             <button id="clearSearchBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600" style="display: none;">
-                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                         ${isOwner ? `
@@ -4133,7 +4192,6 @@ ${_('whatsapp_closing')}
                 let valA, valB;
 
                 if (key === 'credits') {
-                    // Sort by Total Wallet Balance
                     valA = getWalletStatus(a).totalBalance;
                     valB = getWalletStatus(b).totalBalance;
                     if (a.monthlyPlan) valA = Infinity;
@@ -4158,45 +4216,43 @@ ${_('whatsapp_closing')}
                 return 0;
             });
 
-            // --- PAGINATION LOGIC ---
             const { itemsPerPage } = appState;
             const totalPages = Math.ceil(sortedUsers.length / itemsPerPage.members) || 1;
             let page = appState.pagination.members.page;
             if (page > totalPages) page = totalPages;
 
             const paginatedUsers = sortedUsers.slice((page - 1) * itemsPerPage.members, page * itemsPerPage.members);
-            // ------------------------
 
             tableBody.innerHTML = paginatedUsers.map(member => {
-                
-                // --- NEW MULTI-CREDIT RENDERING LOGIC ---
                 const wallet = getMemberWallet(member);
                 let creditsHtml = '';
                 let expiryHtml = '';
 
                 if (member.monthlyPlan) {
-                    // --- START: UPDATED MONTHLY TIER DISPLAY LOGIC (MEMBERS PAGE) ---
                     const tierId = member.monthlyPlanTierId;
                     const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
                     
-                    let pillStyle = 'background-color: #dcfce7; color: #166534;'; // Default Green
+                    let pillStyle = 'background-color: #dcfce7; color: #166534;'; 
                     let tierLabel = '';
 
                     if (tier) {
-                        // Dynamic Color based on Tier
                         pillStyle = `background-color: ${tier.color}26; color: ${tier.color};`;
                         tierLabel = ` ${getMonthlyPlanName(tier)}`;
                     }
 
                     creditsHtml = `<span class="text-xs font-bold px-2 py-1 rounded-full block w-fit mb-1" style="${pillStyle}">${formatCurrency(member.monthlyPlanAmount)}${_('label_mo')}${tierLabel}</span>`;
-                    // --- END: UPDATED MONTHLY TIER DISPLAY LOGIC ---
-
                     expiryHtml = `<span class="text-sm block mb-1">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</span>`;
                 } else {
                     const walletEntries = Object.entries(wallet);
-                    if (walletEntries.length === 0) {
-                        // --- FIXED: Use Pill Style for 0 Credits ---
-                        const neutralColor = '#94a3b8'; // Slate 400
+                    
+                    const activeWalletEntries = walletEntries.filter(([_, data]) => {
+                        const balance = data.balance || 0;
+                        const initial = data.initialCredits || 0;
+                        return !(balance === 0 && initial === 0);
+                    });
+
+                    if (activeWalletEntries.length === 0) {
+                        const neutralColor = '#94a3b8'; 
                         creditsHtml = `
                             <div class="mb-1">
                                 <span class="font-bold text-xs px-2.5 py-1 rounded-full inline-block" style="background-color: ${neutralColor}26; color: ${neutralColor};">
@@ -4205,7 +4261,7 @@ ${_('whatsapp_closing')}
                             </div>`;
                         expiryHtml = `<span class="text-sm text-slate-400">--</span>`;
                     } else {
-                        walletEntries.forEach(([typeId, data]) => {
+                        activeWalletEntries.forEach(([typeId, data]) => {
                             const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                             const color = typeDef?.color || '#64748b'; 
                             const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Credits');
@@ -4228,14 +4284,11 @@ ${_('whatsapp_closing')}
                         });
                     }
                 }
-                // --- END NEW LOGIC ---
 
-                // Status Indicator Logic (Using helper)
                 const { isCritical, isWarning, statusText } = getWalletStatus(member);
                 let statusIndicatorHTML = '';
                 let memberNotes = member.notes ? member.notes.trim() : '';
                 
-                // Build Status Dot
                 if (isCritical) {
                     statusIndicatorHTML = `<span class="status-indicator-dot bg-red-500"></span>`;
                 } else if (isWarning) {
@@ -4244,7 +4297,6 @@ ${_('whatsapp_closing')}
                     statusIndicatorHTML = `<span class="status-indicator-dot bg-blue-500"></span>`;
                 }
 
-                // Build Tooltip (Status + Notes)
                 let tooltipContent = '';
                 if (isCritical || isWarning) tooltipContent = statusText;
                 if (memberNotes) {
@@ -4332,7 +4384,7 @@ ${_('whatsapp_closing')}
         };
 
         if (isOwner) {
-            // 1. Export Member Summary (Updated for Wallet)
+            // 1. Export Member Summary (Updated for Wallet & Tiers)
             container.querySelector('#exportSummaryBtn').onclick = (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4349,18 +4401,24 @@ ${_('whatsapp_closing')}
                 filteredUsers.sort((a, b) => a.name.localeCompare(b.name));
     
                 const exportData = filteredUsers.map(member => {
-                    // --- NEW: Generate Wallet String ---
+                    // --- UPDATED WALLET STRING GENERATION ---
                     let creditsString = _('label_na');
                     let expiryString = _('label_na');
+                    let planTypeString = _('export_value_credits');
 
                     if (member.monthlyPlan) {
-                        creditsString = "Monthly Plan";
+                        // UPDATED: Include Tier Name
+                        const tierId = member.monthlyPlanTierId;
+                        const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
+                        const tierName = getMonthlyPlanName(tier);
+                        
+                        planTypeString = `${_('export_value_monthly')} - ${tierName}`;
+                        creditsString = _('label_monthly_plan');
                         expiryString = member.paymentDueDate || '';
                     } else {
                         const wallet = getMemberWallet(member);
                         const entries = Object.entries(wallet);
                         if (entries.length > 0) {
-                            // Format: "General: 10/15; PT: 5/10"
                             creditsString = entries.map(([typeId, data]) => {
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Unknown');
@@ -4368,7 +4426,6 @@ ${_('whatsapp_closing')}
                                 return `${name}: ${data.balance}/${initial}`;
                             }).join('; ');
 
-                            // Format: "General: 2024-12-31; PT: 2025-01-01"
                             expiryString = entries.map(([typeId, data]) => {
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const name = typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Unknown');
@@ -4378,19 +4435,18 @@ ${_('whatsapp_closing')}
                             creditsString = "0";
                         }
                     }
-                    // -----------------------------------
 
                     return {
                         [_('export_header_name')]: member.name,
                         [_('export_header_email')]: member.email,
                         [_('export_header_phone')]: member.phone,
                         [_('export_header_join_date')]: member.joinDate ? member.joinDate.slice(0, 10) : '',
-                        [_('export_header_plan_type')]: member.monthlyPlan ? _('export_value_monthly') : _('export_value_credits'),
+                        [_('export_header_plan_type')]: planTypeString, // UPDATED
                         [_('export_header_monthly_amount')]: member.monthlyPlanAmount || 0,
                         [_('export_header_due_date')]: member.monthlyPlan ? (member.paymentDueDate || '') : _('label_na'),
-                        [_('export_header_credits_remaining')]: creditsString, // Updated
+                        [_('export_header_credits_remaining')]: creditsString,
                         [_('export_header_credits_initial')]: member.monthlyPlan ? _('label_na') : (member.initialCredits || 0),
-                        [_('export_header_expiry_date')]: expiryString, // Updated
+                        [_('export_header_expiry_date')]: expiryString,
                         [_('export_header_last_active')]: member.lastBooking ? member.lastBooking.slice(0, 10) : ''
                     };
                 });
@@ -4417,11 +4473,9 @@ ${_('whatsapp_closing')}
                                 const sportType = appState.sportTypes.find(st => st.id === cls.sportTypeId);
                                 const tutor = appState.tutors.find(t => t.id === cls.tutorId);
                                 
-                                // --- NEW: Resolve Credit Type Name ---
                                 const typeId = bookingInfo.creditTypeId || cls.costCreditTypeId || 'general';
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
                                 const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Unknown');
-                                // -------------------------------------
 
                                 exportData.push({
                                     [_('export_header_name')]: member.name,
@@ -4430,7 +4484,7 @@ ${_('whatsapp_closing')}
                                     [_('export_header_class_name')]: getSportTypeName(sportType),
                                     [_('export_header_tutor_name')]: tutor?.name || _('unknown_tutor'),
                                     [_('export_header_credits_used')]: cls.credits,
-                                    [_('label_credit_type')]: typeName, // Corrected Translation Key
+                                    [_('label_credit_type')]: typeName, 
                                     [_('export_header_attended')]: (cls.attendedBy && cls.attendedBy[member.id]) ? _('export_value_yes') : _('export_value_no'),
                                     [_('export_header_booked_on')]: bookingInfo.bookedAt ? bookingInfo.bookedAt.slice(0, 10) : '',
                                     [_('export_header_booked_by')]: bookingInfo.bookedBy || _('export_value_unknown')
@@ -4456,7 +4510,7 @@ ${_('whatsapp_closing')}
                 }
             };
     
-            // 3. Export Financial History (Preserved)
+            // 3. Export Financial History (Updated for Tiers & Credit Types)
             container.querySelector('#exportFinancialHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4468,15 +4522,21 @@ ${_('whatsapp_closing')}
                     const members = allUsers.filter(u => u.role === 'member' && !u.isDeleted);
                     
                     members.forEach(member => {
+                        // Credit Purchases
                         if (member.purchaseHistory) {
                             firebaseObjectToArray(member.purchaseHistory)
                                 .filter(p => p.status !== 'deleted')
                                 .forEach(p => {
+                                    // UPDATED: Include Credit Type
+                                    const typeId = p.creditTypeId || 'general';
+                                    const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
+                                    const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Credits');
+
                                     exportData.push({
                                         [_('export_header_name')]: member.name,
                                         [_('export_header_email')]: member.email,
                                         [_('export_header_transaction_date')]: p.date ? p.date.slice(0, 10) : '',
-                                        [_('export_header_transaction_type')]: _('export_value_credit_purchase'),
+                                        [_('export_header_transaction_type')]: `${_('export_value_credit_purchase')} (${typeName})`, // UPDATED
                                         [_('export_header_description')]: _('export_desc_credits').replace('{count}', p.credits),
                                         [_('export_header_amount')]: p.amount,
                                         [_('export_header_modified_by')]: p.lastModifiedBy || '',
@@ -4484,15 +4544,21 @@ ${_('whatsapp_closing')}
                                     });
                                 });
                         }
+                        // Monthly Payments
                         if (member.paymentHistory) {
                             firebaseObjectToArray(member.paymentHistory)
                                 .filter(p => p.status !== 'deleted')
                                 .forEach(p => {
+                                    // UPDATED: Include Monthly Tier
+                                    const tierId = p.monthlyPlanTierId;
+                                    const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
+                                    const tierName = getMonthlyPlanName(tier);
+
                                     exportData.push({
                                         [_('export_header_name')]: member.name,
                                         [_('export_header_email')]: member.email,
                                         [_('export_header_transaction_date')]: p.date ? p.date.slice(0, 10) : '',
-                                        [_('export_header_transaction_type')]: _('export_value_monthly_payment'),
+                                        [_('export_header_transaction_type')]: `${_('export_value_monthly_payment')} (${tierName})`, // UPDATED
                                         [_('export_header_description')]: _('export_desc_months').replace('{count}', p.monthsPaid),
                                         [_('export_header_amount')]: p.amount,
                                         [_('export_header_modified_by')]: p.lastModifiedBy || '',
@@ -4624,11 +4690,7 @@ ${_('whatsapp_closing')}
 
             container.innerHTML = sortedHistory.map(p => {
                 const isDeleted = p.status === 'deleted';
-                
-                const costPerCreditText = p.costPerCredit 
-                    ? _('label_cost_per_credit').replace('{cost}', formatCurrency(p.costPerCredit)) 
-                    : _('label_na');
-                
+                const costPerCreditText = p.costPerCredit ? _('label_cost_per_credit').replace('{cost}', formatCurrency(p.costPerCredit)) : _('label_na');
                 const creditsUnit = p.credits === 1 ? _('label_credit_single') : _('label_credit_plural');
                 
                 const entryText = _('history_purchase_entry')
@@ -4638,11 +4700,9 @@ ${_('whatsapp_closing')}
 
                 const typeId = p.creditTypeId || 'general';
                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
-                // USE HELPER
                 const typeName = typeDef ? getCreditTypeName(typeDef) : (typeId === 'general' ? 'General' : 'Credits');
                 const typeColor = typeDef?.color || '#64748b';
 
-                // UPDATED: Light background, dark text
                 const typePill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${typeColor}26; color: ${typeColor}">${typeName}</span>`;
 
                 let auditMessage = '';
@@ -4670,7 +4730,6 @@ ${_('whatsapp_closing')}
              container.innerHTML = `<p class="text-sm text-slate-500 text-center py-4">${_('no_purchase_history')}</p>`;
         }
         
-        // ... (Event listeners logic remains the same) ...
         container.onclick = (e) => {
             const editTarget = e.target.closest('[data-history-item-id] .flex-grow');
             const removeTarget = e.target.closest('.remove-history-btn');
@@ -4695,13 +4754,24 @@ ${_('whatsapp_closing')}
                     updates[`/users/${memberId}/purchaseHistory/${historyId}/lastModifiedBy`] = appState.currentUser.name;
                     updates[`/users/${memberId}/purchaseHistory/${historyId}/lastModifiedAt`] = new Date().toISOString();
 
+                    // --- CLEANUP LOGIC FOR DELETION ---
                     const typeId = entryToUpdate.creditTypeId || 'general';
                     const wallet = getMemberWallet(member);
                     const currentBalance = wallet[typeId]?.balance || 0;
-                    const currentInitial = wallet[typeId]?.initialCredits || currentBalance; 
+                    const currentInitial = wallet[typeId]?.initialCredits || 0; 
                     
-                    updates[`/users/${memberId}/wallet/${typeId}/balance`] = Math.max(0, currentBalance - entryToUpdate.credits);
-                    updates[`/users/${memberId}/wallet/${typeId}/initialCredits`] = Math.max(0, currentInitial - entryToUpdate.credits);
+                    const newBalance = Math.max(0, currentBalance - entryToUpdate.credits);
+                    const newInitial = Math.max(0, currentInitial - entryToUpdate.credits);
+
+                    if (newBalance === 0 && newInitial === 0) {
+                        // Wallet is empty after deleting this purchase -> Remove node
+                        updates[`/users/${memberId}/wallet/${typeId}`] = null;
+                    } else {
+                        // Still has credits/history -> Update values
+                        updates[`/users/${memberId}/wallet/${typeId}/balance`] = newBalance;
+                        updates[`/users/${memberId}/wallet/${typeId}/initialCredits`] = newInitial;
+                    }
+                    // ---------------------------------
 
                     database.ref().update(updates)
                         .then(() => {
@@ -4748,7 +4818,7 @@ ${_('whatsapp_closing')}
         };
     }
     
-    function _renderMemberPaymentHistory(member, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart) {
+    function _renderMemberPaymentHistory(member, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart, monthlyTierSelect) {
         container.innerHTML = ''; 
         const paymentHistory = firebaseObjectToArray(member.paymentHistory);
         
@@ -4764,20 +4834,15 @@ ${_('whatsapp_closing')}
                     .replace('{quantity}', p.monthsPaid)
                     .replace('{unit}', monthUnit);
 
-                // --- START: Monthly Tier Pill Logic ---
+                // --- Monthly Tier Pill Logic ---
                 const tierId = p.monthlyPlanTierId;
                 const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
                 let tierPill = '';
                 
                 if (tier) {
-                    // Similar style to Credit Type Pills: Light background + Colored Text
                     const name = getMonthlyPlanName(tier);
                     tierPill = `<span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 align-middle" style="background-color: ${tier.color}26; color: ${tier.color}">${name}</span>`;
-                } else if (tierId === 'legacy' || (p.monthlyPlanTierId === undefined && member.monthlyPlan)) {
-                    // Optional: Show a 'Legacy' pill or nothing for old records. 
-                    // Showing nothing keeps it cleaner for historical data.
                 }
-                // --- END: Monthly Tier Pill Logic ---
 
                 let auditMessage = '';
                 if (p.lastModifiedBy) {
@@ -4833,7 +4898,8 @@ ${_('whatsapp_closing')}
                         .then(() => {
                             database.ref(`/users/${memberId}`).once('value', snapshot => {
                                 const updatedMember = { id: snapshot.key, ...snapshot.val() };
-                                _renderMemberPaymentHistory(updatedMember, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart);
+                                // Pass monthlyTierSelect here as well
+                                _renderMemberPaymentHistory(updatedMember, container, historyIdInput, monthsPaidInput, paymentAmountInput, onEditStart, monthlyTierSelect);
                                 showMessageBox(_('info_payment_entry_deleted'), 'info');
                             });
                         })
@@ -4850,6 +4916,12 @@ ${_('whatsapp_closing')}
                     monthsPaidInput.value = historyEntry.monthsPaid;
                     monthsPaidInput.dispatchEvent(new Event('input'));
                     historyIdInput.value = id;
+                    
+                    // --- UPDATE DROPDOWN TO MATCH HISTORY ---
+                    if (monthlyTierSelect) {
+                        monthlyTierSelect.value = historyEntry.monthlyPlanTierId || "";
+                    }
+                    
                     parentItem.classList.add('history-entry-highlighted');
                     showMessageBox(_('info_editing_payment_from').replace('{date}', formatShortDateWithYear(historyEntry.date)), 'info');
                     onEditStart();
@@ -4859,7 +4931,7 @@ ${_('whatsapp_closing')}
     }
 
     function openMemberModal(memberToEdit) {
-        // ... (HTML Template remains exactly the same as previous step) ...
+        // ... (HTML Template is SAME) ...
         DOMElements.memberModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -4971,7 +5043,9 @@ ${_('whatsapp_closing')}
         
         const modal = DOMElements.memberModal;
         const form = modal.querySelector('form');
-        // ... (Previous Input selectors) ...
+        const submitBtn = form.querySelector('.submit-btn');
+
+        // ... (Selectors - same as before) ...
         const purchaseAmountInput = form.querySelector('#purchaseAmount');
         const creditsInput = form.querySelector('#creditsToAdd');
         const creditTypeSelect = form.querySelector('#creditTypeSelect'); 
@@ -4993,29 +5067,42 @@ ${_('whatsapp_closing')}
         const cancelPaymentEditBtn = form.querySelector('#cancelPaymentEditBtn');
         const monthlyPlanAmountInput = form.querySelector('#monthlyPlanAmount');
         
-        // Monthly Tier Selector Logic
+        // ... (Monthly Tier Logic - same as previous) ...
         const monthlyTierSelect = form.querySelector('#monthlyTierSelect');
         const monthlyTiers = appState.monthlyPlanTiers || [];
-        let tierOptionsHTML = `<option value="">${_('label_legacy_tier')}</option>`;
-        if (monthlyTiers.length > 0) {
-            tierOptionsHTML += monthlyTiers.map(t => `<option value="${t.id}">${getMonthlyPlanName(t)}</option>`).join('');
-        }
+        const hasLegacyMembers = appState.users.some(u => u.role === 'member' && !u.isDeleted && u.monthlyPlan && !u.monthlyPlanTierId);
+        const showLegacyOption = hasLegacyMembers || (memberToEdit.monthlyPlan && !memberToEdit.monthlyPlanTierId);
+
+        let tierOptionsHTML = '';
+        if (showLegacyOption) tierOptionsHTML += `<option value="">${_('label_legacy_tier')}</option>`;
+        if (monthlyTiers.length > 0) tierOptionsHTML += monthlyTiers.map(t => `<option value="${t.id}">${getMonthlyPlanName(t)}</option>`).join('');
         monthlyTierSelect.innerHTML = tierOptionsHTML;
-        if (monthlyTiers.length === 0) {
-            monthlyTierSelect.parentElement.classList.add('hidden');
-        }
+
+        if (monthlyTiers.length === 0) monthlyTierSelect.parentElement.classList.add('hidden');
+        else monthlyTierSelect.parentElement.classList.remove('hidden');
         
-        if (memberToEdit.monthlyPlanTierId) {
-            monthlyTierSelect.value = memberToEdit.monthlyPlanTierId;
-        } else {
-            monthlyTierSelect.value = ""; 
+        if (memberToEdit.monthlyPlanTierId) monthlyTierSelect.value = memberToEdit.monthlyPlanTierId;
+        else {
+            if (!showLegacyOption && monthlyTiers.length > 0) monthlyTierSelect.value = monthlyTiers[0].id;
+            else monthlyTierSelect.value = ""; 
         }
 
-        // ... (Existing Logic for Credit Types, Quick Select buttons, Action Buttons) ...
+        // ... (Credit Type Dropdown, Quick Selects - same as before) ...
         const creditTypes = appState.creditTypes || [];
-        let optionsHTML = `<option value="general">General Credits (Default)</option>`;
+        let optionsHTML = `<option value="" disabled selected>${_('placeholder_select_credit_type')}</option>`;
+        const hasGeneralCredits = appState.users.some(u => 
+            !u.isDeleted && (
+                (u.credits !== undefined && u.credits > 0) || 
+                (u.wallet?.general?.balance > 0) || 
+                (u.wallet?.general?.initialCredits > 0)
+            )
+        );
+        const memberHasGeneral = memberToEdit.credits !== undefined || memberToEdit.wallet?.general;
+        if (hasGeneralCredits || memberHasGeneral) {
+            optionsHTML += `<option value="general">General Credits (Default)</option>`;
+        }
         if (creditTypes.length > 0) {
-            optionsHTML = creditTypes.map(ct => `<option value="${ct.id}">${getCreditTypeName(ct)}</option>`).join('');
+            optionsHTML += creditTypes.map(ct => `<option value="${ct.id}">${getCreditTypeName(ct)}</option>`).join('');
         }
         creditTypeSelect.innerHTML = optionsHTML;
 
@@ -5054,6 +5141,7 @@ ${_('whatsapp_closing')}
         const plusIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>`;
         const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>`;
 
+        // --- CREDIT BUTTON LOGIC ---
         const setCreditButtonToAddMode = () => {
             creditActionBtn.innerHTML = plusIconSVG;
             creditActionBtn.title = _('tooltip_add_entry');
@@ -5061,9 +5149,13 @@ ${_('whatsapp_closing')}
             purchaseAmountInput.value = '';
             creditsInput.value = '';
             historyIdInput.value = '';
+            expiryDateInput.value = ''; 
+            creditTypeSelect.value = ""; 
             creditTypeSelect.disabled = false; 
             historyContainer.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
             cancelCreditEditBtn.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         };
 
         const setCreditButtonToEditMode = () => {
@@ -5071,133 +5163,168 @@ ${_('whatsapp_closing')}
             creditActionBtn.title = _('tooltip_save_entry');
             creditActionBtn.className = 'creditActionBtn bg-indigo-600 hover:bg-indigo-700 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
             cancelCreditEditBtn.classList.remove('hidden');
-            creditTypeSelect.disabled = false; 
+            creditTypeSelect.disabled = false;
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
         };
-        setCreditButtonToAddMode(); 
 
+        setCreditButtonToAddMode(); 
         cancelCreditEditBtn.onclick = setCreditButtonToAddMode;
 
-        creditActionBtn.onclick = () => {
-            const historyId = historyIdInput.value;
-            let memberId = memberToEdit.id; 
-            const amount = parseFloat(purchaseAmountInput.value);
-            const credits = parseFloat(creditsInput.value);
-            const selectedTypeId = creditTypeSelect.value;
-            const expiryDate = expiryDateInput.value;
-
-            if (isNaN(amount) || isNaN(credits) || amount < 0 || credits < 0) { 
-                showMessageBox(_('error_invalid_amount_and_credits'), 'error'); 
-                return; 
-            }
-            if (!expiryDate) {
-                showMessageBox(_('error_expiry_date_required'), 'error');
-                return;
-            }
-
-            const wallet = getMemberWallet(memberToEdit);
-
-            if (historyId) {
-                const originalEntry = firebaseObjectToArray(memberToEdit.purchaseHistory).find(p => p.id === historyId);
-                if (!originalEntry) { showMessageBox(_('error_find_original_entry_failed'), 'error'); return; }
-                
-                const oldTypeId = originalEntry.creditTypeId || 'general';
-                const newTypeId = selectedTypeId;
-                
-                const entryUpdate = { 
-                    amount, 
-                    credits, 
-                    creditTypeId: newTypeId,
-                    costPerCredit: amount / credits, 
-                    lastModifiedBy: appState.currentUser.name, 
-                    lastModifiedAt: new Date().toISOString() 
-                };
-
-                database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate)
-                    .then(() => {
-                        const updates = {};
-                        const oldWallet = wallet[oldTypeId] || { balance: 0, initialCredits: 0 };
-                        const newWallet = wallet[newTypeId] || { balance: 0, initialCredits: 0 };
-
-                        if (oldTypeId === newTypeId) {
-                            const diff = credits - originalEntry.credits;
-                            const currentBalance = oldWallet.balance;
-                            const currentInitial = (oldWallet.initialCredits !== undefined) ? oldWallet.initialCredits : currentBalance;
-                            updates[`/users/${memberId}/wallet/${oldTypeId}/balance`] = currentBalance + diff;
-                            updates[`/users/${memberId}/wallet/${oldTypeId}/initialCredits`] = currentInitial + diff;
-                            updates[`/users/${memberId}/wallet/${oldTypeId}/expiryDate`] = expiryDate;
-                        } else {
-                            const isLegacyMigration = oldTypeId === 'general' && memberToEdit.credits !== undefined;
-                            if (isLegacyMigration) {
-                                updates[`/users/${memberId}/wallet/${newTypeId}/balance`] = (newWallet.balance || 0) + memberToEdit.credits;
-                                updates[`/users/${memberId}/wallet/${newTypeId}/initialCredits`] = (newWallet.initialCredits || 0) + memberToEdit.initialCredits;
-                                updates[`/users/${memberId}/wallet/${newTypeId}/expiryDate`] = expiryDate;
-                                updates[`/users/${memberId}/wallet/general`] = null;
-                                updates[`/users/${memberId}/credits`] = null;
-                                updates[`/users/${memberId}/initialCredits`] = null;
-                                updates[`/users/${memberId}/expiryDate`] = null;
-                            } else {
-                                const oldBalance = oldWallet.balance;
-                                const oldInitial = (oldWallet.initialCredits !== undefined) ? oldWallet.initialCredits : oldBalance;
-                                const newOldBalance = Math.max(0, oldBalance - originalEntry.credits);
-                                const newOldInitial = Math.max(0, oldInitial - originalEntry.credits);
-                                if (oldTypeId === 'general' && newOldBalance === 0 && newOldInitial === 0) {
-                                     updates[`/users/${memberId}/wallet/general`] = null;
-                                } else {
-                                     updates[`/users/${memberId}/wallet/${oldTypeId}/balance`] = newOldBalance;
-                                     updates[`/users/${memberId}/wallet/${oldTypeId}/initialCredits`] = newOldInitial;
-                                }
-                                updates[`/users/${memberId}/wallet/${newTypeId}/balance`] = (newWallet.balance || 0) + credits;
-                                updates[`/users/${memberId}/wallet/${newTypeId}/initialCredits`] = (newWallet.initialCredits || 0) + credits;
-                                updates[`/users/${memberId}/wallet/${newTypeId}/expiryDate`] = expiryDate;
-                            }
-                        }
-                        if (memberToEdit.credits !== undefined) {
-                            updates[`/users/${memberId}/credits`] = null;
-                            updates[`/users/${memberId}/initialCredits`] = null;
-                            updates[`/users/${memberId}/expiryDate`] = null;
-                        }
-                        return database.ref().update(updates);
-                    })
-                    .then(() => {
-                        showMessageBox(_('success_purchase_entry_updated'), 'success');
-                        refreshMemberData();
-                    })
-                    .catch(error => showMessageBox(_('error_update_failed').replace('{error}', error.message), 'error'));
-            
-            } else {
-                const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
-                const newPurchase = { 
-                    date: new Date().toISOString(), 
-                    amount, 
-                    credits, 
-                    creditTypeId: selectedTypeId,
-                    costPerCredit: amount / credits, 
-                    status: 'active', 
-                    lastModifiedBy: appState.currentUser.name, 
-                    lastModifiedAt: new Date().toISOString() 
-                };
-
-                newPurchaseRef.set(newPurchase)
-                    .then(() => {
-                        const currentBalance = wallet[selectedTypeId]?.balance || 0;
-                        const currentInitial = (wallet[selectedTypeId]?.initialCredits !== undefined) ? wallet[selectedTypeId].initialCredits : currentBalance;
-                        const updates = {};
-                        updates[`/users/${memberId}/wallet/${selectedTypeId}/balance`] = currentBalance + credits;
-                        updates[`/users/${memberId}/wallet/${selectedTypeId}/initialCredits`] = currentInitial + credits;
-                        updates[`/users/${memberId}/wallet/${selectedTypeId}/expiryDate`] = expiryDate;
-                        if (memberToEdit.credits !== undefined) {
-                            updates[`/users/${memberId}/credits`] = null;
-                            updates[`/users/${memberId}/initialCredits`] = null;
-                            updates[`/users/${memberId}/expiryDate`] = null;
-                        }
-                        return database.ref().update(updates);
-                    })
-                    .then(() => {
-                        showMessageBox(_('success_credit_entry_added'), 'success');
-                        refreshMemberData();
-                    })
-                    .catch(error => showMessageBox(_('error_adding_credits').replace('{error}', error.message), 'error'));
-            }
+        creditActionBtn.onclick = async () => {
+             // ... (same as before) ...
+             const historyId = historyIdInput.value;
+             let memberId = memberToEdit.id; 
+             const amount = parseFloat(purchaseAmountInput.value);
+             const credits = parseFloat(creditsInput.value);
+             const selectedTypeId = creditTypeSelect.value;
+             const expiryDate = expiryDateInput.value;
+ 
+             if (!selectedTypeId) {
+                 showMessageBox(_('error_select_credit_type'), 'error');
+                 return;
+             }
+ 
+             if (isNaN(amount) || isNaN(credits) || amount < 0 || credits < 0) { 
+                 showMessageBox(_('error_invalid_amount_and_credits'), 'error'); 
+                 return; 
+             }
+             if (!expiryDate) {
+                 showMessageBox(_('error_expiry_date_required'), 'error');
+                 return;
+             }
+ 
+             // 1. UI LOCK
+             creditActionBtn.disabled = true;
+             const originalBtnContent = creditActionBtn.innerHTML;
+             creditActionBtn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+ 
+             try {
+                 // 2. FETCH FRESH DATA
+                 const snapshot = await database.ref(`/users/${memberId}`).once('value');
+                 const freshMember = { id: snapshot.key, ...snapshot.val() };
+                 const wallet = getMemberWallet(freshMember);
+                 const freshPurchaseHistory = firebaseObjectToArray(freshMember.purchaseHistory);
+ 
+                 if (historyId) {
+                     // --- EDIT LOGIC (Standard Math Diff) ---
+                     const originalEntry = freshPurchaseHistory.find(p => p.id === historyId);
+                     
+                     if (!originalEntry || originalEntry.status === 'deleted') { 
+                         throw new Error("This entry no longer exists or was deleted."); 
+                     }
+                     
+                     const oldTypeId = originalEntry.creditTypeId || 'general';
+                     const newTypeId = selectedTypeId;
+                     const originalEntryCredits = parseFloat(originalEntry.credits || 0);
+                     
+                     const entryUpdate = { 
+                         amount, 
+                         credits, 
+                         creditTypeId: newTypeId,
+                         costPerCredit: credits > 0 ? amount / credits : 0, 
+                         lastModifiedBy: appState.currentUser.name, 
+                         lastModifiedAt: new Date().toISOString() 
+                     };
+ 
+                     await database.ref(`/users/${memberId}/purchaseHistory/${historyId}`).update(entryUpdate);
+ 
+                     const updates = {};
+                     const oldWallet = wallet[oldTypeId] || { balance: 0, initialCredits: 0 };
+                     const newWallet = wallet[newTypeId] || { balance: 0, initialCredits: 0 };
+                     
+                     const oldBalance = parseFloat(oldWallet.balance || 0);
+                     const oldInitial = parseFloat(oldWallet.initialCredits !== undefined ? oldWallet.initialCredits : oldBalance);
+                     
+                     const newBalance = parseFloat(newWallet.balance || 0);
+                     const newInitial = parseFloat(newWallet.initialCredits !== undefined ? newWallet.initialCredits : newBalance);
+ 
+                     if (oldTypeId === newTypeId) {
+                         const diff = credits - originalEntryCredits;
+                         updates[`/users/${memberId}/wallet/${oldTypeId}/balance`] = oldBalance + diff;
+                         updates[`/users/${memberId}/wallet/${oldTypeId}/initialCredits`] = oldInitial + diff;
+                         updates[`/users/${memberId}/wallet/${oldTypeId}/expiryDate`] = expiryDate;
+                     } else {
+                         // Swap Logic
+                         const adjustedOldBalance = Math.max(0, oldBalance - originalEntryCredits);
+                         const adjustedOldInitial = Math.max(0, oldInitial - originalEntryCredits);
+                         
+                         if (adjustedOldBalance === 0 && adjustedOldInitial === 0) {
+                             updates[`/users/${memberId}/wallet/${oldTypeId}`] = null;
+                         } else {
+                             updates[`/users/${memberId}/wallet/${oldTypeId}/balance`] = adjustedOldBalance;
+                             updates[`/users/${memberId}/wallet/${oldTypeId}/initialCredits`] = adjustedOldInitial;
+                         }
+ 
+                         updates[`/users/${memberId}/wallet/${newTypeId}/balance`] = newBalance + credits;
+                         updates[`/users/${memberId}/wallet/${newTypeId}/initialCredits`] = newInitial + credits;
+                         updates[`/users/${memberId}/wallet/${newTypeId}/expiryDate`] = expiryDate;
+                     }
+ 
+                     if (freshMember.credits !== undefined) {
+                         updates[`/users/${memberId}/credits`] = null;
+                         updates[`/users/${memberId}/initialCredits`] = null;
+                         updates[`/users/${memberId}/expiryDate`] = null;
+                     }
+ 
+                     await database.ref().update(updates);
+                     showMessageBox(_('success_purchase_entry_updated'), 'success');
+ 
+                 } else {
+                     // --- ADD NEW LOGIC (WITH HYBRID PACK RESET) ---
+                     const newPurchaseRef = database.ref(`/users/${memberId}/purchaseHistory`).push();
+                     const newPurchase = { 
+                         date: new Date().toISOString(), 
+                         amount, 
+                         credits, 
+                         creditTypeId: selectedTypeId,
+                         costPerCredit: credits > 0 ? amount / credits : 0, 
+                         status: 'active', 
+                         lastModifiedBy: appState.currentUser.name, 
+                         lastModifiedAt: new Date().toISOString() 
+                     };
+ 
+                     await newPurchaseRef.set(newPurchase);
+ 
+                     const targetWallet = wallet[selectedTypeId] || { balance: 0, initialCredits: 0 };
+                     const currentBalance = parseFloat(targetWallet.balance || 0);
+                     const currentInitial = parseFloat(targetWallet.initialCredits !== undefined ? targetWallet.initialCredits : currentBalance);
+                     
+                     // 1. Calculate Balance (Always Accumulate)
+                     const newBalance = currentBalance + credits;
+ 
+                     // 2. Calculate Initial (Hybrid Logic)
+                     let newInitial;
+                     if (currentBalance === 0) {
+                         newInitial = credits;
+                     } else {
+                         newInitial = currentInitial + credits;
+                     }
+                     
+                     const updates = {};
+                     updates[`/users/${memberId}/wallet/${selectedTypeId}/balance`] = newBalance;
+                     updates[`/users/${memberId}/wallet/${selectedTypeId}/initialCredits`] = newInitial;
+                     updates[`/users/${memberId}/wallet/${selectedTypeId}/expiryDate`] = expiryDate;
+ 
+                     if (freshMember.credits !== undefined) {
+                         updates[`/users/${memberId}/credits`] = null;
+                         updates[`/users/${memberId}/initialCredits`] = null;
+                         updates[`/users/${memberId}/expiryDate`] = null;
+                     }
+ 
+                     await database.ref().update(updates);
+                     showMessageBox(_('success_credit_entry_added'), 'success');
+                 }
+ 
+                 refreshMemberData();
+ 
+             } catch (error) {
+                 console.error("Transaction Error:", error);
+                 showMessageBox(_('error_update_failed').replace('{error}', error.message), 'error');
+             } finally {
+                 creditActionBtn.innerHTML = originalBtnContent;
+                 creditActionBtn.disabled = false;
+             }
         };
 
         const refreshMemberData = () => {
@@ -5216,15 +5343,34 @@ ${_('whatsapp_closing')}
         monthsPaidInput.oninput = autoCalculatePayment;
         monthlyPlanAmountInput.addEventListener('input', autoCalculatePayment);
 
+        // --- START: UPDATED BUTTON LOGIC FOR PAYMENTS (RESET TIER) ---
         const setPaymentButtonToAddMode = () => {
             paymentActionBtn.innerHTML = plusIconSVG;
             paymentActionBtn.title = _('tooltip_add_entry');
             paymentActionBtn.className = 'paymentActionBtn bg-green-500 hover:bg-green-600 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
+            
+            // Reset Fields
             monthsPaidInput.value = '';
             paymentAmountInput.value = '';
             paymentHistoryIdInput.value = '';
+            
+            // Reset Dropdown to Current Member Tier
+            if (memberToEdit.monthlyPlanTierId) {
+                monthlyTierSelect.value = memberToEdit.monthlyPlanTierId;
+            } else {
+                if (!showLegacyOption && monthlyTiers.length > 0) {
+                    monthlyTierSelect.value = monthlyTiers[0].id;
+                } else {
+                    monthlyTierSelect.value = ""; 
+                }
+            }
+
             paymentHistoryContainer.querySelectorAll('.history-entry-highlighted').forEach(el => el.classList.remove('history-entry-highlighted'));
             cancelPaymentEditBtn.classList.add('hidden');
+            
+            // Re-enable Main Save Button
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         };
 
         const setPaymentButtonToEditMode = () => {
@@ -5232,18 +5378,22 @@ ${_('whatsapp_closing')}
             paymentActionBtn.title = _('tooltip_save_entry');
             paymentActionBtn.className = 'paymentActionBtn bg-indigo-600 hover:bg-indigo-700 font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white';
             cancelPaymentEditBtn.classList.remove('hidden');
+            
+            // Disable Main Save Button
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
         };
+        // --- END: UPDATED BUTTON LOGIC FOR PAYMENTS ---
 
         setPaymentButtonToAddMode();
         cancelPaymentEditBtn.onclick = setPaymentButtonToAddMode;
 
-        // --- UPDATE HERE: Capture Tier ID on Payment Save ---
+        // ... (paymentActionBtn.onclick - Same as before) ...
         paymentActionBtn.onclick = () => {
             const historyId = paymentHistoryIdInput.value;
             const memberId = memberToEdit.id;
             const monthsPaid = parseInt(monthsPaidInput.value);
             const amount = parseFloat(paymentAmountInput.value);
-            // Capture the currently selected Tier ID from the dropdown
             const currentTierId = monthlyTierSelect.value || null;
 
             if (isNaN(monthsPaid) || monthsPaid <= 0) { showMessageBox(_('error_months_paid_invalid'), 'error'); return; }
@@ -5251,33 +5401,31 @@ ${_('whatsapp_closing')}
             if (isNaN(amount) || amount < 0) { showMessageBox(_('error_payment_amount_invalid'), 'error'); return; }
 
             if (historyId) {
-                // Edit: Include tier ID in update
                 const entryUpdate = { 
                     monthsPaid, 
                     amount, 
-                    monthlyPlanTierId: currentTierId, // Save the tier
+                    monthlyPlanTierId: currentTierId,
                     lastModifiedBy: appState.currentUser.name, 
                     lastModifiedAt: new Date().toISOString() 
                 };
                 database.ref(`/users/${memberId}/paymentHistory/${historyId}`).update(entryUpdate).then(() => {
                     showMessageBox(_('success_payment_entry_updated'), 'success');
-                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode); setPaymentButtonToAddMode(); });
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode, monthlyTierSelect); setPaymentButtonToAddMode(); });
                 }).catch(error => showMessageBox(_('error_update_failed').replace('{error}', error.message), 'error'));
             } else {
-                // Add: Include tier ID in new entry
                 const newPaymentRef = database.ref(`/users/${memberId}/paymentHistory`).push();
                 const newPayment = { 
                     date: new Date().toISOString(), 
                     monthsPaid, 
                     amount, 
-                    monthlyPlanTierId: currentTierId, // Save the tier
+                    monthlyPlanTierId: currentTierId,
                     status: 'active', 
                     lastModifiedBy: appState.currentUser.name, 
                     lastModifiedAt: new Date().toISOString() 
                 };
                 newPaymentRef.set(newPayment).then(() => {
                     showMessageBox(_('success_payment_entry_added'), 'success');
-                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode); setPaymentButtonToAddMode(); });
+                    database.ref(`/users/${memberId}`).once('value', snapshot => { memberToEdit = { id: snapshot.key, ...snapshot.val() }; _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode, monthlyTierSelect); setPaymentButtonToAddMode(); });
                 }).catch(error => showMessageBox(_('error_adding_payment').replace('{error}', error.message), 'error'));
             }
         };
@@ -5286,6 +5434,7 @@ ${_('whatsapp_closing')}
         form.querySelector('#memberName').value = memberToEdit.name;
         form.querySelector('#memberEmail').value = memberToEdit.email;
         
+        // ... (Rest of the setup - Same as before) ...
         const { countryCode, number } = parsePhoneNumber(memberToEdit.phone);
         memberCountryCodeInput.value = countryCode;
         memberPhoneInput.value = number;
@@ -5334,7 +5483,8 @@ ${_('whatsapp_closing')}
         updateCalculatedValue();
         
         _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode, creditTypeSelect, expiryDateInput);
-        _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode);
+        // PASSING MONTHLY TIER SELECT HERE
+        _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode, monthlyTierSelect);
         
         form.querySelector('#resetPasswordBtn').onclick = () => {
             auth.sendPasswordResetEmail(memberToEdit.email)
@@ -5386,19 +5536,15 @@ ${_('whatsapp_closing')}
                 calculatedCreditValue = monthlyPlanAmount / estimatedAttendance;
             }
         } 
-        else {
-            // Validation: Ensure expiry is set if credits exist
-            const expiryDate = form.querySelector('#expiryDate').value;
-            if (!expiryDate) {
-                showMessageBox(_('error_expiry_date_required'), 'error');
-                return; 
-            }
-        }
-
+        
         const countryCode = form.querySelector('#memberCountryCode').value.trim();
         const phoneNumber = form.querySelector('#memberPhone').value;
         const fullPhoneNumber = constructPhoneNumber(countryCode, phoneNumber);
 
+        // Capture New Tier ID
+        const newTierId = form.querySelector('#monthlyTierSelect').value || null;
+
+        // Prepare Updates Object
         let updates = {};
         updates[`/users/${id}/name`] = form.querySelector('#memberName').value;
         updates[`/users/${id}/phone`] = fullPhoneNumber;
@@ -5411,26 +5557,63 @@ ${_('whatsapp_closing')}
         updates[`/users/${id}/monthlyPlanEstimatedAttendance`] = isMonthly ? estimatedAttendance : null;
         updates[`/users/${id}/monthlyCreditValue`] = isMonthly ? calculatedCreditValue : null;
         
-        // NEW: Save Selected Monthly Tier
-        // If dropdown was hidden or empty, value might be "" (handled as null)
-        const tierId = form.querySelector('#monthlyTierSelect').value || null;
-        updates[`/users/${id}/monthlyPlanTierId`] = isMonthly ? tierId : null;
+        // Save Selected Monthly Tier
+        updates[`/users/${id}/monthlyPlanTierId`] = isMonthly ? newTierId : null;
 
         // Multi-Credit Expiry Update logic
         if (!isMonthly) {
-            const selectedTypeId = form.querySelector('#creditTypeSelect').value || 'general';
-            const expiryDate = form.querySelector('#expiryDate').value;
-            // Update the expiry date for the currently selected credit type bucket
-            updates[`/users/${id}/wallet/${selectedTypeId}/expiryDate`] = expiryDate;
-            
-            // Also clean up legacy field if present
+            // CLEANUP LEGACY FIELD ONLY
             updates[`/users/${id}/expiryDate`] = null;
         }
-        
-        database.ref().update(updates).then(() => {
-            showMessageBox(_('success_member_updated'), 'success');
-            closeModal(DOMElements.memberModal);
-        }).catch(error => showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error'));
+
+        // --- HELPER: EXECUTE UPDATE ---
+        const executeDatabaseUpdate = () => {
+            database.ref().update(updates).then(() => {
+                showMessageBox(_('success_member_updated'), 'success');
+                closeModal(DOMElements.memberModal);
+            }).catch(error => showMessageBox(_('error_firebase_generic').replace('{error}', error.message), 'error'));
+        };
+
+        // --- START: ACTIVE SUBSCRIPTION CONFLICT CHECK ---
+        if (isMonthly && originalMember.monthlyPlan) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const dueDateStr = originalMember.paymentDueDate; // Use original date to check status
+            const hasActivePlan = dueDateStr && new Date(dueDateStr) >= today;
+            
+            const oldTierId = originalMember.monthlyPlanTierId || null; // Normalize undefined to null
+            
+            // Check if Tier Changed on an Active Plan
+            // We use != to catch null vs "" differences loosely, or normalize both to null above
+            if (hasActivePlan && (newTierId !== oldTierId)) {
+                
+                // Resolve Tier Names for the Alert
+                const getTierNameById = (tid) => {
+                    if (!tid) return _('label_legacy_tier');
+                    const t = appState.monthlyPlanTiers.find(x => x.id === tid);
+                    return t ? getMonthlyPlanName(t) : _('unknown_type');
+                };
+
+                const oldTierName = getTierNameById(oldTierId);
+                const newTierName = getTierNameById(newTierId);
+
+                showConfirmation(
+                    _('title_tier_change_conflict'),
+                    _('desc_tier_change_conflict')
+                        .replace('{name}', originalMember.name)
+                        .replace('{date}', formatShortDateWithYear(dueDateStr))
+                        .replace('{oldTier}', oldTierName)
+                        .replace('{newTier}', newTierName),
+                    executeDatabaseUpdate // Callback if confirmed
+                );
+                return; // Stop here, wait for modal
+            }
+        }
+        // --- END: ACTIVE SUBSCRIPTION CONFLICT CHECK ---
+
+        // If no conflict, proceed directly
+        executeDatabaseUpdate();
     }
 
     let html5QrCode = null; // To hold the scanner instance
@@ -5474,7 +5657,7 @@ ${_('whatsapp_closing')}
 
         const cls = appState.classes.find(c => c.id === clsId);
         if (!cls) {
-            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">Class not found.</div>`;
+            resultEl.innerHTML = `<div class="check-in-result-banner check-in-error">${_('error_class_not_found')}</div>`;
             setTimeout(() => { if (html5QrCode) html5QrCode.resume(); }, 2500);
             return;
         }
@@ -6213,12 +6396,12 @@ ${_('whatsapp_closing')}
                 return wallet[id] && wallet[id].balance > 0;
             });
             if (isInUse) {
-                errorMsg = `Cannot delete "${name}" because some members still hold a balance of this type.`;
+                errorMsg = _('error_cannot_delete_credit_type_in_use').replace('{name}', name);
             }
         } else if (type === 'monthlyTier') {
             isInUse = appState.users.some(u => u.monthlyPlan && u.monthlyPlanTierId === id);
             if (isInUse) {
-                errorMsg = `Cannot delete "${name}" because some members are assigned to this tier.`;
+                errorMsg = _('error_cannot_delete_tier_in_use').replace('{name}', name);
             }
         }
 
@@ -6230,7 +6413,7 @@ ${_('whatsapp_closing')}
         let itemTypeText = '';
         if (type === 'sportType') itemTypeText = _('label_sport_type_item');
         else if (type === 'tutor') itemTypeText = _('label_tutor_item');
-        else if (type === 'creditType') itemTypeText = 'Credit Type';
+        else if (type === 'creditType') itemTypeText = _('label_credit_type');
         else if (type === 'monthlyTier') itemTypeText = _('label_monthly_tier');
         
         // 2. Confirmation Dialog
@@ -6332,9 +6515,12 @@ ${_('whatsapp_closing')}
         const form = e.target;
         const id = form.querySelector('#creditTypeModalId').value;
         
+        // Check if this is the FIRST credit type being created
+        const isFirstCreation = appState.creditTypes.length === 0 && !id;
+        
         const creditData = {
             name: form.querySelector('#creditTypeName').value.trim(),
-            name_zh: form.querySelector('#creditTypeNameZh').value.trim(), // Capture Chinese name
+            name_zh: form.querySelector('#creditTypeNameZh').value.trim(), 
             color: form.querySelector('#creditTypeColor').value
         };
 
@@ -6343,16 +6529,124 @@ ${_('whatsapp_closing')}
             return;
         }
 
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
         let promise;
+        let newTypeId = id;
+
         if (id) {
             promise = database.ref('/creditTypes/' + id).update(creditData);
         } else {
-            promise = database.ref('/creditTypes').push(creditData);
+            const newRef = database.ref('/creditTypes').push();
+            newTypeId = newRef.key;
+            promise = newRef.set(creditData);
         }
+
         promise.then(() => {
-            showMessageBox(id ? 'Credit Type updated!' : 'Credit Type added!', 'success');
             closeModal(DOMElements.sportTypeModal);
-        }).catch(err => showMessageBox(err.message, 'error'));
+            const message = id ? _('success_credit_type_updated') : _('success_credit_type_added');
+            showMessageBox(message, 'success');
+
+            // --- MIGRATION LOGIC ---
+            if (isFirstCreation) {
+                setTimeout(() => {
+                    const typeName = (appState.currentLanguage === 'zh-TW' && creditData.name_zh) ? creditData.name_zh : creditData.name;
+                    
+                    showConfirmation(
+                        _('title_migrate_legacy_credits'),
+                        _('desc_migrate_legacy_credits').replace('{type}', typeName),
+                        () => performCreditMigration(newTypeId, typeName)
+                    );
+                }, 300);
+            }
+        })
+        .catch(err => showMessageBox(err.message, 'error'))
+        .finally(() => {
+            submitBtn.disabled = false;
+        });
+    }
+
+    async function performCreditMigration(newTypeId, typeName) {
+        showMessageBox(_('status_please_wait'), 'info');
+
+        try {
+            // 1. Fetch all users
+            const snapshot = await database.ref('/users').once('value');
+            const usersObj = snapshot.val() || {};
+            
+            const updates = {};
+            let migrationCount = 0;
+            let cleanupCount = 0;
+
+            // 2. Iterate and find eligible members
+            Object.entries(usersObj).forEach(([userId, user]) => {
+                // Check: Is User? Not Deleted? Has Legacy Credits field?
+                if (user.role === 'member' && !user.isDeleted && user.credits !== undefined) {
+                    
+                    const legacyBalance = parseFloat(user.credits || 0);
+                    const legacyInitial = parseFloat(user.initialCredits || 0);
+                    const legacyExpiry = user.expiryDate || null;
+
+                    // CHECK: Is this a "Pure Monthly" member? (Monthly Plan + No Credit Balance)
+                    const isPureMonthly = user.monthlyPlan && legacyBalance === 0 && legacyInitial === 0;
+
+                    if (isPureMonthly) {
+                        // Just clean up the legacy fields, do NOT create a wallet
+                        updates[`/users/${userId}/credits`] = null;
+                        updates[`/users/${userId}/initialCredits`] = null;
+                        updates[`/users/${userId}/expiryDate`] = null;
+                        cleanupCount++;
+                    } else {
+                        // Real Credit User: Migrate to Wallet
+                        
+                        // A. Move to Wallet
+                        updates[`/users/${userId}/wallet/${newTypeId}/balance`] = legacyBalance;
+                        updates[`/users/${userId}/wallet/${newTypeId}/initialCredits`] = legacyInitial;
+                        updates[`/users/${userId}/wallet/${newTypeId}/expiryDate`] = legacyExpiry;
+
+                        // B. Tag Purchase History
+                        if (user.purchaseHistory) {
+                            Object.keys(user.purchaseHistory).forEach(purchaseId => {
+                                updates[`/users/${userId}/purchaseHistory/${purchaseId}/creditTypeId`] = newTypeId;
+                            });
+                        }
+
+                        // C. Clean up Legacy Fields
+                        updates[`/users/${userId}/credits`] = null;
+                        updates[`/users/${userId}/initialCredits`] = null;
+                        updates[`/users/${userId}/expiryDate`] = null;
+
+                        migrationCount++;
+                    }
+                }
+            });
+
+            // 3. Apply Updates
+            if (Object.keys(updates).length > 0) {
+                await database.ref().update(updates);
+                
+                let msg = '';
+                if (migrationCount > 0) {
+                    msg = _('success_migration_complete').replace('{count}', migrationCount).replace('{tier}', typeName);
+                } else {
+                    msg = _('success_cleanup_complete');
+                }
+                
+                showMessageBox(msg, 'success');
+                
+                // Refresh views
+                if (appState.activePage === 'members' || appState.activePage === 'account') {
+                    setTimeout(() => renderCurrentPage(), 500);
+                }
+            } else {
+                showMessageBox(_('info_no_credits_to_migrate'), 'info');
+            }
+
+        } catch (error) {
+            console.error("Credit Migration failed:", error);
+            showMessageBox(_('error_generic'), 'error');
+        }
     }
 
     function openMonthlyPlanTierModal(tierToEdit = null) {
@@ -6411,6 +6705,10 @@ ${_('whatsapp_closing')}
         const form = e.target;
         const id = form.querySelector('#monthlyTierModalId').value;
         
+        // Check if this is the FIRST tier being created (before we save it)
+        // We check if the existing list in state is empty AND we are creating new (not editing)
+        const isFirstTierCreation = appState.monthlyPlanTiers.length === 0 && !id;
+
         const tierData = {
             name: form.querySelector('#monthlyTierName').value.trim(),
             name_zh: form.querySelector('#monthlyTierNameZh').value.trim(),
@@ -6422,16 +6720,94 @@ ${_('whatsapp_closing')}
             return;
         }
 
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
         let promise;
+        let newTierKey = id;
+
         if (id) {
             promise = database.ref('/monthlyPlanTiers/' + id).update(tierData);
         } else {
-            promise = database.ref('/monthlyPlanTiers').push(tierData);
+            // Create new ref to get the key immediately
+            const newRef = database.ref('/monthlyPlanTiers').push();
+            newTierKey = newRef.key;
+            promise = newRef.set(tierData);
         }
+
         promise.then(() => {
-            showMessageBox(id ? 'Monthly Tier updated!' : 'Monthly Tier added!', 'success');
-            closeModal(DOMElements.sportTypeModal);
-        }).catch(err => showMessageBox(err.message, 'error'));
+            closeModal(DOMElements.sportTypeModal); // Close modal immediately
+            
+            const message = id ? _('success_monthly_tier_updated') : _('success_monthly_tier_added');
+            showMessageBox(message, 'success');
+
+            // --- MIGRATION LOGIC ---
+            if (isFirstTierCreation) {
+                // Use a small timeout to allow the modal to close visually first
+                setTimeout(() => {
+                    const tierName = (appState.currentLanguage === 'zh-TW' && tierData.name_zh) ? tierData.name_zh : tierData.name;
+                    
+                    showConfirmation(
+                        _('title_migrate_legacy_members'),
+                        _('desc_migrate_legacy_members').replace('{tier}', tierName),
+                        () => performMonthlyTierMigration(newTierKey, tierName)
+                    );
+                }, 300);
+            }
+        })
+        .catch(err => showMessageBox(err.message, 'error'))
+        .finally(() => {
+            submitBtn.disabled = false;
+        });
+    }
+
+    async function performMonthlyTierMigration(newTierId, tierName) {
+        showMessageBox(_('status_please_wait'), 'info');
+
+        try {
+            // 1. Fetch all users to ensure we have the latest data
+            const snapshot = await database.ref('/users').once('value');
+            const usersObj = snapshot.val() || {};
+            
+            const updates = {};
+            let migrationCount = 0;
+
+            // 2. Iterate and find eligible members
+            Object.entries(usersObj).forEach(([userId, user]) => {
+                // Check: Is User? Not Deleted? Is Monthly Plan? Does NOT have a Tier ID?
+                if (user.role === 'member' && !user.isDeleted && user.monthlyPlan && !user.monthlyPlanTierId) {
+                    // A. Update User Profile to the new Tier
+                    updates[`/users/${userId}/monthlyPlanTierId`] = newTierId;
+                    migrationCount++;
+
+                    // B. Update Past Payment History (Retrospective Tagging)
+                    // This ensures the "Pill" appears correctly for past payments in the UI
+                    if (user.paymentHistory) {
+                        Object.keys(user.paymentHistory).forEach(paymentId => {
+                            updates[`/users/${userId}/paymentHistory/${paymentId}/monthlyPlanTierId`] = newTierId;
+                        });
+                    }
+                }
+            });
+
+            // 3. Apply Updates
+            if (migrationCount > 0) {
+                await database.ref().update(updates);
+                showMessageBox(_('success_migration_complete').replace('{count}', migrationCount).replace('{tier}', tierName), 'success');
+                
+                // Refresh the Admin/Members list view if currently active
+                if (appState.activePage === 'members') {
+                    // Small delay to allow Firebase listener to update appState first
+                    setTimeout(() => renderCurrentPage(), 500);
+                }
+            } else {
+                showMessageBox(_('info_no_members_to_migrate'), 'info');
+            }
+
+        } catch (error) {
+            console.error("Migration failed:", error);
+            showMessageBox(_('error_generic'), 'error');
+        }
     }
 
     function openSportTypeModal(sportTypeToEdit = null) {
