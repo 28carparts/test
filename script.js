@@ -177,24 +177,53 @@ document.addEventListener('DOMContentLoaded', function() {
         let isWarning = false;
         let statusText = "";
 
-        Object.entries(wallet).forEach(([typeId, data]) => {
-            totalBalance += data.balance;
-            
-            if (data.balance > 0 && data.expiryDate) {
-                const expDate = new Date(data.expiryDate);
-                if (expDate < today) {
-                    isCritical = true;
-                    statusText = _('status_overdue'); // Or "Some credits expired"
-                } else if (expDate <= sevenDaysFromNow) {
-                    isWarning = true;
-                    statusText = _('status_expiring_soon').replace('{days}', Math.ceil((expDate - today)/(1000*60*60*24)));
-                }
-            }
+        // 1. Calculate Total Balance (Common for all user types for sorting/display)
+        Object.values(wallet).forEach(data => {
+            totalBalance += (data.balance || 0);
         });
 
-        if (totalBalance <= 0 && !user.monthlyPlan) {
-            isCritical = true;
-            statusText = _('status_no_credits');
+        // 2. Determine Status based on Plan Type
+        if (user.monthlyPlan) {
+            // --- Monthly Plan Logic ---
+            // Check Payment Due Date for Monthly Members
+            if (user.paymentDueDate) {
+                const dueDate = new Date(user.paymentDueDate);
+                
+                if (dueDate < today) {
+                    // Payment is in the past
+                    isCritical = true;
+                    statusText = _('status_overdue');
+                } else if (dueDate <= sevenDaysFromNow) {
+                    // Payment is upcoming within 7 days
+                    isWarning = true;
+                    const diffTime = dueDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    statusText = _('status_due_soon').replace('{days}', Math.max(0, diffDays));
+                }
+            }
+        } else {
+            // --- Credit Plan Logic ---
+            // Check specific wallet expirations
+            Object.entries(wallet).forEach(([typeId, data]) => {
+                if (data.balance > 0 && data.expiryDate) {
+                    const expDate = new Date(data.expiryDate);
+                    if (expDate < today) {
+                        isCritical = true;
+                        statusText = _('status_overdue'); 
+                    } else if (!isCritical && expDate <= sevenDaysFromNow) {
+                        isWarning = true;
+                        const diffTime = expDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        statusText = _('status_expiring_soon').replace('{days}', Math.max(0, diffDays));
+                    }
+                }
+            });
+
+            // Check for empty balance
+            if (totalBalance <= 0 && !isCritical && !isWarning) {
+                isCritical = true;
+                statusText = _('status_no_credits');
+            }
         }
 
         return { isCritical, isWarning, statusText, totalBalance };
@@ -573,16 +602,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const formatShortDateWithYear = (isoString) => {
         if (!isoString) return _('label_na');
+        
+        // Heuristic: Check if it's a simple date string (YYYY-MM-DD, 10 chars)
+        // vs a full ISO timestamp (e.g., 2023-11-28T14:30:00.000Z)
+        const isDateOnly = isoString.length === 10;
+        
         const date = new Date(isoString); 
         if (isNaN(date)) return 'Invalid Date';
 
-        // Use the dynamic locale for date formatting
         const options = {
             year: '2-digit',
             month: 'short',
-            day: 'numeric',
-            timeZone: 'UTC' // Use UTC to be consistent with how dates are stored
+            day: 'numeric'
         };
+
+        // If it is a Date-Only string (Class Date, Expiry Date), force UTC
+        // to prevent the day from shifting due to local timezone offsets.
+        // If it is a full Timestamp (Audit Log, Booking Time), allow the default 
+        // behavior (Local Time) so the user sees the date relative to their location.
+        if (isDateOnly) {
+            options.timeZone = 'UTC';
+        }
+
         return new Intl.DateTimeFormat(getLocale(), options).format(date);
     };
 
@@ -4196,16 +4237,24 @@ ${_('whatsapp_closing')}
                     valB = getWalletStatus(b).totalBalance;
                     if (a.monthlyPlan) valA = Infinity;
                     if (b.monthlyPlan) valB = Infinity;
-                } else if (key === 'expiryDate' || key === 'lastBooking' || key === 'joinDate') {
-                    if (key === 'expiryDate') {
-                        valA = a.monthlyPlan ? a.paymentDueDate : a.expiryDate;
-                        valB = b.monthlyPlan ? b.paymentDueDate : b.expiryDate;
-                    } else {
-                        valA = a[key];
-                        valB = b[key];
-                    }
-                    valA = valA ? new Date(valA).getTime() : -Infinity;
-                    valB = valB ? new Date(valB).getTime() : -Infinity;
+                } else if (key === 'expiryDate') {
+                    const getExpirationTimestamp = (u) => {
+                        if (u.monthlyPlan) {
+                            return u.paymentDueDate ? new Date(u.paymentDueDate).getTime() : 0;
+                        }
+                        if (u.expiryDate) return new Date(u.expiryDate).getTime();
+                        if (u.wallet) {
+                            const timestamps = Object.values(u.wallet)
+                                .map(w => w.expiryDate ? new Date(w.expiryDate).getTime() : 0);
+                            return timestamps.length > 0 ? Math.max(0, ...timestamps) : 0;
+                        }
+                        return 0;
+                    };
+                    valA = getExpirationTimestamp(a);
+                    valB = getExpirationTimestamp(b);
+                } else if (key === 'lastBooking' || key === 'joinDate') {
+                    valA = a[key] ? new Date(a[key]).getTime() : 0;
+                    valB = b[key] ? new Date(b[key]).getTime() : 0;
                 } else {
                     valA = a[key];
                     valB = b[key];
@@ -4241,7 +4290,15 @@ ${_('whatsapp_closing')}
                     }
 
                     creditsHtml = `<span class="text-xs font-bold px-2 py-1 rounded-full block w-fit mb-1" style="${pillStyle}">${formatCurrency(member.monthlyPlanAmount)}${_('label_mo')}${tierLabel}</span>`;
-                    expiryHtml = `<span class="text-sm block mb-1">${member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : 'N/A'}</span>`;
+                    
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const dueDate = member.paymentDueDate ? new Date(member.paymentDueDate) : null;
+                    const isOverdue = dueDate && dueDate < today;
+                    
+                    const dateText = member.paymentDueDate ? formatShortDateWithYear(member.paymentDueDate) : _('label_na');
+                    expiryHtml = `<span class="text-sm block mb-1 ${isOverdue ? 'text-red-600 font-bold' : ''}">${dateText}</span>`;
+
                 } else {
                     const walletEntries = Object.entries(wallet);
                     
@@ -4384,7 +4441,7 @@ ${_('whatsapp_closing')}
         };
 
         if (isOwner) {
-            // 1. Export Member Summary (Updated for Wallet & Tiers)
+            // 1. Export Member Summary (Enhanced Plan Type Display)
             container.querySelector('#exportSummaryBtn').onclick = (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4401,13 +4458,11 @@ ${_('whatsapp_closing')}
                 filteredUsers.sort((a, b) => a.name.localeCompare(b.name));
     
                 const exportData = filteredUsers.map(member => {
-                    // --- UPDATED WALLET STRING GENERATION ---
                     let creditsString = _('label_na');
                     let expiryString = _('label_na');
                     let planTypeString = _('export_value_credits');
 
                     if (member.monthlyPlan) {
-                        // UPDATED: Include Tier Name
                         const tierId = member.monthlyPlanTierId;
                         const tier = appState.monthlyPlanTiers ? appState.monthlyPlanTiers.find(t => t.id === tierId) : null;
                         const tierName = getMonthlyPlanName(tier);
@@ -4418,6 +4473,22 @@ ${_('whatsapp_closing')}
                     } else {
                         const wallet = getMemberWallet(member);
                         const entries = Object.entries(wallet);
+                        
+                        // 1. Generate Names for Plan Type Column (NEW LOGIC)
+                        const activeTypeNames = entries
+                            .filter(([_, data]) => (data.balance || 0) > 0 || (data.initialCredits || 0) > 0)
+                            .map(([typeId, data]) => {
+                                const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
+                                return typeDef ? getCreditTypeName(typeDef) : (data.isLegacy ? 'General' : 'Unknown');
+                            });
+                        
+                        if (activeTypeNames.length > 0) {
+                            planTypeString = `${_('export_value_credits')} - ${activeTypeNames.join(', ')}`;
+                        } else {
+                            planTypeString = _('export_value_credits');
+                        }
+
+                        // 2. Generate Details for Credits Remaining/Expiry Columns
                         if (entries.length > 0) {
                             creditsString = entries.map(([typeId, data]) => {
                                 const typeDef = appState.creditTypes ? appState.creditTypes.find(ct => ct.id === typeId) : null;
@@ -4441,7 +4512,7 @@ ${_('whatsapp_closing')}
                         [_('export_header_email')]: member.email,
                         [_('export_header_phone')]: member.phone,
                         [_('export_header_join_date')]: member.joinDate ? member.joinDate.slice(0, 10) : '',
-                        [_('export_header_plan_type')]: planTypeString, // UPDATED
+                        [_('export_header_plan_type')]: planTypeString,
                         [_('export_header_monthly_amount')]: member.monthlyPlanAmount || 0,
                         [_('export_header_due_date')]: member.monthlyPlan ? (member.paymentDueDate || '') : _('label_na'),
                         [_('export_header_credits_remaining')]: creditsString,
@@ -4453,7 +4524,7 @@ ${_('whatsapp_closing')}
                 exportToCsv('member-summary', exportData);
             };
     
-            // 2. Export Booking History (Updated for Wallet)
+            // 2. Export Booking History
             container.querySelector('#exportBookingHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4510,7 +4581,7 @@ ${_('whatsapp_closing')}
                 }
             };
     
-            // 3. Export Financial History (Updated for Tiers & Credit Types)
+            // 3. Export Financial History
             container.querySelector('#exportFinancialHistoryBtn').onclick = async (e) => {
                 e.preventDefault();
                 exportDropdown.classList.add('hidden');
@@ -4635,7 +4706,7 @@ ${_('whatsapp_closing')}
             }
         }, true);
         
-        updateUIText(); // Ensures static elements like headings are translated
+        updateUIText(); 
     }
 
     function handleMemberDeletion(member) {
@@ -4931,7 +5002,6 @@ ${_('whatsapp_closing')}
     }
 
     function openMemberModal(memberToEdit) {
-        // ... (HTML Template is SAME) ...
         DOMElements.memberModal.innerHTML = `
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content relative">
                 <button class="modal-close-btn"><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -5045,7 +5115,6 @@ ${_('whatsapp_closing')}
         const form = modal.querySelector('form');
         const submitBtn = form.querySelector('.submit-btn');
 
-        // ... (Selectors - same as before) ...
         const purchaseAmountInput = form.querySelector('#purchaseAmount');
         const creditsInput = form.querySelector('#creditsToAdd');
         const creditTypeSelect = form.querySelector('#creditTypeSelect'); 
@@ -5067,7 +5136,6 @@ ${_('whatsapp_closing')}
         const cancelPaymentEditBtn = form.querySelector('#cancelPaymentEditBtn');
         const monthlyPlanAmountInput = form.querySelector('#monthlyPlanAmount');
         
-        // ... (Monthly Tier Logic - same as previous) ...
         const monthlyTierSelect = form.querySelector('#monthlyTierSelect');
         const monthlyTiers = appState.monthlyPlanTiers || [];
         const hasLegacyMembers = appState.users.some(u => u.role === 'member' && !u.isDeleted && u.monthlyPlan && !u.monthlyPlanTierId);
@@ -5087,7 +5155,6 @@ ${_('whatsapp_closing')}
             else monthlyTierSelect.value = ""; 
         }
 
-        // ... (Credit Type Dropdown, Quick Selects - same as before) ...
         const creditTypes = appState.creditTypes || [];
         let optionsHTML = `<option value="" disabled selected>${_('placeholder_select_credit_type')}</option>`;
         const hasGeneralCredits = appState.users.some(u => 
@@ -5172,7 +5239,6 @@ ${_('whatsapp_closing')}
         cancelCreditEditBtn.onclick = setCreditButtonToAddMode;
 
         creditActionBtn.onclick = async () => {
-             // ... (same as before) ...
              const historyId = historyIdInput.value;
              let memberId = memberToEdit.id; 
              const amount = parseFloat(purchaseAmountInput.value);
@@ -5328,10 +5394,19 @@ ${_('whatsapp_closing')}
         };
 
         const refreshMemberData = () => {
+            const currentTypeId = creditTypeSelect.value;
             database.ref(`/users/${memberToEdit.id}`).once('value', snapshot => { 
                 memberToEdit = { id: snapshot.key, ...snapshot.val() }; 
                 _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode, creditTypeSelect, expiryDateInput); 
                 setCreditButtonToAddMode(); 
+                
+                if (currentTypeId) {
+                    creditTypeSelect.value = currentTypeId;
+                    const updatedWallet = getMemberWallet(memberToEdit);
+                    if (updatedWallet[currentTypeId] && updatedWallet[currentTypeId].expiryDate) {
+                        expiryDateInput.value = updatedWallet[currentTypeId].expiryDate;
+                    }
+                }
             });
         };
 
@@ -5343,7 +5418,6 @@ ${_('whatsapp_closing')}
         monthsPaidInput.oninput = autoCalculatePayment;
         monthlyPlanAmountInput.addEventListener('input', autoCalculatePayment);
 
-        // --- START: UPDATED BUTTON LOGIC FOR PAYMENTS (RESET TIER) ---
         const setPaymentButtonToAddMode = () => {
             paymentActionBtn.innerHTML = plusIconSVG;
             paymentActionBtn.title = _('tooltip_add_entry');
@@ -5383,12 +5457,10 @@ ${_('whatsapp_closing')}
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
         };
-        // --- END: UPDATED BUTTON LOGIC FOR PAYMENTS ---
 
         setPaymentButtonToAddMode();
         cancelPaymentEditBtn.onclick = setPaymentButtonToAddMode;
 
-        // ... (paymentActionBtn.onclick - Same as before) ...
         paymentActionBtn.onclick = () => {
             const historyId = paymentHistoryIdInput.value;
             const memberId = memberToEdit.id;
@@ -5434,7 +5506,6 @@ ${_('whatsapp_closing')}
         form.querySelector('#memberName').value = memberToEdit.name;
         form.querySelector('#memberEmail').value = memberToEdit.email;
         
-        // ... (Rest of the setup - Same as before) ...
         const { countryCode, number } = parsePhoneNumber(memberToEdit.phone);
         memberCountryCodeInput.value = countryCode;
         memberPhoneInput.value = number;
@@ -5443,13 +5514,31 @@ ${_('whatsapp_closing')}
         form.querySelector('#monthlyPlan').checked = memberToEdit.monthlyPlan;
         
         const wallet = getMemberWallet(memberToEdit);
-        const defaultExpiry = memberToEdit.expiryDate || (Object.values(wallet)[0] || {}).expiryDate || '';
-        expiryDateInput.value = defaultExpiry;
+        
+        // --- FIX START: Auto-select existing credit type ---
+        const walletKeys = Object.keys(wallet);
+        if (walletKeys.length > 0) {
+            // Pick the first available wallet type
+            const defaultTypeId = walletKeys[0];
+            
+            // Check if this type exists in the dropdown options
+            if (creditTypeSelect.querySelector(`option[value="${defaultTypeId}"]`)) {
+                creditTypeSelect.value = defaultTypeId;
+            }
+            // Set the date input to match this specific wallet
+            expiryDateInput.value = wallet[defaultTypeId].expiryDate || '';
+        } else {
+            // Fallback for rare cases
+            expiryDateInput.value = memberToEdit.expiryDate || '';
+        }
+        // --- FIX END ---
 
         creditTypeSelect.onchange = () => {
             const typeId = creditTypeSelect.value;
             if (wallet[typeId]) {
                 expiryDateInput.value = wallet[typeId].expiryDate || '';
+            } else {
+                expiryDateInput.value = '';
             }
         };
 
@@ -5483,7 +5572,6 @@ ${_('whatsapp_closing')}
         updateCalculatedValue();
         
         _renderMemberPurchaseHistory(memberToEdit, historyContainer, historyIdInput, purchaseAmountInput, creditsInput, setCreditButtonToEditMode, creditTypeSelect, expiryDateInput);
-        // PASSING MONTHLY TIER SELECT HERE
         _renderMemberPaymentHistory(memberToEdit, paymentHistoryContainer, paymentHistoryIdInput, monthsPaidInput, paymentAmountInput, setPaymentButtonToEditMode, monthlyTierSelect);
         
         form.querySelector('#resetPasswordBtn').onclick = () => {
@@ -5564,6 +5652,18 @@ ${_('whatsapp_closing')}
         if (!isMonthly) {
             // CLEANUP LEGACY FIELD ONLY
             updates[`/users/${id}/expiryDate`] = null;
+
+            // --- FIX START: Capture Manual Date Change ---
+            const selectedTypeId = form.querySelector('#creditTypeSelect').value;
+            const newExpiryDate = form.querySelector('#expiryDate').value;
+
+            // Only update if a type is selected. 
+            if (selectedTypeId) {
+                // Update the specific wallet's expiry date. 
+                // If newExpiryDate is empty, save as null to clear it.
+                updates[`/users/${id}/wallet/${selectedTypeId}/expiryDate`] = newExpiryDate || null;
+            }
+            // --- FIX END ---
         }
 
         // --- HELPER: EXECUTE UPDATE ---
@@ -5585,7 +5685,6 @@ ${_('whatsapp_closing')}
             const oldTierId = originalMember.monthlyPlanTierId || null; // Normalize undefined to null
             
             // Check if Tier Changed on an Active Plan
-            // We use != to catch null vs "" differences loosely, or normalize both to null above
             if (hasActivePlan && (newTierId !== oldTierId)) {
                 
                 // Resolve Tier Names for the Alert
