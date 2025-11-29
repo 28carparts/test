@@ -172,6 +172,7 @@ const LANG_PACK = {
         'success_password_reset_sent': 'Password reset email sent to {email}',
         'error_auth_no_db_entry': 'Authentication error. User profile not found. Logging out.',
         'error_required_field': 'Please fill out all required fields.',
+        'error_auth_invalid_credentials': 'Incorrect email or password. Please try again.',
 
         // --- Navigation ---
         'nav_schedule': 'Schedule',
@@ -312,12 +313,15 @@ const LANG_PACK = {
         'status_no_credits': 'Out of credits.',
         'status_due_soon': 'Payment due in {days} day(s).',
         'status_expiring_soon': 'Credits expire in {days} day(s).',
-        'status_low_credits': 'Low on credits ({count} remaining).',
+        'status_low_credits': 'Low on credits ({balance} {type} remaining).',
         'status_no_show': 'No Show',
         'label_admin_notes': 'Admin Notes (Visible to Staff Only)',
         'placeholder_admin_notes': 'e.g., Prefers morning classes, injury info, etc.',
         'tooltip_header_purchase_history': 'Recent Purchases:',
         'tooltip_header_payment_history': 'Recent Payments:',
+        'label_used_credits_suffix': 'Used: {count}',
+        'label_history_counts': 'Total: {total}, Deleted: {deleted}',
+        'label_history_counts_clean': 'Total: {total}',
 
         // --- Classes Page ---
         'title_all_classes': 'All Classes',
@@ -793,6 +797,7 @@ const LANG_PACK = {
         'success_password_reset_sent': '密碼重設郵件已發送到 {email}',
         'error_auth_no_db_entry': '驗證錯誤。找不到用戶個人資料。正在登出。',
         'error_required_field': '請填寫所有必填欄位。',
+        'error_auth_invalid_credentials': '電子郵件或密碼錯誤，請再試一次。',
 
         // --- Navigation ---
         'nav_schedule': '時間表',
@@ -933,12 +938,15 @@ const LANG_PACK = {
         'status_no_credits': '點數已用完。',
         'status_due_soon': '{days} 天內需要付款。',
         'status_expiring_soon': '點數將於 {days} 天內到期。',
-        'status_low_credits': '點數不足 (剩餘 {count} 點)。',
+        'status_low_credits': '點數不足 (剩餘 {balance} 點 - {type})。',
         'status_no_show': '未出席',
         'label_admin_notes': '管理員備註 (僅供員工查看)',
         'placeholder_admin_notes': '例如：偏好早上的課程、傷患資訊等...',
         'tooltip_header_purchase_history': '最近購買記錄：',
         'tooltip_header_payment_history': '最近付款記錄：',
+        'label_used_credits_suffix': '已用：{count}',
+        'label_history_counts': '總數：{total}，已刪除：{deleted}',
+        'label_history_counts_clean': '總數：{total}',
 
         // --- Classes Page ---
         'title_all_classes': '所有課程',
