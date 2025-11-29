@@ -5091,15 +5091,15 @@ ${_('whatsapp_closing')}
                                     <button type="button" data-months="12" class="due-date-quick-select-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-1 px-2 rounded-md text-sm transition">${_('label_quick_select_1_year')}</button>
                                 </div>
 
-                                <!-- Due Date / Attendance / Buttons -->
+                                <!-- Due Date / Attendance / Buttons (Buttons moved here) -->
                                 <div class="flex items-end gap-2">
                                     <div class="flex-1">
                                         <label for="paymentDueDate" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_payment_due_date')}</label>
-                                        <input type="date" id="paymentDueDate" class="form-input w-full">
+                                        <input type="date" id="paymentDueDate" class="form-input w-full appearance-none py-[0.6rem]">
                                     </div>
                                     <div class="flex-1">
                                         <label for="monthlyPlanEstimatedAttendance" class="block text-slate-600 text-sm font-semibold mb-2">${_('label_est_monthly_attendance')}</label>
-                                        <input type="number" id="monthlyPlanEstimatedAttendance" class="form-input w-full" min="1" step="1" placeholder="e.g., 8">
+                                        <input type="number" id="monthlyPlanEstimatedAttendance" class="form-input w-full appearance-none py-[0.6rem]" min="1" step="1" placeholder="e.g., 8">
                                     </div>
                                     <button type="button" id="paymentActionBtn" class="font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white"></button>
                                     <button type="button" id="cancelPaymentEditBtn" class="font-bold py-[0.6rem] px-4 flex items-center justify-center rounded-lg transition text-white bg-slate-400 hover:bg-slate-500 hidden">${_('btn_cancel')}</button>
