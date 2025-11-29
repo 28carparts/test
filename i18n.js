@@ -126,9 +126,11 @@ const LANG_PACK = {
         'template_class_on_date': '{class} on {date}',
         'placeholder_yoga_example': 'e.g., Yoga',
         'placeholder_country_code_example': 'e.g., 852',
+        "placeholder_phone": "e.g., 9123 4567",
         'label_mo': '/mo',
         'error_booking_not_found': 'Booking not found.',
         'error_class_not_found': 'Class not found.',
+        'filter_all': 'All',
 
         // --- Password Strength ---
         'auth_password_strength': 'Password Strength',
@@ -157,7 +159,7 @@ const LANG_PACK = {
         'placeholder_email': 'user@example.com',
         'placeholder_password': '••••••••',
         'placeholder_name': 'Your Name',
-        'placeholder_country_code': '852',
+        'placeholder_country_code': 'e.g., 852',
         'lang_selector_zh': '繁中',
         'lang_selector_en': 'English',
         'status_logging_in': 'Logging in...',
@@ -220,6 +222,7 @@ const LANG_PACK = {
         'no_booking_history': 'You have no upcoming or past bookings.',
         'no_purchase_history': 'No purchase history.',
         'no_payment_history': 'No payment history.',
+        'info_cancellation_policy_banner': 'Note: Cancellations are not allowed within {hours} hours of the class start time.',
 
         // --- Admin Page ---
         'header_sport_types': 'Sport Types',
@@ -271,6 +274,16 @@ const LANG_PACK = {
         'header_announcements': 'Announcements',
         'desc_announcements': 'Post important updates, holiday notices, or news. This will appear at the top of the dashboard for all users.',
         'btn_manage_announcement': 'Manage Announcement',
+        'placeholder_sport_name_en': 'e.g., Yoga',
+        'placeholder_sport_name_zh': 'e.g., 瑜伽',
+        'placeholder_credit_name_en': 'e.g., Personal Training Class',
+        'placeholder_credit_name_zh': 'e.g., 私人教練堂',
+        'placeholder_tutor_name': 'e.g., John Doe',
+        'placeholder_tutor_email': 'e.g., tutor@example.com',
+        'placeholder_tutor_phone': 'e.g., 9123 4567',
+        'tooltip_move_up': 'Move Up',
+        'tooltip_move_down': 'Move Down',
+        "label_credit_plan": "Credit Plan",
 
         // --- Members Page ---
         'title_manage_members': 'Manage Members',
@@ -497,6 +510,8 @@ const LANG_PACK = {
         'error_select_credit_type': 'Please select a credit type.',
         'error_cannot_delete_credit_type_in_use': 'Cannot delete "{name}" because some members still hold a balance of this type.',
         'success_cleanup_complete': 'Cleanup complete. No active credit balances found to migrate.',
+        'placeholder_eg_800': 'e.g., 800',
+        'placeholder_eg_10': 'e.g., 10',
 
         // --- Monthly Plan Tier ---
         'header_monthly_tiers': 'Monthly Plan Tiers',
@@ -520,6 +535,9 @@ const LANG_PACK = {
         'title_tier_change_conflict': 'Change Active Subscription?',
         'desc_tier_change_conflict': 'Member <strong>{name}</strong> has an active subscription until <strong>{date}</strong>.<br>You are changing their tier from <strong>{oldTier}</strong> to <strong>{newTier}</strong>.<br><br>This will immediately affect their ability to book classes.',
         'btn_confirm_tier_change': 'Confirm Change',
+        'placeholder_select_monthly_tier': 'Select Monthly Tier...',
+        'placeholder_eg_1': 'e.g., 1',
+        'placeholder_eg_1500': 'e.g., 1500',
 
         // --- QR Code ---
         'nav_check_in': 'Check-In',
@@ -729,9 +747,11 @@ const LANG_PACK = {
         'template_class_on_date': '{class} 於 {date}',
         'placeholder_yoga_example': '例如：瑜伽',
         'placeholder_country_code_example': '例如：852',
+        "placeholder_phone": "例如：9123 4567",
         'label_mo': '/月',
         'error_booking_not_found': '找不到預約記錄。',
         'error_class_not_found': '找不到課程。',
+        'filter_all': '全部',
 
         // --- Password Strength ---
         'auth_password_strength': '密碼強度',
@@ -760,7 +780,7 @@ const LANG_PACK = {
         'placeholder_email': 'user@example.com',
         'placeholder_password': '••••••••',
         'placeholder_name': '您的姓名',
-        'placeholder_country_code': '852',
+        'placeholder_country_code': '例如：852',
         'lang_selector_zh': '繁中',
         'lang_selector_en': 'English',
         'status_logging_in': '登入中...',
@@ -823,6 +843,7 @@ const LANG_PACK = {
         'no_booking_history': '您沒有任何預約記錄。',
         'no_purchase_history': '沒有購買記錄。',
         'no_payment_history': '沒有付款記錄。',
+        'info_cancellation_policy_banner': '注意：課堂開始前 {hours} 小時內不允許取消。',
         
         // --- Admin Page ---
         'header_sport_types': '運動類型',
@@ -874,6 +895,16 @@ const LANG_PACK = {
         'header_announcements': '公告設定',
         'desc_announcements': '發布重要更新、假期通知或新聞。這將顯示在所有用戶的儀表板頂部。',
         'btn_manage_announcement': '管理公告',
+        'placeholder_sport_name_en': '例如：Yoga',
+        'placeholder_sport_name_zh': '例如：瑜伽',
+        'placeholder_credit_name_en': '例如：Personal Training Class',
+        'placeholder_credit_name_zh': '例如：私人教練堂',
+        'placeholder_tutor_name': '例如：陳大文',
+        'placeholder_tutor_email': '例如：tutor@example.com',
+        'placeholder_tutor_phone': '例如：9123 4567',
+        'tooltip_move_up': '上移',
+        'tooltip_move_down': '下移',
+        "label_credit_plan": "點數方案",
 
         // --- Members Page ---
         'title_manage_members': '會員管理',
@@ -1119,6 +1150,8 @@ const LANG_PACK = {
         'error_select_credit_type': '請選擇點數類型。',
         'error_cannot_delete_credit_type_in_use': '無法刪除 "{name}"，因為仍有會員持有此類型的餘額。',
         'success_cleanup_complete': '清理完成。找不到需要遷移的有效點數餘額。',
+        'placeholder_eg_800': '例如：800',
+        'placeholder_eg_10': '例如：10',
 
         // --- Monthly Plan Tier ---
         'header_monthly_tiers': '月費方案等級',
@@ -1142,6 +1175,9 @@ const LANG_PACK = {
         'title_tier_change_conflict': '變更有效訂閱？',
         'desc_tier_change_conflict': '會員 <strong>{name}</strong> 目前擁有有效的訂閱，至 <strong>{date}</strong> 到期。<br>您即將將其等級從 <strong>{oldTier}</strong> 變更為 <strong>{newTier}</strong>。<br><br>這將立即影響他們預約課程的權限。',
         'btn_confirm_tier_change': '確認變更',
+        'placeholder_select_monthly_tier': '選擇月費方案等級...',
+        'placeholder_eg_1': '例如：1',
+        'placeholder_eg_1500': '例如：1500',
         
         // --- CSV Export Labels ---
         'export_header_name': '姓名',
