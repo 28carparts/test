@@ -4411,16 +4411,17 @@ ${_('whatsapp_closing')}
                     </div>
                     <button id="recalculatePlansBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto flex-shrink-0">${_('btn_recalculate_all')}</button>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
+                <!-- FIX: Added min-w-[900px] to table and whitespace-nowrap to headers -->
+                <div class="overflow-x-auto pb-2">
+                    <table class="w-full text-left min-w-[900px]">
                         <thead>
                             <tr class="border-b">
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="name">${_('table_header_name')}<span class="sort-icon"></span></th>
-                                <th class="p-2">${_('table_header_contact')}</th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="joinDate">${_('table_header_join')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="credits">${_('table_header_credits_plan')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="expiryDate">${_('table_header_expiry_due')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="lastBooking">${_('table_header_last_active')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="name">${_('table_header_name')}<span class="sort-icon"></span></th>
+                                <th class="p-2 whitespace-nowrap">${_('table_header_contact')}</th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="joinDate">${_('table_header_join')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="credits">${_('table_header_credits_plan')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="expiryDate">${_('table_header_expiry_due')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="lastBooking">${_('table_header_last_active')}<span class="sort-icon"></span></th>
                                 <th class="p-2"></th>
                             </tr>
                         </thead>
@@ -4621,15 +4622,21 @@ ${_('whatsapp_closing')}
                 const hasTooltip = (hasDot && !!tooltipContent);
 
                 // Changed tr class to 'align-middle'
+                // FIX: Added whitespace-nowrap to cells to prevent vertical stretching
                 return `
                 <tr class="border-b border-slate-100 align-middle">
-                    <td class="p-2 font-semibold" ${hasTooltip ? `data-tooltip-content` : ''}>${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}</td>
-                    <td class="p-2 text-sm"><div>${member.email}</div><div>${formatDisplayPhoneNumber(member.phone)}</div></td>
-                    <td class="p-2 text-sm">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
+                    <td class="p-2 font-semibold whitespace-nowrap" ${hasTooltip ? `data-tooltip-content` : ''}>
+                        ${statusIndicatorHTML}<button class="text-indigo-600 hover:underline member-name-btn" data-id="${member.id}">${member.name}</button>${tooltipHTML}
+                    </td>
+                    <td class="p-2 text-sm whitespace-nowrap">
+                        <div>${member.email}</div>
+                        <div>${formatDisplayPhoneNumber(member.phone)}</div>
+                    </td>
+                    <td class="p-2 text-sm whitespace-nowrap">${member.joinDate ? formatShortDateWithYear(member.joinDate) : 'N/A'}</td>
                     <td class="p-2">${planColumnHtml}</td>
                     <td class="p-2">${expiryColumnHtml}</td>
-                    <td class="p-2 text-sm">${formatShortDateWithYear(member.lastBooking)}</td>
-                    <td class="p-2 text-right space-x-2">
+                    <td class="p-2 text-sm whitespace-nowrap">${formatShortDateWithYear(member.lastBooking)}</td>
+                    <td class="p-2 text-right space-x-2 whitespace-nowrap">
                         <button class="edit-member-btn font-semibold text-indigo-600" data-id="${member.id}">${_('btn_edit')}</button>
                         <button class="delete-member-btn font-semibold text-red-600" data-id="${member.id}" data-name="${member.name}">${_('btn_delete')}</button>
                     </td>
