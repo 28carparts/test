@@ -7801,24 +7801,25 @@ ${_('whatsapp_closing')}
             </div>
             <div>
                 <h3 class="text-xl font-bold text-slate-700 mb-4">${_('header_detailed_breakdown')}</h3>
-                <div class="overflow-x-auto"><table class="w-full text-left">
-                    <thead>
-                        <tr class="border-b">
-                            <th class="p-2 sortable cursor-pointer" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
-                            <th class="p-2 sortable cursor-pointer" data-sort-key="sportTypeName">${_('label_class')}<span class="sort-icon"></span></th>
-                            <th class="p-2 sortable cursor-pointer" data-sort-key="attendeesCount">${_('table_header_attendees')}<span class="sort-icon"></span></th>
-                            <th class="p-2 sortable cursor-pointer" data-sort-key="calculation">${_('table_header_calculation')}<span class="sort-icon"></span></th>
-                            <th class="p-2 text-right sortable cursor-pointer" data-sort-key="earnings">${_('table_header_earnings')}<span class="sort-icon"></span></th>
-                        </tr>
-                    </thead>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[800px]">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="sportTypeName">${_('label_class')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="attendeesCount">${_('table_header_attendees')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="calculation">${_('table_header_calculation')}<span class="sort-icon"></span></th>
+                                <th class="p-2 text-right sortable cursor-pointer whitespace-nowrap" data-sort-key="earnings">${_('table_header_earnings')}<span class="sort-icon"></span></th>
+                            </tr>
+                        </thead>
                     <tbody>
                         ${paginatedClsDetails.map(c => `
                             <tr class="border-b border-slate-100">
-                                <td class="p-2">${formatShortDateWithYear(c.date)}</td>
-                                <td class="p-2">${c.sportTypeName}</td>
-                                <td class="p-2">${c.attendeesCount} / ${c.maxParticipants}</td>
-                                <td class="p-2 text-sm text-slate-500">${c.calculation}</td>
-                                <td class="p-2 text-right font-semibold">${formatCurrency(c.earnings)}</td>
+                                <td class="p-2 whitespace-nowrap">${formatShortDateWithYear(c.date)}</td>
+                                <td class="p-2 whitespace-nowrap">${c.sportTypeName}</td>
+                                <td class="p-2 whitespace-nowrap">${c.attendeesCount} / ${c.maxParticipants}</td>
+                                <td class="p-2 text-sm text-slate-500 whitespace-nowrap">${c.calculation}</td>
+                                <td class="p-2 text-right font-semibold whitespace-nowrap">${formatCurrency(c.earnings)}</td>
                             </tr>`).join('') || `<tr><td colspan="5" class="text-center p-4 text-slate-500">${_('info_no_classes_in_period')}</td></tr>`}
                     </tbody>
                 </table></div>
@@ -8367,15 +8368,15 @@ ${_('whatsapp_closing')}
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left min-w-[600px]">
+                    <table class="w-full text-left min-w-[900px]">
                         <thead>
                             <tr class="border-b">
                                 <th class="p-2 w-12">#</th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
-                                <th class="p-2">${_('label_class')}</th>
-                                <th class="p-2">${_('label_tutor')}</th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="credits">${_('label_credits')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="attendees">${_('table_header_attendees')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
+                                <th class="p-2 whitespace-nowrap">${_('label_class')}</th>
+                                <th class="p-2 whitespace-nowrap">${_('label_tutor')}</th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="credits">${_('label_credits')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="attendees">${_('table_header_attendees')}<span class="sort-icon"></span></th>
                                 <th class="p-2"></th>
                             </tr>
                         </thead>
@@ -8501,12 +8502,12 @@ ${_('whatsapp_closing')}
                 return `
                     <tr class="border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${isNewDay && index > 0 ? 'day-divider' : ''}" data-date="${cls.date}">
                         <td class="p-2 text-slate-500 font-semibold">${entryNumber}</td>
-                        <td class="p-2">${formatShortDateWithYear(cls.date)}<br><span class="text-sm text-slate-500">${getTimeRange(cls.time, cls.duration)}</span></td>
-                        <td class="p-2 font-semibold">${getSportTypeName(sportType)}</td>
-                        <td class="p-2">${tutor?.name || _('label_unknown')}</td>
-                        <td class="p-2">${cls.credits}</td>
-                        <td class="p-2">${bookingsCount}/${cls.maxParticipants}</td>
-                        <td class="p-2 text-right space-x-2">
+                        <td class="p-2 whitespace-nowrap">${formatShortDateWithYear(cls.date)}<br><span class="text-sm text-slate-500">${getTimeRange(cls.time, cls.duration)}</span></td>
+                        <td class="p-2 font-semibold whitespace-nowrap">${getSportTypeName(sportType)}</td>
+                        <td class="p-2 whitespace-nowrap">${tutor?.name || _('label_unknown')}</td>
+                        <td class="p-2 whitespace-nowrap">${cls.credits}</td>
+                        <td class="p-2 whitespace-nowrap">${bookingsCount}/${cls.maxParticipants}</td>
+                        <td class="p-2 text-right space-x-2 whitespace-nowrap">
                             <button class="edit-cls-btn font-semibold text-indigo-600" data-id="${cls.id}">${_('btn_edit')}</button>
                             <button class="delete-cls-btn font-semibold text-red-600" data-id="${cls.id}">${_('btn_delete')}</button>
                         </td>
@@ -8821,26 +8822,27 @@ ${_('whatsapp_closing')}
                 </div>
                 <div>
                     <h3 class="text-xl font-bold text-slate-700 mb-4">${_('header_daily_breakdown')}</h3>
-                    <div class="overflow-x-auto"><table class="w-full text-left">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[800px]">
                         <thead>
                             <tr class="border-b">
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="classCount">${_('table_header_classes')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="enrollments">${_('table_header_enrollments')}<span class="sort-icon"></span></th>
-                                <th class="p-2 sortable cursor-pointer" data-sort-key="attendees">${_('table_header_attendees')}<span class="sort-icon"></span></th>
-                                <th class="p-2 text-right sortable cursor-pointer" data-sort-key="grossRevenue">${_('label_gross_revenue')}<span class="sort-icon"></span></th>
-                                <th class="p-2 text-right sortable cursor-pointer" data-sort-key="netRevenue">${_('label_net_revenue')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="date">${_('table_header_datetime')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="classCount">${_('table_header_classes')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="enrollments">${_('table_header_enrollments')}<span class="sort-icon"></span></th>
+                                <th class="p-2 sortable cursor-pointer whitespace-nowrap" data-sort-key="attendees">${_('table_header_attendees')}<span class="sort-icon"></span></th>
+                                <th class="p-2 text-right sortable cursor-pointer whitespace-nowrap" data-sort-key="grossRevenue">${_('label_gross_revenue')}<span class="sort-icon"></span></th>
+                                <th class="p-2 text-right sortable cursor-pointer whitespace-nowrap" data-sort-key="netRevenue">${_('label_net_revenue')}<span class="sort-icon"></span></th>
                             </tr>
                         </thead>
                         <tbody>
                             ${paginatedDetails.map(d => `
                                 <tr class="border-b border-slate-100">
-                                    <td class="p-2">${formatShortDateWithYear(d.date)}</td>
-                                    <td class="p-2">${d.classCount}</td>
-                                    <td class="p-2">${d.enrollments}</td>
-                                    <td class="p-2">${d.attendees} / ${d.capacity}</td>
-                                    <td class="p-2 text-right font-semibold text-slate-700">${formatCurrency(d.grossRevenue)}</td>
-                                    <td class="p-2 text-right font-bold ${d.netRevenue >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(d.netRevenue)}</td>
+                                    <td class="p-2 whitespace-nowrap">${formatShortDateWithYear(d.date)}</td>
+                                    <td class="p-2 whitespace-nowrap">${d.classCount}</td>
+                                    <td class="p-2 whitespace-nowrap">${d.enrollments}</td>
+                                    <td class="p-2 whitespace-nowrap">${d.attendees} / ${d.capacity}</td>
+                                    <td class="p-2 text-right font-semibold text-slate-700 whitespace-nowrap">${formatCurrency(d.grossRevenue)}</td>
+                                    <td class="p-2 text-right font-bold whitespace-nowrap ${d.netRevenue >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(d.netRevenue)}</td>
                                 </tr>`).join('') || `<tr><td colspan="6" class="text-center p-4 text-slate-500">${_('info_no_income_data')}</td></tr>`}
                         </tbody>
                     </table></div>
