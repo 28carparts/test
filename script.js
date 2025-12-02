@@ -4071,14 +4071,14 @@ ${_('whatsapp_closing')}
                     
                     <!-- History Tabbed Card (UPDATED) -->
                     <div class="card p-6">
-                        <h4 class="text-2xl font-bold text-slate-800 mb-4 text-center">${_('header_transaction_history')}</h4>
+                        <h4 class="text-xl font-bold text-slate-800 mb-4 text-center">${_('header_transaction_history')}</h4>
                         
                         <!-- Tabs -->
                         <div class="flex border-b border-slate-200 mb-4">
-                            <button id="tabPurchases" class="flex-1 pb-2 text-lg font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors">
+                            <button id="tabPurchases" class="flex-1 pb-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors">
                                 ${_('tab_credits')} (${purchaseCount})
                             </button>
-                            <button id="tabPayments" class="flex-1 pb-2 text-lg font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors">
+                            <button id="tabPayments" class="flex-1 pb-2 text-sm font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors">
                                 ${_('tab_monthly')} (${paymentCount})
                             </button>
                         </div>
@@ -4094,7 +4094,7 @@ ${_('whatsapp_closing')}
                 <div class="md:col-span-2">
                     <div class="card p-6">
                         <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-                            <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap">${_('header_my_bookings')} <span id="accountBookingCount"></span></h3>
+                            <h3 class="text-xl font-bold text-slate-800 whitespace-nowrap">${_('header_my_bookings')} <span id="accountBookingCount"></span></h3>
                             <div id="bookingFilterPills" class="flex flex-wrap gap-2 justify-end"></div>
                         </div>
                         ${cancellationBannerHTML}
@@ -4166,14 +4166,14 @@ ${_('whatsapp_closing')}
         tabPurchases.onclick = () => {
             purchaseContent.classList.remove('hidden');
             paymentContent.classList.add('hidden');
-            tabPurchases.className = "flex-1 pb-2 text-lg font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors";
-            tabPayments.className = "flex-1 pb-2 text-lg font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors";
+            tabPurchases.className = "flex-1 pb-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors";
+            tabPayments.className = "flex-1 pb-2 text-sm font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors";
         };
         tabPayments.onclick = () => {
             purchaseContent.classList.add('hidden');
             paymentContent.classList.remove('hidden');
-            tabPayments.className = "flex-1 pb-2 text-lg font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors";
-            tabPurchases.className = "flex-1 pb-2 text-lg font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors";
+            tabPayments.className = "flex-1 pb-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors";
+            tabPurchases.className = "flex-1 pb-2 text-sm font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent transition-colors";
         };
 
         setupLanguageToggles();
