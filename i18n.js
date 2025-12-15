@@ -1536,7 +1536,7 @@ const LANG_PACK = {
         'label_test_attendees': '測試：人數',
         'label_test_revenue': '測試：營收 ($)',
         'label_test_result': '計算結果',
-        'helper_script_variables': '可用變數：context.attendees (人數), context.revenue (營收), context.duration (時長)',
+        'helper_script_variables': '可用變數：context.attendees (人數), context.revenue (營收), context.duration (時長), context.credits (點數)',
         'salary_type_custom': '自訂腳本',
         'error_script_evaluation': '腳本錯誤：{error}',
         'info_no_formulas_found': '尚未定義自訂公式。',
@@ -1611,3 +1611,4 @@ const LANG_PACK = {
         'export_cat_low_times': '低峰時段',
     }
 };
+
